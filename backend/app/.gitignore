@@ -1,0 +1,41 @@
+# ==============================
+# Frontend (React / Node.js)
+# ==============================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# ==============================
+# Backend (Python / FastAPI)
+# ==============================
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ==============================
+# Environment Variables
+# ==============================
+.env
+.env.*
+!.env.example
+
+# ==============================
+# IDE / Editor
+# ==============================
+.vscode/
+.idea/
+
+# ==============================
+# Operating System
+# ==============================
+.DS_Store
+Thumbs.db
+
+# ==============================
+# Logs
+# ==============================
+*.log

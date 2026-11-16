@@ -7,6 +7,8 @@ import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import ModulePage from "./pages/ModulePage";
 import Staff from "./pages/Staff";
+import Menu from "./pages/Menu";
+import Customers from "./pages/Customers";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -61,25 +63,10 @@ function AppRoutes() {
 
         <Route
           path="/menu"
-          element={
-            <ModulePage
-              title="Menu Management"
-              description="Manage menu items and categories."
-              emptyMessage="Menu items will appear here."
-            />
-          }
+          element={<Menu />}
         />
 
-        <Route
-          path="/customers"
-          element={
-            <ModulePage
-              title="Customers"
-              description="Manage customer records."
-              emptyMessage="Customer records will appear here."
-            />
-          }
-        />
+        <Route path="customers" element={<Customers />} />
 
         <Route
           path="/staff"

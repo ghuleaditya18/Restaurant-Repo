@@ -1,9 +1,15 @@
 from fastapi import FastAPI, Depends
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
 from app.api.auth import router as auth_router
 from app.api.staff import router as staff_router
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.menu import router as menu_router
+from app.api.customer import router as customer_router
+
+from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import get_db
 
 app = FastAPI(
@@ -26,6 +32,17 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 
 app.include_router(staff_router, prefix="/api/staff", tags=["Staff Management"])
+
+app.include_router(menu_router, prefix="/api/menu")
+
+app.include_router(
+    customer_router,
+    prefix="/api/customers"
+)
+
+# Serves uploaded menu photos, e.g. http://localhost:8000/uploads/menu/<name>.jpg
+# (the folder is created when app.core.image_upload is imported)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 
 @app.get("/")

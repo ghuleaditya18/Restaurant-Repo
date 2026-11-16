@@ -33,14 +33,12 @@ def validate_required_text(value: str, field_name: str) -> str:
 
 
 def validate_phone(value: str) -> str:
-    value = value.strip()
+    if not re.fullmatch(r"[6-9]\d{9}", value):
+        raise ValueError(
+            "Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9."
+        )
 
-    cleaned = re.sub(r"[\s\-()]", "", value)
-
-    if not re.fullmatch(r"\+?\d{10,15}", cleaned):
-        raise ValueError("Enter a valid phone number (10-15 digits).")
-
-    return cleaned
+    return value
 
 
 # 1. CREATE STAFF

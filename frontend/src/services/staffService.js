@@ -37,3 +37,9 @@ export const updateStaffStatus = async (staffId, isActive) => {
 
   return response.data;
 };
+
+// Delete a staff member
+export const deleteStaff = async (staffId) => {
+  const response = await api.delete(`/api/staff/${staffId}`);
+  return response.data;
+};

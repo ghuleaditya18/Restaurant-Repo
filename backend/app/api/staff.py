@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db
-from app.models import User, Staff
+from app.models import Order, OrderStatusHistory, User, Staff
 
 from app.core.security import hash_password
 from app.api.deps import require_roles
@@ -297,3 +297,53 @@ def update_staff_status(
     db.refresh(user)
 
     return staff_to_response(staff, user)
+
+
+# 7. DELETE STAFF
+@router.delete("/{staff_id}")
+def delete_staff(
+    staff_id: int,
+    db: Session = Depends(get_db),
+):
+
+    staff, user = get_staff_record(db, staff_id)
+
+    # Preserve the user account when historical records refer to it, while
+    # preventing the account from being used to sign in again.
+    has_history = (
+        db.query(Order.id)
+        .filter(Order.created_by_user_id == user.id)
+        .first()
+        is not None
+    ) or (
+        db.query(OrderStatusHistory.id)
+        .filter(OrderStatusHistory.changed_by_user_id == user.id)
+        .first()
+        is not None
+    )
+
+    try:
+        db.delete(staff)
+        db.flush()
+
+        if has_history:
+            user.is_active = False
+        else:
+            db.delete(user)
+
+        db.commit()
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Staff member cannot be deleted because existing records still reference the account.",
+        )
+
+    return {
+        "message": (
+            "Staff member deleted. The account was deactivated to preserve historical records."
+            if has_history
+            else "Staff member deleted successfully."
+        )
+    }

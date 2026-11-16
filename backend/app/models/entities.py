@@ -352,6 +352,11 @@ class MenuItem(TimestampMixin, Base):
         nullable=False
     )
 
+    image_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True
+    )
+
     category: Mapped[MenuCategory] = relationship(
         back_populates="items"
     )

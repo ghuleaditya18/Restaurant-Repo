@@ -9,6 +9,9 @@ import ModulePage from "./pages/ModulePage";
 import Staff from "./pages/Staff";
 import Menu from "./pages/Menu";
 import Customers from "./pages/Customers";
+import Tables from "./pages/Tables";
+import Orders from "./pages/Orders";
+import Invoices from "./pages/Invoices";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -39,32 +42,11 @@ function AppRoutes() {
       >
         <Route path="/" element={<Dashboard />} />
 
-        <Route
-          path="/orders"
-          element={
-            <ModulePage
-              title="Orders"
-              description="Manage restaurant orders."
-              emptyMessage="Orders will appear here."
-            />
-          }
-        />
+        <Route path="orders" element={<Orders />} />
 
-        <Route
-          path="/tables"
-          element={
-            <ModulePage
-              title="Tables"
-              description="Manage restaurant tables."
-              emptyMessage="Tables will appear here."
-            />
-          }
-        />
+        <Route path="tables" element={<Tables />} />
 
-        <Route
-          path="/menu"
-          element={<Menu />}
-        />
+        <Route path="/menu" element={<Menu />} />
 
         <Route path="customers" element={<Customers />} />
 
@@ -77,16 +59,7 @@ function AppRoutes() {
           }
         />
 
-        <Route
-          path="/invoices"
-          element={
-            <ModulePage
-              title="Invoices"
-              description="Manage customer invoices and payment records."
-              emptyMessage="Invoices will appear here."
-            />
-          }
-        />
+        <Route path="invoices" element={<Invoices />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

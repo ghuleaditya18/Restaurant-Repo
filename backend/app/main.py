@@ -8,6 +8,10 @@ from app.api.staff import router as staff_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.menu import router as menu_router
 from app.api.customer import router as customer_router
+from app.api.table import router as table_router
+from app.api.order import router as order_router
+from app.api.invoice import router as invoice_router
+from app.api.payment import router as payment_router
 
 from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import get_db
@@ -35,13 +39,19 @@ app.include_router(staff_router, prefix="/api/staff", tags=["Staff Management"])
 
 app.include_router(menu_router, prefix="/api/menu")
 
-app.include_router(
-    customer_router,
-    prefix="/api/customers"
-)
+app.include_router(customer_router, prefix="/api/customers")
+
+app.include_router(table_router, prefix="/api/tables")
+
+app.include_router(order_router, prefix="/api/orders")
+
+app.include_router(invoice_router, prefix="/api/invoices")
+
+app.include_router(payment_router, prefix="/api/payments")
 
 # Serves uploaded menu photos, e.g. http://localhost:8000/uploads/menu/<name>.jpg
 # (the folder is created when app.core.image_upload is imported)
+
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 

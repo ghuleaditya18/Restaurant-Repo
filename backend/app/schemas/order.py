@@ -1,0 +1,201 @@
+from datetime import datetime
+from decimal import Decimal
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+from app.models.entities import OrderStatus
+
+# ==========================================
+# 1. CREATE ORDER ITEM
+# ==========================================
+
+
+class OrderItemCreate(BaseModel):
+
+    menu_item_id: int = Field(gt=0)
+
+    quantity: int = Field(gt=0)
+
+
+# ==========================================
+# 2. CREATE ORDER
+# ==========================================
+
+
+class OrderCreate(BaseModel):
+
+    customer_id: int = Field(gt=0)
+
+    table_id: int = Field(gt=0)
+
+    items: list[OrderItemCreate] = Field(min_length=1)
+
+    special_instructions: str | None = None
+
+    @field_validator("special_instructions")
+    @classmethod
+    def clean_instructions(cls, value):
+
+        if value is None:
+            return None
+
+        value = value.strip()
+
+        return value if value else None
+
+    @model_validator(mode="after")
+    def validate_unique_items(self):
+
+        item_ids = [item.menu_item_id for item in self.items]
+
+        if len(item_ids) != len(set(item_ids)):
+            raise ValueError(
+                "Duplicate menu items are not allowed. "
+                "Combine them by updating the quantity."
+            )
+
+        return self
+
+
+# ==========================================
+# 3. UPDATE ORDER DETAILS
+# ==========================================
+
+
+class OrderUpdate(BaseModel):
+
+    special_instructions: str | None = None
+
+    @field_validator("special_instructions")
+    @classmethod
+    def clean_instructions(cls, value):
+
+        if value is None:
+            return None
+
+        value = value.strip()
+
+        return value if value else None
+
+    @model_validator(mode="after")
+    def check_empty_update(self):
+
+        if not self.model_fields_set:
+            raise ValueError("Provide at least one field to update.")
+
+        return self
+
+
+# ==========================================
+# 4. UPDATE ORDER ITEM QUANTITY
+# ==========================================
+
+
+class OrderItemUpdate(BaseModel):
+
+    quantity: int = Field(gt=0)
+
+
+# ==========================================
+# 5. UPDATE ORDER STATUS
+# ==========================================
+
+
+class OrderStatusUpdate(BaseModel):
+
+    status: OrderStatus
+
+    note: str | None = None
+
+    @field_validator("note")
+    @classmethod
+    def clean_note(cls, value):
+
+        if value is None:
+            return None
+
+        value = value.strip()
+
+        return value if value else None
+
+
+# ==========================================
+# 6. ORDER ITEM RESPONSE
+# ==========================================
+
+
+class OrderItemResponse(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+    menu_item_id: int
+
+    item_name: str
+
+    quantity: int
+
+    unit_price: Decimal
+
+    line_total: Decimal
+
+
+# ==========================================
+# 7. ORDER STATUS HISTORY RESPONSE
+# ==========================================
+
+
+class OrderStatusHistoryResponse(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+    previous_status: OrderStatus | None
+
+    new_status: OrderStatus
+
+    changed_by_user_id: int
+
+    note: str | None
+
+    changed_at: datetime
+
+
+# ==========================================
+# 8. ORDER RESPONSE
+# ==========================================
+
+
+class OrderResponse(BaseModel):
+
+    id: int
+
+    order_number: str
+
+    customer_id: int
+
+    customer_name: str
+
+    table_id: int
+
+    table_number: str
+
+    created_by_user_id: int
+
+    status: OrderStatus
+
+    special_instructions: str | None
+
+    items: list[OrderItemResponse]
+
+    status_history: list[OrderStatusHistoryResponse]
+
+    subtotal: Decimal

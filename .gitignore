@@ -35,3 +35,6 @@ Thumbs.db
 
 # Runtime uploaded images
 backend/uploads/
+
+# Generated private invoice PDFs
+backend/private/

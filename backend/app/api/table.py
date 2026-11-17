@@ -112,7 +112,19 @@ def get_all_tables(
     db: Session = Depends(get_db),
 ):
 
-    return db.query(RestaurantTable).order_by(RestaurantTable.id.asc()).all()
+    tables = db.query(RestaurantTable).order_by(RestaurantTable.id.asc()).all()
+    updated = False
+
+    for table in tables:
+        has_active = has_active_orders(db, table.id)
+        if has_active and table.status != TableStatus.OCCUPIED:
+            table.status = TableStatus.OCCUPIED
+            updated = True
+
+    if updated:
+        db.commit()
+
+    return tables
 
 
 # ==========================================
@@ -126,7 +138,15 @@ def get_table(
     db: Session = Depends(get_db),
 ):
 
-    return get_table_record(db, table_id)
+    table = get_table_record(db, table_id)
+    has_active = has_active_orders(db, table.id)
+
+    if has_active and table.status != TableStatus.OCCUPIED:
+        table.status = TableStatus.OCCUPIED
+        db.commit()
+        db.refresh(table)
+
+    return table
 
 
 # ==========================================
@@ -159,6 +179,17 @@ def update_table(
 
         if existing_table:
             raise HTTPException(status_code=409, detail="Table number already exists.")
+
+    # Prevent manual status override if active orders exist
+    if "status" in updates:
+        if updates["status"] == TableStatus.AVAILABLE and has_active_orders(db, table_id):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Cannot set table to Available because active orders are "
+                    "currently associated with it."
+                ),
+            )
 
     # Prevent deactivating a table with active orders
     if updates.get("is_active") is False:

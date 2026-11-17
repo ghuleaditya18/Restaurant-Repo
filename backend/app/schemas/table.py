@@ -42,6 +42,8 @@ class TableUpdate(BaseModel):
 
     capacity: int | None = Field(default=None, gt=0)
 
+    status: TableStatus | None = None
+
     is_active: bool | None = None
 
     @field_validator("table_number")
@@ -58,7 +60,7 @@ class TableUpdate(BaseModel):
 
         return value
 
-    @field_validator("capacity", "is_active")
+    @field_validator("capacity", "is_active", "status")
     @classmethod
     def validate_not_null(cls, value, info):
 

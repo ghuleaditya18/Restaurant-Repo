@@ -162,6 +162,8 @@ def ensure_editable_order(order):
 
 
 def refresh_table_status(db: Session, table_id: int):
+    db.flush()
+
     active_order = (
         db.query(Order.id)
         .filter(
@@ -174,7 +176,9 @@ def refresh_table_status(db: Session, table_id: int):
     table = db.query(RestaurantTable).filter(RestaurantTable.id == table_id).first()
 
     if table:
-        table.status = TableStatus.OCCUPIED if active_order else TableStatus.AVAILABLE
+        table.status = (
+            TableStatus.OCCUPIED if active_order else TableStatus.AVAILABLE
+        )
 
 
 # ==========================================
@@ -334,6 +338,26 @@ def get_order_tables(
         .order_by(RestaurantTable.table_number.asc())
         .all()
     )
+
+    updated = False
+    for table in tables:
+        active_order = (
+            db.query(Order.id)
+            .filter(
+                Order.table_id == table.id,
+                Order.status.notin_(list(TERMINAL_STATUSES)),
+            )
+            .first()
+        )
+        expected_status = (
+            TableStatus.OCCUPIED if active_order else TableStatus.AVAILABLE
+        )
+        if table.status != expected_status:
+            table.status = expected_status
+            updated = True
+
+    if updated:
+        db.commit()
 
     return [
         {

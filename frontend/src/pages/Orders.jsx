@@ -128,6 +128,7 @@ export default function Orders() {
   // Order details modal
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [quantityModal, setQuantityModal] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState("");
 
@@ -212,7 +213,11 @@ export default function Orders() {
         String(order.table_number).toLowerCase().includes(searchValue);
 
       const matchesStatus =
-        statusFilter === "ALL" || order.status.toUpperCase() === statusFilter;
+        statusFilter === "ALL"
+          ? true
+          : statusFilter === "ACTIVE"
+            ? !["COMPLETED", "CANCELLED"].includes(order.status.toUpperCase())
+            : order.status.toUpperCase() === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -512,25 +517,28 @@ export default function Orders() {
   // UPDATE ORDER ITEM QUANTITY
   // ==========================================
 
-  const handleUpdateItemQuantity = async (item) => {
-    const newQuantity = Number(
-      window.prompt("Enter new quantity:", item.quantity),
-    );
+  const handleUpdateItemQuantity = (item) => {
+    setQuantityModal({ item, quantity: item.quantity });
+  };
 
+  const handleSaveQuantityModal = async (e) => {
+    if (e) e.preventDefault();
+    if (!quantityModal || !selectedOrder) return;
+
+    const newQuantity = Number(quantityModal.quantity);
     if (!Number.isInteger(newQuantity) || newQuantity < 1) {
+      setDetailsError("Quantity must be a positive integer.");
       return;
     }
 
     setSaving(true);
-
     try {
-      await updateOrderItem(selectedOrder.id, item.id, {
+      await updateOrderItem(selectedOrder.id, quantityModal.item.id, {
         quantity: newQuantity,
       });
-
       await refreshSelectedOrder();
-
       setSuccessMessage("Item quantity updated successfully.");
+      setQuantityModal(null);
     } catch (error) {
       setDetailsError(getErrorMessage(error));
     } finally {
@@ -638,7 +646,7 @@ export default function Orders() {
           title="Active Orders"
           value={activeCount}
           icon={<ShoppingCart size={19} />}
-          active={false}
+          active={statusFilter === "ACTIVE"}
           onClick={() => {
             setStatusFilter("ACTIVE");
           }}
@@ -1101,7 +1109,56 @@ export default function Orders() {
                             </td>
 
                             <td className="px-3 py-3 text-sm">
-                              {item.quantity}
+                              {["Pending", "Confirmed"].includes(selectedOrder.status) ? (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    disabled={saving || item.quantity <= 1}
+                                    onClick={async () => {
+                                      if (item.quantity <= 1) return;
+                                      setSaving(true);
+                                      try {
+                                        await updateOrderItem(selectedOrder.id, item.id, {
+                                          quantity: item.quantity - 1,
+                                        });
+                                        await refreshSelectedOrder();
+                                      } catch (err) {
+                                        setDetailsError(getErrorMessage(err));
+                                      } finally {
+                                        setSaving(false);
+                                      }
+                                    }}
+                                    title="Decrease quantity"
+                                    className="rounded border border-[#E9E3DA] p-1 text-gray-600 hover:bg-[#F5E5DC] disabled:opacity-40"
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                  <span className="w-5 text-center font-medium">{item.quantity}</span>
+                                  <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={async () => {
+                                      setSaving(true);
+                                      try {
+                                        await updateOrderItem(selectedOrder.id, item.id, {
+                                          quantity: item.quantity + 1,
+                                        });
+                                        await refreshSelectedOrder();
+                                      } catch (err) {
+                                        setDetailsError(getErrorMessage(err));
+                                      } finally {
+                                        setSaving(false);
+                                      }
+                                    }}
+                                    title="Increase quantity"
+                                    className="rounded border border-[#E9E3DA] p-1 text-gray-600 hover:bg-[#F5E5DC] disabled:opacity-40"
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                item.quantity
+                              )}
                             </td>
 
                             <td className="px-3 py-3 text-sm">
@@ -1333,6 +1390,103 @@ export default function Orders() {
           )}
         </ModalShell>
       )}
+        {/* QUANTITY EDIT MODAL */}
+        {quantityModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !saving) setQuantityModal(null);
+            }}
+          >
+            <div className="my-auto w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-[#EEE9E2] px-5 py-4">
+                <h3 className="font-semibold text-[#29231F]">Update Quantity</h3>
+                <button
+                  type="button"
+                  onClick={() => setQuantityModal(null)}
+                  disabled={saving}
+                  className="rounded-lg p-1 text-gray-400 hover:bg-[#F7F5F0] hover:text-[#29231F]"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveQuantityModal} className="space-y-4 p-5">
+                <p className="text-sm font-medium text-[#29231F]">
+                  {quantityModal.item.item_name}
+                </p>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+                    Quantity
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={saving || quantityModal.quantity <= 1}
+                      onClick={() =>
+                        setQuantityModal((prev) => ({
+                          ...prev,
+                          quantity: Math.max(1, prev.quantity - 1),
+                        }))
+                      }
+                      className="rounded-lg border border-[#E9E3DA] p-2 hover:bg-[#F7F5F0] disabled:opacity-40"
+                    >
+                      <Minus size={16} />
+                    </button>
+
+                    <input
+                      type="number"
+                      min="1"
+                      value={quantityModal.quantity}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setQuantityModal((prev) => ({
+                          ...prev,
+                          quantity: Number.isNaN(val) ? 1 : Math.max(1, val),
+                        }));
+                      }}
+                      className="w-24 rounded-lg border border-[#E9E3DA] py-2 text-center text-sm outline-none focus:border-[#C65D35]"
+                      autoFocus
+                    />
+
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        setQuantityModal((prev) => ({
+                          ...prev,
+                          quantity: prev.quantity + 1,
+                        }))
+                      }
+                      className="rounded-lg border border-[#E9E3DA] p-2 hover:bg-[#F7F5F0]"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t border-[#EEE9E2] pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setQuantityModal(null)}
+                    disabled={saving}
+                    className="rounded-lg border border-[#E9E3DA] px-4 py-2 text-sm text-gray-600 hover:bg-[#F7F5F0]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-lg bg-[#C65D35] px-4 py-2 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+                  >
+                    {saving ? "Updating..." : "Update Quantity"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

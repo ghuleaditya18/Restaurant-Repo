@@ -186,7 +186,13 @@ class StaffStatusUpdate(BaseModel):
     is_active: bool
 
 
-# 5. STAFF RESPONSE
+# 5. STAFF PASSWORD RESET
+class StaffPasswordReset(BaseModel):
+
+    password: str = Field(min_length=12, max_length=128)
+
+
+# 6. STAFF RESPONSE
 class StaffResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)

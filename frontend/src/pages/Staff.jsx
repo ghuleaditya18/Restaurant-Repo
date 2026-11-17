@@ -18,6 +18,7 @@ import {
   CalendarDays,
   Hash,
   Lock,
+  KeyRound,
 } from "lucide-react";
 
 import {
@@ -27,6 +28,7 @@ import {
   updateStaff,
   updateStaffStatus,
   deleteStaff,
+  resetStaffPassword,
 } from "../services/staffService";
 
 const EMPTY_FORM = {
@@ -140,6 +142,14 @@ export default function Staff() {
 
   // View staff modal state
   const [showViewModal, setShowViewModal] = useState(false);
+
+  // Reset password modal state
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resettingStaff, setResettingStaff] = useState(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+  const [resetSaving, setResetSaving] = useState(false);
   const [viewingStaff, setViewingStaff] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState("");
@@ -184,7 +194,7 @@ export default function Staff() {
   }, [successMessage]);
 
   // Escape key closes modals, and background scroll is locked while open
-  const modalOpen = showModal || showViewModal;
+  const modalOpen = showModal || showViewModal || showResetModal;
 
   useEffect(() => {
     if (!modalOpen) return undefined;
@@ -192,7 +202,8 @@ export default function Staff() {
     const handleKeyDown = (event) => {
       if (event.key !== "Escape") return;
 
-      if (showViewModal) closeViewModal();
+      if (showResetModal && !resetSaving) closeResetModal();
+      else if (showViewModal) closeViewModal();
       else if (!saving) closeModal();
     };
 
@@ -287,6 +298,51 @@ export default function Staff() {
     setFieldErrors({});
     setFormError("");
   }
+
+  // ---------- Reset password modal ----------
+  const openResetModal = (member) => {
+    setResettingStaff(member);
+    setResetPassword("");
+    setResetConfirmPassword("");
+    setResetError("");
+    setShowResetModal(true);
+  };
+
+  const closeResetModal = () => {
+    setShowResetModal(false);
+    setResettingStaff(null);
+    setResetPassword("");
+    setResetConfirmPassword("");
+    setResetError("");
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!resettingStaff) return;
+    if (!resetPassword) {
+      setResetError("Please enter a new password.");
+      return;
+    }
+    if (resetPassword.length < 12) {
+      setResetError("Password must be at least 12 characters.");
+      return;
+    }
+    if (resetPassword !== resetConfirmPassword) {
+      setResetError("Passwords do not match.");
+      return;
+    }
+    setResetSaving(true);
+    setResetError("");
+    try {
+      await resetStaffPassword(resettingStaff.id, resetPassword);
+      setSuccessMessage(`Password for ${resettingStaff.full_name} was reset successfully.`);
+      closeResetModal();
+    } catch (err) {
+      setResetError(getErrorMessage(err));
+    } finally {
+      setResetSaving(false);
+    }
+  };
 
   // ---------- View modal ----------
 
@@ -731,6 +787,16 @@ export default function Staff() {
 
                         <button
                           type="button"
+                          onClick={() => openResetModal(member)}
+                          title="Reset password"
+                          aria-label={`Reset password for ${member.full_name}`}
+                          className="rounded-lg p-2 text-[#29231F] transition hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                        >
+                          <KeyRound size={16} />
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => openEditModal(member)}
                           title="Edit staff"
                           aria-label={`Edit ${member.full_name}`}
@@ -950,6 +1016,95 @@ export default function Staff() {
                     : editingStaff
                       ? "Save Changes"
                       : "Create Staff"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetModal && resettingStaff && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && !resetSaving) closeResetModal();
+          }}
+        >
+          <div
+            className="my-auto w-full max-w-md overflow-hidden rounded-xl bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-center justify-between border-b border-[#EEE9E2] px-6 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[#29231F]">
+                  Reset Staff Password
+                </h2>
+                <p className="text-xs text-[#8A817B]">
+                  Set a new password for {resettingStaff.full_name} ({resettingStaff.email})
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeResetModal}
+                disabled={resetSaving}
+                className="rounded-lg p-1 text-[#8A817B] transition hover:bg-[#F7F5F0] hover:text-[#29231F]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-4 p-6">
+              {resetError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  {resetError}
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase text-[#8A817B]">
+                  New Password <span className="text-[#C65D35]">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  placeholder="Minimum 12 characters"
+                  className="w-full rounded-lg border border-[#E9E3DA] px-3.5 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase text-[#8A817B]">
+                  Confirm New Password <span className="text-[#C65D35]">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={resetConfirmPassword}
+                  onChange={(e) => setResetConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full rounded-lg border border-[#E9E3DA] px-3.5 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
+                <button
+                  type="button"
+                  onClick={closeResetModal}
+                  disabled={resetSaving}
+                  className="rounded-lg border border-[#E9E3DA] px-4 py-2.5 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetSaving}
+                  className="rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+                >
+                  {resetSaving ? "Resetting..." : "Reset Password"}
                 </button>
               </div>
             </form>

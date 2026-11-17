@@ -166,6 +166,10 @@ export default function Invoices() {
   const [refreshingOrders, setRefreshingOrders] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("ALL");
+  const [activeTab, setActiveTab] = useState("invoices");
+  const [transactionSearch, setTransactionSearch] = useState("");
+  const [transactionStatusFilter, setTransactionStatusFilter] = useState("ALL");
 
   // Modals
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -294,19 +298,49 @@ export default function Invoices() {
     const value = search.trim().toLowerCase();
 
     return invoices.filter((invoice) => {
-      return (
-        String(invoice.invoice_number || "")
-          .toLowerCase()
-          .includes(value) ||
-        String(invoice.order_number || "")
-          .toLowerCase()
-          .includes(value) ||
-        String(invoice.customer_name || "")
-          .toLowerCase()
-          .includes(value)
-      );
+      const matchesSearch =
+        String(invoice.invoice_number || "").toLowerCase().includes(value) ||
+        String(invoice.order_number || "").toLowerCase().includes(value) ||
+        String(invoice.customer_name || "").toLowerCase().includes(value);
+
+      const status = String(invoice.payment_status || "").trim().toUpperCase();
+      const matchesStatus =
+        paymentStatusFilter === "ALL" || status === paymentStatusFilter;
+
+      return matchesSearch && matchesStatus;
     });
-  }, [invoices, search]);
+  }, [invoices, search, paymentStatusFilter]);
+
+  const invoiceMap = useMemo(() => {
+    const map = {};
+    invoices.forEach((inv) => {
+      map[inv.id] = inv;
+    });
+    return map;
+  }, [invoices]);
+
+  const filteredPayments = useMemo(() => {
+    const value = transactionSearch.trim().toLowerCase();
+    return payments.filter((payment) => {
+      const inv = invoiceMap[payment.invoice_id];
+      const invoiceNumber = String(
+        inv?.invoice_number || `INV-${payment.invoice_id}`,
+      ).toLowerCase();
+      const refNumber = String(payment.reference_number || "").toLowerCase();
+      const method = String(payment.payment_method || "").toLowerCase();
+
+      const matchesSearch =
+        invoiceNumber.includes(value) ||
+        refNumber.includes(value) ||
+        method.includes(value);
+
+      const status = String(payment.status || "").trim().toUpperCase();
+      const matchesStatus =
+        transactionStatusFilter === "ALL" || status === transactionStatusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [payments, invoiceMap, transactionSearch, transactionStatusFilter]);
 
   // ==========================================
   // IDENTIFY ELIGIBLE ORDERS
@@ -725,17 +759,54 @@ export default function Invoices() {
           title="Paid Invoices"
           value={paidInvoices}
           icon={<CheckCircle2 size={20} />}
+          active={paymentStatusFilter === "PAID"}
+          onClick={() => {
+            setActiveTab("invoices");
+            setPaymentStatusFilter((prev) => (prev === "PAID" ? "ALL" : "PAID"));
+          }}
         />
 
         <SummaryCard
           title="Pending Invoices"
           value={pendingInvoices}
           icon={<Clock size={20} />}
+          active={paymentStatusFilter === "PENDING"}
+          onClick={() => {
+            setActiveTab("invoices");
+            setPaymentStatusFilter((prev) => (prev === "PENDING" ? "ALL" : "PENDING"));
+          }}
         />
+      </div>
+
+      {/* TABS */}
+      <div className="mb-4 flex border-b border-[#E9E3DA]">
+        <button
+          type="button"
+          onClick={() => setActiveTab("invoices")}
+          className={`border-b-2 px-5 py-3 text-sm font-semibold transition ${
+            activeTab === "invoices"
+              ? "border-[#C65D35] text-[#C65D35]"
+              : "border-transparent text-gray-500 hover:text-[#29231F]"
+          }`}
+        >
+          Invoices ({filteredInvoices.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("transactions")}
+          className={`border-b-2 px-5 py-3 text-sm font-semibold transition ${
+            activeTab === "transactions"
+              ? "border-[#C65D35] text-[#C65D35]"
+              : "border-transparent text-gray-500 hover:text-[#29231F]"
+          }`}
+        >
+          Payment Transactions ({filteredPayments.length})
+        </button>
       </div>
 
       {/* INVOICE TABLE */}
 
+      {activeTab === "invoices" && (
       <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
         <div className="flex flex-col justify-between gap-4 border-b border-[#EEE9E2] p-4 md:flex-row md:items-center">
           <div>
@@ -762,6 +833,16 @@ export default function Invoices() {
                 className="w-full rounded-lg border border-[#E9E3DA] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-64"
               />
             </div>
+
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => setPaymentStatusFilter(e.target.value)}
+              className="rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+            >
+              <option value="ALL">All Payment Statuses</option>
+              <option value="PAID">Paid</option>
+              <option value="PENDING">Pending</option>
+            </select>
 
             <button
               type="button"
@@ -881,6 +962,133 @@ export default function Invoices() {
           </table>
         </div>
       </div>
+      )}
+
+      {/* PAYMENT TRANSACTIONS TABLE */}
+      {activeTab === "transactions" && (
+        <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
+          <div className="flex flex-col justify-between gap-4 border-b border-[#EEE9E2] p-4 md:flex-row md:items-center">
+            <div>
+              <h2 className="font-semibold text-[#29231F]">
+                Payment Transactions
+              </h2>
+              <p className="mt-1 text-xs text-gray-500">
+                {filteredPayments.length} transactions recorded
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
+                <input
+                  value={transactionSearch}
+                  onChange={(event) => setTransactionSearch(event.target.value)}
+                  placeholder="Search transaction or ref..."
+                  className="w-full rounded-lg border border-[#E9E3DA] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-60"
+                />
+              </div>
+
+              <select
+                value={transactionStatusFilter}
+                onChange={(e) => setTransactionStatusFilter(e.target.value)}
+                className="rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="PAID">Paid</option>
+                <option value="PENDING">Pending</option>
+                <option value="FAILED">Failed</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => loadData()}
+                disabled={loading}
+                title="Refresh payments"
+                className="rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-gray-600 hover:bg-[#F7F5F0] disabled:opacity-50"
+              >
+                <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[800px] text-left">
+              <thead className="bg-[#FAF9F6] text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-4 py-3">Txn ID</th>
+                  <th className="px-4 py-3">Invoice Number</th>
+                  <th className="px-4 py-3">Payment Method</th>
+                  <th className="px-4 py-3">Reference Number</th>
+                  <th className="px-4 py-3">Amount</th>
+                  <th className="px-4 py-3">Paid Date</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0ECE6]">
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" className="p-10 text-center text-sm text-gray-500">
+                      Loading payments...
+                    </td>
+                  </tr>
+                ) : filteredPayments.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="p-10 text-center text-sm text-gray-500">
+                      No payment transactions found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredPayments.map((payment) => {
+                    const inv = invoiceMap[payment.invoice_id];
+                    return (
+                      <tr key={payment.id} className="hover:bg-[#FAF9F6]">
+                        <td className="px-4 py-4 text-sm font-medium text-[#29231F]">
+                          #{payment.id}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-[#C65D35] font-medium">
+                          {inv?.invoice_number || `Invoice #${payment.invoice_id}`}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-[#29231F]">
+                          {payment.payment_method}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
+                          {payment.reference_number || "—"}
+                        </td>
+                        <td className="px-4 py-4 text-sm font-semibold text-[#29231F]">
+                          {formatCurrency(payment.amount)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
+                          {payment.paid_at
+                            ? new Date(payment.paid_at).toLocaleString("en-IN", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyle(
+                              payment.status,
+                            )}`}
+                          >
+                            {payment.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* =====================================
           GENERATE INVOICE MODAL
@@ -1321,9 +1529,18 @@ export default function Invoices() {
 // REUSABLE COMPONENTS
 // ==========================================
 
-function SummaryCard({ title, value, icon }) {
+function SummaryCard({ title, value, icon, active = false, onClick }) {
   return (
-    <div className="rounded-xl border border-[#E9E3DA] bg-white p-4">
+    <div
+      onClick={onClick}
+      className={`rounded-xl border p-4 transition ${
+        onClick ? "cursor-pointer" : ""
+      } ${
+        active
+          ? "border-[#C65D35] bg-[#FDF9F7] shadow-sm ring-1 ring-[#C65D35]"
+          : "border-[#E9E3DA] bg-white hover:border-[#D6C7BC]"
+      }`}
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">{title}</p>
@@ -1331,7 +1548,11 @@ function SummaryCard({ title, value, icon }) {
           <h3 className="mt-1 text-xl font-semibold text-[#29231F]">{value}</h3>
         </div>
 
-        <div className="rounded-lg bg-[#F5E5DC] p-2.5 text-[#C65D35]">
+        <div
+          className={`rounded-lg p-2.5 transition ${
+            active ? "bg-[#C65D35] text-white" : "bg-[#F5E5DC] text-[#C65D35]"
+          }`}
+        >
           {icon}
         </div>
       </div>

@@ -5,7 +5,6 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
-import ModulePage from "./pages/ModulePage";
 import Staff from "./pages/Staff";
 import Menu from "./pages/Menu";
 import Customers from "./pages/Customers";
@@ -20,8 +19,8 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
+      <div className="min-h-screen flex items-center justify-center text-[#C65D35]">
+        Verifying your session...
       </div>
     );
   }
@@ -44,14 +43,35 @@ function AppRoutes() {
 
         <Route path="orders" element={<Orders />} />
 
-        <Route path="tables" element={<Tables />} />
-
-        <Route path="/menu" element={<Menu />} />
-
-        <Route path="customers" element={<Customers />} />
+        <Route
+          path="tables"
+          element={
+            <ProtectedRoute allowedRoles={["MANAGER"]}>
+              <Tables />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
-          path="/staff"
+          path="menu"
+          element={
+            <ProtectedRoute allowedRoles={["MANAGER"]}>
+              <Menu />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="customers"
+          element={
+            <ProtectedRoute allowedRoles={["MANAGER"]}>
+              <Customers />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="staff"
           element={
             <ProtectedRoute allowedRoles={["MANAGER"]}>
               <Staff />

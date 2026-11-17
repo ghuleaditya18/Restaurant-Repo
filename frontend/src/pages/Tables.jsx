@@ -27,6 +27,7 @@ import {
 const EMPTY_FORM = {
   table_number: "",
   capacity: "",
+  status: "Available",
 };
 
 const getErrorMessage = (error) => {
@@ -152,6 +153,7 @@ export default function Tables() {
     setForm({
       table_number: table.table_number,
       capacity: String(table.capacity),
+      status: table.status || "Available",
     });
 
     setFormError("");
@@ -185,6 +187,10 @@ export default function Tables() {
       table_number: form.table_number.trim(),
       capacity: Number(form.capacity),
     };
+
+    if (editingTable && form.status) {
+      tableData.status = form.status;
+    }
 
     try {
       if (editingTable) {
@@ -598,6 +604,26 @@ export default function Tables() {
               required
               min={1}
             />
+
+            {editingTable && (
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Occupancy Status
+                </label>
+                <select
+                  name="status"
+                  value={form.status || "Available"}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+                >
+                  <option value="Available">Available</option>
+                  <option value="Occupied">Occupied</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  Tables with active orders cannot be manually marked Available.
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
               <button

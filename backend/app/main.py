@@ -12,6 +12,7 @@ from app.api.table import router as table_router
 from app.api.order import router as order_router
 from app.api.invoice import router as invoice_router
 from app.api.payment import router as payment_router
+from app.api.dashboard import router as dashboard_router
 
 from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import get_db
@@ -48,6 +49,8 @@ app.include_router(order_router, prefix="/api/orders")
 app.include_router(invoice_router, prefix="/api/invoices")
 
 app.include_router(payment_router, prefix="/api/payments")
+
+app.include_router(dashboard_router, prefix="/api/dashboard", tags=["Dashboard"])
 
 # Serves uploaded menu photos, e.g. http://localhost:8000/uploads/menu/<name>.jpg
 # (the folder is created when app.core.image_upload is imported)

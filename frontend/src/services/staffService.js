@@ -43,3 +43,12 @@ export const deleteStaff = async (staffId) => {
   const response = await api.delete(`/api/staff/${staffId}`);
   return response.data;
 };
+
+
+// Reset a staff member password
+export const resetStaffPassword = async (staffId, password) => {
+  const response = await api.patch(`/api/staff/${staffId}/password`, {
+    password,
+  });
+  return response.data;
+};

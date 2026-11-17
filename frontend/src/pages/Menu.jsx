@@ -58,7 +58,7 @@ const MAX_IMAGE_SIZE_MB = 5;
 // Server origin used to build image URLs from stored relative paths
 // such as "/uploads/menu/abc.jpg". Set VITE_API_ORIGIN in frontend/.env.
 const API_ORIGIN = (
-  import.meta.env.VITE_API_ORIGIN || "http://localhost:8000"
+  import.meta.env.VITE_API_ORIGIN || "http://127.0.0.1:8000"
 ).replace(/\/+$/, "");
 
 // Field names the menu item API may use for the stored image path.

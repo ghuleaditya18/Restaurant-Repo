@@ -13,6 +13,7 @@ from app.schemas.staff import (
     StaffPut,
     StaffUpdate,
     StaffStatusUpdate,
+    StaffPasswordReset,
     StaffResponse,
 )
 
@@ -346,4 +347,23 @@ def delete_staff(
             if has_history
             else "Staff member deleted successfully."
         )
+    }
+
+
+
+# 8. RESET STAFF PASSWORD
+@router.patch("/{staff_id}/password")
+def reset_staff_password(
+    staff_id: int,
+    data: StaffPasswordReset,
+    db: Session = Depends(get_db),
+):
+
+    staff, user = get_staff_record(db, staff_id)
+
+    user.password_hash = hash_password(data.password)
+    db.commit()
+
+    return {
+        "message": f"Password for staff member '{user.full_name}' was reset successfully."
     }

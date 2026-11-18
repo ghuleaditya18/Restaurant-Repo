@@ -1,27 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ShoppingCart,
-  ClipboardList,
   Plus,
   Search,
   Eye,
   X,
   Pencil,
   RefreshCw,
-  Minus,
   Trash2,
-  Utensils,
-  Users,
-  Armchair,
-  Clock,
-  CheckCircle2,
-  ChefHat,
-  Receipt,
-  ArrowRight,
   History,
-  Calendar,
-  IndianRupee,
-  AlertCircle,
 } from "lucide-react";
 
 import {
@@ -43,16 +30,6 @@ import { useNotification } from "../context/NotificationContext";
 // ==========================================
 // CONSTANTS
 // ==========================================
-
-const ORDER_STATUSES = [
-  "Pending",
-  "Confirmed",
-  "Preparing",
-  "Ready",
-  "Served",
-  "Completed",
-  "Cancelled",
-];
 
 const STATUS_TRANSITIONS = {
   Pending: ["Confirmed", "Cancelled"],

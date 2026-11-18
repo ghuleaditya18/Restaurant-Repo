@@ -233,7 +233,7 @@ function Login() {
 
         {/* Branding */}
         <div className="flex justify-center mb-7">
-          <div className="bg-[#29231F] text-white p-4 rounded-2xl">
+          <div className="bg-[#C65D35] text-white p-4 rounded-2xl shadow-xs">
             <ChefHat size={30} />
           </div>
         </div>

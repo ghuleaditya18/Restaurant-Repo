@@ -605,12 +605,15 @@ export default function Invoices() {
 
     let canShareFile = false;
     try {
-      canShareFile =
+      if (
         typeof navigator.share === "function" &&
         typeof navigator.canShare === "function" &&
-        navigator.canShare({ files: [file] });
+        navigator.canShare({ files: [file] })
+      ) {
+        canShareFile = true;
+      }
     } catch {
-      canShareFile = false;
+      // browser does not support file sharing
     }
 
     if (canShareFile) {

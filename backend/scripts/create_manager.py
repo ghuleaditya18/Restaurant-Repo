@@ -1,4 +1,11 @@
+import sys
+from pathlib import Path
 from getpass import getpass
+
+# Ensure the backend directory is in sys.path
+backend_root = Path(__file__).resolve().parent.parent
+if str(backend_root) not in sys.path:
+    sys.path.insert(0, str(backend_root))
 
 from app.db.session import SessionLocal
 from app.models import User

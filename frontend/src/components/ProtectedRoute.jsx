@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-function ProtectedRoute({ children, allowedRoles }) {
+function ProtectedRoute({ children, allowedRoles = ["MANAGER", "RECEPTIONIST"] }) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -16,11 +16,18 @@ function ProtectedRoute({ children, allowedRoles }) {
     return <Navigate to="/login" replace />;
   }
 
+  const role = user.role ? user.role.toUpperCase() : "";
+
+  // Staff members cannot access any protected frontend page
+  if (role === "STAFF") {
+    return <Navigate to="/login" replace />;
+  }
+
   if (
     allowedRoles &&
-    !allowedRoles.includes(user.role.toUpperCase())
+    !allowedRoles.map((r) => r.toUpperCase()).includes(role)
   ) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;

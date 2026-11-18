@@ -33,12 +33,6 @@ function Header({ onOpenMobileMenu }) {
     : "U";
 
   const userName = user?.full_name || "User";
-  const userRole =
-    user?.role?.toUpperCase() === "MANAGER" ? "Manager" : "Staff";
-  const roleSubtitle =
-    user?.role?.toUpperCase() === "MANAGER"
-      ? "Administrator"
-      : "Staff Member";
 
   const handleLogout = () => {
     setDropdownOpen(false);
@@ -99,11 +93,9 @@ function Header({ onOpenMobileMenu }) {
           </div>
 
           <div className="hidden text-left sm:block">
-            <p className="text-xs font-semibold leading-tight text-[#29231F]">
+            <p className="text-sm font-semibold leading-tight text-[#29231F]">
               {userName}
             </p>
-
-            <p className="text-[11px] text-[#8A817B]">{roleSubtitle}</p>
           </div>
 
           <ChevronDown
@@ -116,17 +108,14 @@ function Header({ onOpenMobileMenu }) {
 
         {/* User Profile Dropdown Menu */}
         {dropdownOpen && (
-          <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[#E9E3DA] bg-white py-1.5 shadow-lg z-30">
+          <div className="absolute right-0 mt-2 w-52 rounded-xl border border-[#E9E3DA] bg-white py-1.5 shadow-lg z-30">
             <div className="border-b border-[#EEE9E2] px-4 py-2.5">
-              <p className="truncate text-xs font-semibold text-[#29231F]">
+              <p className="truncate text-sm font-semibold text-[#29231F]">
                 {userName}
               </p>
-              <p className="truncate text-[11px] text-[#8A817B]">
+              <p className="truncate text-xs text-[#8A817B] mt-0.5">
                 {user?.email || ""}
               </p>
-              <span className="mt-1.5 inline-block rounded-full bg-[#F5E5DC] px-2 py-0.5 text-[10px] font-semibold text-[#C65D35]">
-                {userRole}
-              </span>
             </div>
 
             <div className="pt-1">

@@ -48,7 +48,7 @@ class StaffCreate(BaseModel):
 
     email: str
 
-    password: str = Field(min_length=12)
+    password: str | None = Field(default=None, min_length=12)
 
     employee_code: str = Field(min_length=2, max_length=30)
 

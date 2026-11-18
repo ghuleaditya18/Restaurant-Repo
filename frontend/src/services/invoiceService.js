@@ -4,8 +4,8 @@ import api from "./api";
 // INVOICE SERVICES
 // ==========================================
 
-export const getAllInvoices = async () => {
-  const response = await api.get("/api/invoices/");
+export const getAllInvoices = async (params = {}) => {
+  const response = await api.get("/api/invoices/", { params });
   return response.data;
 };
 

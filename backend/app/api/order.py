@@ -1,8 +1,11 @@
+from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
+
+from app.core.date_utils import get_date_range
 
 from app.db.session import get_db
 from app.models.entities import (
@@ -35,7 +38,7 @@ from app.schemas.order import (
 
 router = APIRouter(
     tags=["Order Management"],
-    dependencies=[Depends(require_roles("MANAGER", "STAFF"))],
+    dependencies=[Depends(require_roles("MANAGER"))],
 )
 
 
@@ -83,6 +86,7 @@ def get_order_record(db: Session, order_id: int):
         .options(
             joinedload(Order.customer),
             joinedload(Order.table),
+            joinedload(Order.invoice),
             selectinload(Order.items),
             selectinload(Order.status_history),
         )
@@ -101,6 +105,10 @@ def build_order_response(order):
         (item.line_total for item in order.items),
         Decimal("0.00"),
     )
+
+    invoice_id = order.invoice.id if order.invoice else None
+    invoice_number = order.invoice.invoice_number if order.invoice else None
+    payment_status = order.invoice.payment_status if order.invoice else None
 
     return OrderResponse(
         id=order.id,
@@ -121,6 +129,10 @@ def build_order_response(order):
             )
         ],
         subtotal=subtotal,
+        created_at=order.created_at,
+        invoice_id=invoice_id,
+        invoice_number=invoice_number,
+        payment_status=payment_status,
     )
 
 
@@ -283,14 +295,24 @@ def get_all_orders(
     status: OrderStatus | None = None,
     table_id: int | None = None,
     customer_id: int | None = None,
+    view: str | None = None,
+    preset: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
     query = db.query(Order).options(
         joinedload(Order.customer),
         joinedload(Order.table),
+        joinedload(Order.invoice),
         selectinload(Order.items),
         selectinload(Order.status_history),
     )
+
+    if view == "active":
+        query = query.filter(Order.status.notin_(TERMINAL_STATUSES))
+    elif view == "history":
+        query = query.filter(Order.status.in_(TERMINAL_STATUSES))
 
     if status is not None:
         query = query.filter(Order.status == status)
@@ -300,6 +322,10 @@ def get_all_orders(
 
     if customer_id is not None:
         query = query.filter(Order.customer_id == customer_id)
+
+    start_dt, end_dt = get_date_range(preset, start_date, end_date)
+    if start_dt is not None and end_dt is not None:
+        query = query.filter(Order.created_at >= start_dt, Order.created_at <= end_dt)
 
     orders = query.order_by(Order.id.desc()).all()
 

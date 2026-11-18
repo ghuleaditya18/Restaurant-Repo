@@ -4,8 +4,8 @@ import api from "./api";
 // PAYMENT SERVICES
 // ==========================================
 
-export const getAllPayments = async () => {
-  const response = await api.get("/api/payments/");
+export const getAllPayments = async (params = {}) => {
+  const response = await api.get("/api/payments/", { params });
   return response.data;
 };
 

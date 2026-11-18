@@ -18,6 +18,8 @@ class DashboardStatistics(BaseModel):
     today_orders: int = 0
     active_orders: int = 0
     pending_payments: int = 0
+    total_revenue: Decimal = Decimal("0.00")
+    date_filter_label: str = "Today"
 
 
 class RecentOrderResponse(BaseModel):

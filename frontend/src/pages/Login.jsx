@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  Utensils,
+  ChefHat,
   Mail,
   Lock,
   ArrowRight,
@@ -193,6 +193,10 @@ function Login() {
         setServerError(
           message || "Invalid email or password. Please try again."
         );
+      } else if (status === 403) {
+        setServerError(
+          message || "Staff accounts are not permitted to log in."
+        );
       } else if (status === 422) {
         setServerError("Invalid login information. Please check your entries.");
       } else if (status === 429) {
@@ -230,7 +234,7 @@ function Login() {
         {/* Branding */}
         <div className="flex justify-center mb-7">
           <div className="bg-[#29231F] text-white p-4 rounded-2xl">
-            <Utensils size={30} />
+            <ChefHat size={30} />
           </div>
         </div>
 

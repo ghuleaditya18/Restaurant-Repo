@@ -23,6 +23,7 @@ import {
   updateTable,
   deleteTable,
 } from "../services/tableService";
+import { useNotification } from "../context/NotificationContext";
 
 const EMPTY_FORM = {
   table_number: "",
@@ -45,6 +46,7 @@ const getErrorMessage = (error) => {
 };
 
 export default function Tables() {
+  const { showError, showInfo, confirm } = useNotification();
   const [tables, setTables] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -248,9 +250,13 @@ export default function Tables() {
   const handleStatusChange = async (table) => {
     const action = table.is_active ? "deactivate" : "activate";
 
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action} Table ${table.table_number}?`,
-    );
+    const confirmed = await confirm({
+      title: `${table.is_active ? "Deactivate" : "Activate"} Table`,
+      message: `Are you sure you want to ${action} Table ${table.table_number}?`,
+      confirmText: action === "deactivate" ? "Deactivate" : "Activate",
+      cancelText: "Cancel",
+      variant: table.is_active ? "warning" : "primary",
+    });
 
     if (!confirmed) return;
 
@@ -266,9 +272,13 @@ export default function Tables() {
         previous.map((item) => (item.id === table.id ? updatedTable : item)),
       );
 
-      setSuccessMessage(`Table ${table.table_number} ${action}d successfully.`);
+      const msg = `Table ${table.table_number} ${action}d successfully.`;
+      setSuccessMessage(msg);
+      showInfo(msg, "Table Status Updated");
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      const msg = getErrorMessage(error);
+      setPageError(msg);
+      showError(msg, "Update Failed");
     }
   };
 
@@ -277,9 +287,13 @@ export default function Tables() {
   // ==========================================
 
   const handleDelete = async (table) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete Table ${table.table_number}?`,
-    );
+    const confirmed = await confirm({
+      title: "Delete Table",
+      message: `Are you sure you want to delete Table ${table.table_number}? This action cannot be undone.`,
+      confirmText: "Delete Table",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 
@@ -291,9 +305,13 @@ export default function Tables() {
 
       setTables((previous) => previous.filter((item) => item.id !== table.id));
 
-      setSuccessMessage(`Table ${table.table_number} deleted successfully.`);
+      const msg = `Table ${table.table_number} deleted successfully.`;
+      setSuccessMessage(msg);
+      showError(msg, "Table Deleted");
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      const msg = getErrorMessage(error);
+      setPageError(msg);
+      showError(msg, "Delete Failed");
     }
   };
 
@@ -307,10 +325,6 @@ export default function Tables() {
 
       <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#C65D35]">
-            Restaurant Administration
-          </p>
-
           <h1 className="text-2xl font-semibold text-[#29231F] md:text-3xl">
             Table Management
           </h1>

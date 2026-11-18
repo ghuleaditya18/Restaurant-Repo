@@ -776,10 +776,6 @@ export default function Menu() {
 
       <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-[#C65D35]">
-            Restaurant Administration
-          </p>
-
           <h1 className="text-xl font-semibold text-[#29231F] md:text-2xl">
             Menu Management
           </h1>

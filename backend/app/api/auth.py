@@ -32,6 +32,14 @@ def login(
         User.email == login_data.email
     ).first()
 
+    if user is not None:
+        user_role = getattr(user.role, "value", user.role)
+        if str(user_role).upper() != "MANAGER":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Staff accounts are not permitted to log in."
+            )
+
     if (
         user is None
         or not verify_password(

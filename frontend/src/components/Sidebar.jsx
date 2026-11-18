@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard,
@@ -10,21 +10,23 @@ import {
   FileText,
   LogOut,
   X,
+  Menu,
+  ChefHat,
 } from "lucide-react";
 
 const menuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard, end: true },
   { name: "Orders", path: "/orders", icon: ClipboardList },
-  { name: "Tables", path: "/tables", icon: Grid3X3, managerOnly: true },
-  { name: "Menu Management", path: "/menu", icon: Utensils, managerOnly: true },
-  { name: "Customers", path: "/customers", icon: Users, managerOnly: true },
-  { name: "Staff Management", path: "/staff", icon: UserCog, managerOnly: true },
+  { name: "Tables", path: "/tables", icon: Grid3X3 },
+  { name: "Menu Management", path: "/menu", icon: Utensils },
+  { name: "Customers", path: "/customers", icon: Users },
+  { name: "Staff Management", path: "/staff", icon: UserCog },
   { name: "Invoices", path: "/invoices", icon: FileText },
 ];
 
-function SidebarNav({ items, onClose }) {
+function SidebarNav({ items, onClose, collapsed = false }) {
   return (
-    <nav className="space-y-1">
+    <nav className="space-y-1.5">
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -33,16 +35,21 @@ function SidebarNav({ items, onClose }) {
             to={item.path}
             end={item.end}
             onClick={onClose}
+            title={item.name}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm font-medium transition-all duration-150 ${
+              `flex items-center rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 ${
+                collapsed
+                  ? "justify-center p-2.5"
+                  : "gap-3 px-3.5 py-2.5"
+              } ${
                 isActive
                   ? "bg-[#C65D35] text-white shadow-xs"
                   : "text-[#D6C7BC] hover:bg-white/10 hover:text-white"
               }`
             }
           >
-            <Icon size={18} />
-            <span>{item.name}</span>
+            <Icon size={collapsed ? 20 : 18} className="shrink-0" />
+            {!collapsed && <span className="truncate">{item.name}</span>}
           </NavLink>
         );
       })}
@@ -50,8 +57,13 @@ function SidebarNav({ items, onClose }) {
   );
 }
 
-function Sidebar({ mobileOpen = false, onClose }) {
-  const { user, logout } = useAuth();
+function Sidebar({
+  mobileOpen = false,
+  onClose,
+  collapsed = false,
+  onToggleCollapse,
+}) {
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -60,10 +72,7 @@ function Sidebar({ mobileOpen = false, onClose }) {
     navigate("/login", { replace: true });
   };
 
-  const isManager = user?.role?.toUpperCase() === "MANAGER";
-  const visibleMenuItems = menuItems.filter(
-    (item) => !item.managerOnly || isManager,
-  );
+  const visibleMenuItems = menuItems;
 
   return (
     <>
@@ -78,27 +87,32 @@ function Sidebar({ mobileOpen = false, onClose }) {
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[250px] flex-col bg-[#29231F] text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#29231F] text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Branding & Close Button */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-[#C65D35] p-2">
-              <Utensils size={18} />
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+          <Link
+            to="/"
+            onClick={onClose}
+            className="group flex items-center gap-2.5 transition-opacity hover:opacity-90 min-w-0 cursor-pointer"
+            title="DineFlow - Dashboard"
+          >
+            <div className="rounded-lg bg-[#C65D35] p-2 text-white shadow-xs group-hover:bg-[#A94B2B] transition-colors shrink-0">
+              <ChefHat size={18} />
             </div>
-            <div>
-              <h1 className="text-base font-bold tracking-wide">DineFlow</h1>
-              <p className="text-[11px] text-[#D6C7BC]">Restaurant Management</p>
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-wide text-white truncate">DineFlow</h1>
             </div>
-          </div>
+          </Link>
 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[#D6C7BC] hover:bg-white/10 hover:text-white"
+            className="rounded-lg p-1.5 text-[#D6C7BC] hover:bg-white/10 hover:text-white transition-colors"
             aria-label="Close sidebar"
+            title="Close navigation drawer"
           >
             <X size={18} />
           </button>
@@ -109,7 +123,7 @@ function Sidebar({ mobileOpen = false, onClose }) {
           <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#A99B90]">
             Main Menu
           </p>
-          <SidebarNav items={visibleMenuItems} onClose={onClose} />
+          <SidebarNav items={visibleMenuItems} onClose={onClose} collapsed={false} />
         </div>
 
         {/* Bottom Actions */}
@@ -117,48 +131,96 @@ function Sidebar({ mobileOpen = false, onClose }) {
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-[#D6C7BC] transition hover:bg-white/10 hover:text-white"
+            className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#D6C7BC] transition hover:bg-white/10 hover:text-white cursor-pointer"
+            title="Logout"
           >
-            <LogOut size={18} />
+            <LogOut size={18} className="shrink-0" />
             <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      {/* Desktop Sidebar (preserved exactly) */}
-      <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col bg-[#29231F] text-white lg:flex">
-        {/* Branding */}
-        <div className="border-b border-white/10 px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-[#C65D35] p-2.5">
-              <Utensils size={20} />
-            </div>
+      {/* Desktop Sidebar (Collapsible) */}
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-[#29231F] text-white transition-all duration-300 ease-in-out lg:flex overflow-x-hidden ${
+          collapsed ? "w-[72px]" : "w-[240px]"
+        }`}
+      >
+        {/* Branding & Hamburger Header */}
+        {collapsed ? (
+          <div className="flex flex-col items-center justify-center gap-2.5 border-b border-white/10 py-3.5 px-2">
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="rounded-lg p-2 text-[#D6C7BC] hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              title="Expand Sidebar"
+              aria-label="Expand Sidebar"
+            >
+              <Menu size={20} />
+            </button>
 
-            <div>
-              <h1 className="text-lg font-bold tracking-wide">DineFlow</h1>
-              <p className="text-xs text-[#D6C7BC]">Restaurant Management</p>
-            </div>
+            <Link
+              to="/"
+              className="group flex items-center justify-center rounded-lg bg-[#C65D35] p-2 text-white shadow-xs group-hover:bg-[#A94B2B] transition-colors cursor-pointer"
+              title="DineFlow - Dashboard"
+              aria-label="DineFlow - Dashboard"
+            >
+              <ChefHat size={20} />
+            </Link>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+            <Link
+              to="/"
+              className="group flex items-center gap-2.5 transition-opacity hover:opacity-90 min-w-0 cursor-pointer"
+              title="DineFlow - Dashboard"
+            >
+              <div className="rounded-lg bg-[#C65D35] p-2 text-white shrink-0 shadow-xs group-hover:bg-[#A94B2B] transition-colors">
+                <ChefHat size={20} />
+              </div>
+              <div className="min-w-0 overflow-hidden">
+                <h1 className="text-base font-bold tracking-wide text-white truncate">DineFlow</h1>
+              </div>
+            </Link>
+
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="rounded-lg p-1.5 text-[#D6C7BC] hover:bg-white/10 hover:text-white transition-colors shrink-0 cursor-pointer"
+              title="Collapse Sidebar"
+              aria-label="Collapse Sidebar"
+            >
+              <Menu size={20} />
+            </button>
+          </div>
+        )}
 
         {/* Navigation */}
-        <div className="flex-1 overflow-y-auto px-3.5 py-5">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#A99B90]">
-            Main Menu
-          </p>
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden py-4 ${collapsed ? "px-2" : "px-3.5"}`}>
+          {!collapsed && (
+            <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#A99B90]">
+              Main Menu
+            </p>
+          )}
 
-          <SidebarNav items={visibleMenuItems} />
+          <SidebarNav items={visibleMenuItems} collapsed={collapsed} />
         </div>
 
-        {/* Bottom Navigation */}
-        <div className="border-t border-white/10 p-3.5">
+        {/* Bottom Actions */}
+        <div className={`border-t border-white/10 ${collapsed ? "p-2.5 flex justify-center" : "p-3.5"}`}>
           <button
             type="button"
             onClick={handleLogout}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-[#D6C7BC] transition hover:bg-white/10 hover:text-white"
+            className={`flex items-center rounded-xl text-xs sm:text-sm text-[#D6C7BC] transition hover:bg-white/10 hover:text-white cursor-pointer ${
+              collapsed
+                ? "justify-center p-2.5"
+                : "w-full gap-2.5 px-3.5 py-2.5"
+            }`}
+            title="Logout"
+            aria-label="Logout"
           >
-            <LogOut size={18} />
-            <span>Logout</span>
+            <LogOut size={collapsed ? 20 : 18} className="shrink-0" />
+            {!collapsed && <span>Logout</span>}
           </button>
         </div>
       </aside>

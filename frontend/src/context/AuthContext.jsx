@@ -25,7 +25,12 @@ export function AuthProvider({ children }) {
 
       try {
         const response = await api.get("/api/auth/me");
-        setUser(response.data);
+        if (response.data.role?.toUpperCase() === "STAFF") {
+          sessionStorage.removeItem("access_token");
+          setUser(null);
+        } else {
+          setUser(response.data);
+        }
       } catch {
         sessionStorage.removeItem("access_token");
         setUser(null);
@@ -51,6 +56,12 @@ export function AuthProvider({ children }) {
 
     try {
       const userResponse = await api.get("/api/auth/me");
+
+      if (userResponse.data.role?.toUpperCase() === "STAFF") {
+        sessionStorage.removeItem("access_token");
+        setUser(null);
+        throw new Error("Staff accounts are not permitted to log in.");
+      }
 
       setUser(userResponse.data);
 

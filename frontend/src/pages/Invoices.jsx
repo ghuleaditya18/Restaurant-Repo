@@ -31,6 +31,8 @@ import {
 } from "../services/paymentService";
 
 import { getAllOrders } from "../services/orderService";
+import DateFilter from "../components/DateFilter";
+import { useNotification } from "../context/NotificationContext";
 
 // ==========================================
 // CONSTANTS
@@ -189,6 +191,15 @@ export default function Invoices() {
   const [pdfPreparing, setPdfPreparing] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
+  const { showSuccess, showError, confirm } = useNotification();
+
+  // Date Filter State
+  const [dateFilter, setDateFilter] = useState({
+    preset: "today",
+    startDate: "",
+    endDate: "",
+  });
+
   // Notifications
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -204,9 +215,17 @@ export default function Invoices() {
     setError("");
 
     try {
+      const params = {
+        preset: dateFilter.preset,
+      };
+      if (dateFilter.preset === "custom") {
+        if (dateFilter.startDate) params.start_date = dateFilter.startDate;
+        if (dateFilter.endDate) params.end_date = dateFilter.endDate;
+      }
+
       const [invoiceData, paymentData, orderData] = await Promise.all([
-        getAllInvoices(),
-        getAllPayments(),
+        getAllInvoices(params),
+        getAllPayments(params),
         getAllOrders(),
       ]);
 
@@ -224,12 +243,14 @@ export default function Invoices() {
         orders: nextOrders,
       };
     } catch (err) {
-      setError(errorMessage(err));
+      const msg = errorMessage(err);
+      setError(msg);
+      showError(msg, "Failed to load invoices");
       throw err;
     } finally {
       if (showLoader) setLoading(false);
     }
-  }, []);
+  }, [dateFilter, showError]);
 
   useEffect(() => {
     loadData().catch(() => {
@@ -396,7 +417,9 @@ export default function Invoices() {
       setShowGenerateModal(false);
       setSelectedOrder("");
       setGstRate("5");
-      setMessage("Invoice generated successfully.");
+      const msg = "Invoice generated successfully.";
+      setMessage(msg);
+      showSuccess(msg, "Invoice Generated");
 
       await loadData({ showLoader: false });
     } catch (err) {
@@ -487,7 +510,9 @@ export default function Invoices() {
       const blob = await getPdfForInvoice(invoice);
 
       savePdfFile(blob, getInvoiceFilename(invoice));
-      setMessage("Invoice PDF downloaded successfully.");
+      const msg = "Invoice PDF downloaded successfully.";
+      setMessage(msg);
+      showSuccess(msg, "PDF Downloaded");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -645,9 +670,9 @@ export default function Invoices() {
       });
 
       setShowPaymentModal(false);
-      setMessage(
-        "Payment record created successfully. Payment is currently Pending.",
-      );
+      const msg = "Payment record created successfully. Payment is currently Pending.";
+      setMessage(msg);
+      showSuccess(msg, "Payment Recorded");
 
       await loadData({ showLoader: false });
     } catch (err) {
@@ -662,9 +687,13 @@ export default function Invoices() {
   // ==========================================
 
   const handleMarkPaid = async (payment) => {
-    const confirmed = window.confirm(
-      "Confirm that this payment has been received?",
-    );
+    const confirmed = await confirm({
+      title: "Confirm Payment Receipt",
+      message: "Are you sure you want to mark this payment as Paid?",
+      confirmText: "Mark Paid",
+      cancelText: "Cancel",
+      variant: "primary",
+    });
 
     if (!confirmed) return;
 
@@ -674,7 +703,9 @@ export default function Invoices() {
     try {
       await updatePaymentStatus(payment.id, { status: "Paid" });
 
-      setMessage("Payment marked as Paid successfully.");
+      const successText = "Payment marked as Paid successfully.";
+      setMessage(successText);
+      showSuccess(successText, "Payment Settled");
 
       await loadData({ showLoader: false });
 
@@ -683,7 +714,9 @@ export default function Invoices() {
         setSelectedInvoice(updatedInvoice);
       }
     } catch (err) {
-      setError(errorMessage(err));
+      const msg = errorMessage(err);
+      setError(msg);
+      showError(msg, "Payment Update Failed");
     } finally {
       setSaving(false);
     }
@@ -699,10 +732,6 @@ export default function Invoices() {
 
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#C65D35]">
-            Restaurant Administration
-          </p>
-
           <h1 className="text-2xl font-semibold text-[#29231F] md:text-3xl">
             Invoice Management
           </h1>
@@ -739,6 +768,16 @@ export default function Invoices() {
           variant="error"
         />
       )}
+
+      {/* DATE FILTER */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <DateFilter
+          selectedPreset={dateFilter.preset}
+          startDate={dateFilter.startDate}
+          endDate={dateFilter.endDate}
+          onChange={(newFilter) => setDateFilter(newFilter)}
+        />
+      </div>
 
       {/* SUMMARY CARDS */}
 

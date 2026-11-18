@@ -9,6 +9,7 @@ import {
   updateCustomer,
   deleteCustomer,
 } from "../services/customerService";
+import { useNotification } from "../context/NotificationContext";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -40,6 +41,7 @@ const getErrorMessage = (error) => {
 // ==========================================
 
 export default function Customers() {
+  const { showSuccess, showError, confirm } = useNotification();
   const [customers, setCustomers] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -169,12 +171,14 @@ export default function Customers() {
     try {
       if (editingCustomer) {
         await updateCustomer(editingCustomer.id, customerData);
-
-        setSuccessMessage("Customer details updated successfully.");
+        const msg = "Customer details updated successfully.";
+        setSuccessMessage(msg);
+        showSuccess(msg, "Customer Updated");
       } else {
         await createCustomer(customerData);
-
-        setSuccessMessage("Customer registered successfully.");
+        const msg = "Customer registered successfully.";
+        setSuccessMessage(msg);
+        showSuccess(msg, "Customer Created");
       }
 
       setShowModal(false);
@@ -225,9 +229,13 @@ export default function Customers() {
   // ==========================================
 
   const handleDelete = async (customer) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete ${customer.full_name}?`,
-    );
+    const confirmed = await confirm({
+      title: "Delete Customer",
+      message: `Are you sure you want to delete ${customer.full_name}? This action cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
 
     if (!confirmed) return;
 
@@ -241,9 +249,13 @@ export default function Customers() {
         previous.filter((item) => item.id !== customer.id),
       );
 
-      setSuccessMessage(`${customer.full_name} deleted successfully.`);
+      const msg = `${customer.full_name} deleted successfully.`;
+      setSuccessMessage(msg);
+      showError(msg, "Customer Deleted");
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      const msg = getErrorMessage(error);
+      setPageError(msg);
+      showError(msg, "Delete Failed");
     }
   };
 
@@ -257,10 +269,6 @@ export default function Customers() {
 
       <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#C65D35]">
-            Restaurant Administration
-          </p>
-
           <h1 className="text-2xl font-semibold text-[#29231F] md:text-3xl">
             Customer Management
           </h1>
@@ -621,32 +629,7 @@ export default function Customers() {
 // REUSABLE COMPONENTS
 // ==========================================
 
-function SummaryCard({ title, value, icon, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`w-full rounded-xl border p-4 text-left transition ${
-        active
-          ? "border-[#C65D35] bg-[#FFF9F5] shadow-sm"
-          : "border-[#E9E3DA] bg-white hover:border-[#C65D35]/50"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
 
-          <h3 className="mt-1 text-xl font-semibold text-[#29231F]">{value}</h3>
-        </div>
-
-        <div className="rounded-lg bg-[#F5E5DC] p-2.5 text-[#C65D35]">
-          {icon}
-        </div>
-      </div>
-    </button>
-  );
-}
 
 function ModalShell({ title, subtitle, onClose, children }) {
   return (

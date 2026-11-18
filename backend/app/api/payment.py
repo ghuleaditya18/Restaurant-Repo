@@ -1,9 +1,10 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
+from app.core.date_utils import get_date_range
 from app.db.session import get_db
 from app.api.deps import require_roles
 
@@ -20,7 +21,7 @@ from app.schemas.payment import (
 )
 
 router = APIRouter(
-    tags=["Payment Management"], dependencies=[Depends(require_roles("MANAGER","STAFF"))]
+    tags=["Payment Management"], dependencies=[Depends(require_roles("MANAGER"))]
 )
 
 
@@ -109,10 +110,18 @@ def create_payment(
 
 @router.get("/", response_model=list[PaymentResponse])
 def get_all_payments(
+    preset: str | None = "today",
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
+    query = db.query(Payment)
 
-    return db.query(Payment).order_by(Payment.id.desc()).all()
+    start_dt, end_dt = get_date_range(preset, start_date, end_date)
+    if start_dt is not None and end_dt is not None:
+        query = query.filter(Payment.created_at >= start_dt, Payment.created_at <= end_dt)
+
+    return query.order_by(Payment.id.desc()).all()
 
 
 # ==========================================

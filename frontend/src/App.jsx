@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
@@ -34,51 +35,17 @@ function AppRoutes() {
 
       <Route
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={["MANAGER", "RECEPTIONIST"]}>
             <DashboardLayout />
           </ProtectedRoute>
         }
       >
         <Route path="/" element={<Dashboard />} />
-
         <Route path="orders" element={<Orders />} />
-
-        <Route
-          path="tables"
-          element={
-            <ProtectedRoute allowedRoles={["MANAGER"]}>
-              <Tables />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="menu"
-          element={
-            <ProtectedRoute allowedRoles={["MANAGER"]}>
-              <Menu />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="customers"
-          element={
-            <ProtectedRoute allowedRoles={["MANAGER"]}>
-              <Customers />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="staff"
-          element={
-            <ProtectedRoute allowedRoles={["MANAGER"]}>
-              <Staff />
-            </ProtectedRoute>
-          }
-        />
-
+        <Route path="tables" element={<Tables />} />
+        <Route path="menu" element={<Menu />} />
+        <Route path="customers" element={<Customers />} />
+        <Route path="staff" element={<Staff />} />
         <Route path="invoices" element={<Invoices />} />
       </Route>
 
@@ -91,7 +58,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <NotificationProvider>
+          <AppRoutes />
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

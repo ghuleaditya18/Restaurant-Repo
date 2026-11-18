@@ -9,7 +9,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.entities import OrderStatus
+from app.models.entities import OrderStatus, PaymentStatus
 
 # ==========================================
 # 1. CREATE ORDER ITEM
@@ -199,3 +199,11 @@ class OrderResponse(BaseModel):
     status_history: list[OrderStatusHistoryResponse]
 
     subtotal: Decimal
+
+    created_at: datetime | None = None
+
+    invoice_id: int | None = None
+
+    invoice_number: str | None = None
+
+    payment_status: PaymentStatus | None = None

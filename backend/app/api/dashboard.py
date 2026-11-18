@@ -1,10 +1,12 @@
+from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import require_roles
+from app.core.date_utils import get_date_range
 from app.db.session import get_db
 from app.models.entities import (
     Customer,
@@ -12,6 +14,7 @@ from app.models.entities import (
     MenuItem,
     Order,
     OrderStatus,
+    Payment,
     PaymentStatus,
     RestaurantTable,
     Staff,
@@ -26,39 +29,97 @@ from app.schemas.dashboard import (
 
 router = APIRouter(
     tags=["Dashboard"],
-    dependencies=[Depends(require_roles("MANAGER", "STAFF"))],
+    dependencies=[Depends(require_roles("MANAGER"))],
 )
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
 def get_dashboard_summary(
+    preset: str = Query(default="today"),
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
-    total_orders = db.query(func.count(Order.id)).scalar() or 0
-    total_customers = db.query(func.count(Customer.id)).scalar() or 0
-    total_staff = db.query(func.count(Staff.id)).scalar() or 0
-    total_menu_items = db.query(func.count(MenuItem.id)).scalar() or 0
+    start_dt, end_dt = get_date_range(preset=preset, start_date=start_date, end_date=end_date)
+
+    # Date-filtered orders query
+    filtered_orders = db.query(Order)
+    if start_dt is not None and end_dt is not None:
+        filtered_orders = filtered_orders.filter(
+            Order.created_at >= start_dt,
+            Order.created_at <= end_dt,
+        )
+
+    total_orders = filtered_orders.with_entities(func.count(Order.id)).scalar() or 0
 
     pending_orders = (
-        db.query(func.count(Order.id))
-        .filter(Order.status == OrderStatus.PENDING)
+        filtered_orders.filter(Order.status == OrderStatus.PENDING)
+        .with_entities(func.count(Order.id))
         .scalar()
         or 0
     )
     preparing_orders = (
-        db.query(func.count(Order.id))
-        .filter(Order.status == OrderStatus.PREPARING)
+        filtered_orders.filter(Order.status == OrderStatus.PREPARING)
+        .with_entities(func.count(Order.id))
         .scalar()
         or 0
     )
     completed_orders = (
-        db.query(func.count(Order.id))
-        .filter(Order.status == OrderStatus.COMPLETED)
+        filtered_orders.filter(Order.status == OrderStatus.COMPLETED)
+        .with_entities(func.count(Order.id))
+        .scalar()
+        or 0
+    )
+    active_orders = (
+        filtered_orders.filter(
+            Order.status.notin_([OrderStatus.COMPLETED, OrderStatus.CANCELLED])
+        )
+        .with_entities(func.count(Order.id))
         .scalar()
         or 0
     )
 
-    # Active tables and current orders count per table
+    # Permanent catalog counts (unaffected by date filter)
+    total_customers = db.query(func.count(Customer.id)).scalar() or 0
+    total_staff = db.query(func.count(Staff.id)).scalar() or 0
+    total_menu_items = db.query(func.count(MenuItem.id)).scalar() or 0
+
+    # Today's date range in Asia/Kolkata for today_orders reference counter
+    today_start, today_end = get_date_range(preset="today")
+    today_orders = (
+        db.query(func.count(Order.id))
+        .filter(Order.created_at >= today_start, Order.created_at <= today_end)
+        .scalar()
+        or 0
+    )
+
+    # Date-filtered invoice and payment statistics
+    invoice_q = db.query(Invoice)
+    if start_dt is not None and end_dt is not None:
+        invoice_q = invoice_q.filter(
+            Invoice.created_at >= start_dt,
+            Invoice.created_at <= end_dt,
+        )
+    pending_payments = (
+        invoice_q.filter(Invoice.payment_status == PaymentStatus.PENDING)
+        .with_entities(func.count(Invoice.id))
+        .scalar()
+        or 0
+    )
+
+    payment_q = db.query(Payment).filter(Payment.status == PaymentStatus.PAID)
+    if start_dt is not None and end_dt is not None:
+        payment_q = payment_q.filter(
+            Payment.created_at >= start_dt,
+            Payment.created_at <= end_dt,
+        )
+    total_revenue = (
+        payment_q.with_entities(func.coalesce(func.sum(Payment.amount), Decimal("0.00")))
+        .scalar()
+        or Decimal("0.00")
+    )
+
+    # Active tables and current orders count per table (always based on live orders, NEVER date-filtered)
     active_tables = (
         db.query(RestaurantTable)
         .filter(RestaurantTable.is_active.is_(True))
@@ -95,26 +156,15 @@ def get_dashboard_summary(
         1 for t in active_tables if t.status == TableStatus.OCCUPIED
     )
 
-    today_orders = (
-        db.query(func.count(Order.id))
-        .filter(func.date(Order.created_at) == func.current_date())
-        .scalar()
-        or 0
-    )
-    active_orders = (
-        db.query(func.count(Order.id))
-        .filter(
-            Order.status.notin_([OrderStatus.COMPLETED, OrderStatus.CANCELLED])
-        )
-        .scalar()
-        or 0
-    )
-    pending_payments = (
-        db.query(func.count(Invoice.id))
-        .filter(Invoice.payment_status == PaymentStatus.PENDING)
-        .scalar()
-        or 0
-    )
+    preset_label = preset.capitalize() if preset else "Today"
+    if preset == "last_7_days":
+        preset_label = "Last 7 Days"
+    elif preset == "this_month":
+        preset_label = "This Month"
+    elif preset == "all":
+        preset_label = "All Dates"
+    elif preset == "custom":
+        preset_label = f"{start_date} to {end_date}" if start_date and end_date else "Custom"
 
     statistics = DashboardStatistics(
         total_orders=total_orders,
@@ -130,17 +180,26 @@ def get_dashboard_summary(
         today_orders=today_orders,
         active_orders=active_orders,
         pending_payments=pending_payments,
+        total_revenue=total_revenue,
+        date_filter_label=preset_label,
     )
 
-    # 10 latest orders
-    recent_orders_query = (
+    # 10 latest orders for selected date range
+    recent_query = (
         db.query(Order)
         .options(
             joinedload(Order.customer),
             joinedload(Order.table),
             selectinload(Order.items),
         )
-        .order_by(Order.created_at.desc(), Order.id.desc())
+    )
+    if start_dt is not None and end_dt is not None:
+        recent_query = recent_query.filter(
+            Order.created_at >= start_dt,
+            Order.created_at <= end_dt,
+        )
+    recent_orders_query = (
+        recent_query.order_by(Order.created_at.desc(), Order.id.desc())
         .limit(10)
         .all()
     )

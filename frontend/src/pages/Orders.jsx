@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-
 import {
   ShoppingCart,
   ClipboardList,
@@ -19,6 +18,10 @@ import {
   ChefHat,
   Receipt,
   ArrowRight,
+  History,
+  Calendar,
+  IndianRupee,
+  AlertCircle,
 } from "lucide-react";
 
 import {
@@ -34,6 +37,8 @@ import {
   removeOrderItem,
   updateOrderStatus,
 } from "../services/orderService";
+import DateFilter from "../components/DateFilter";
+import { useNotification } from "../context/NotificationContext";
 
 // ==========================================
 // CONSTANTS
@@ -92,16 +97,35 @@ const formatCurrency = (amount) => {
 
 const getStatusStyle = (status) => {
   const styles = {
-    Pending: "bg-[#FFF3DB] text-[#956719]",
-    Confirmed: "bg-[#F5E5DC] text-[#A94B2B]",
-    Preparing: "bg-[#F3EBDD] text-[#846C37]",
-    Ready: "bg-[#E8EDE5] text-[#52684A]",
-    Served: "bg-[#E8EDE5] text-[#52684A]",
-    Completed: "bg-[#EEEAE4] text-[#5E554D]",
-    Cancelled: "bg-[#F4E6E2] text-[#A14E3C]",
+    Pending: "bg-[#FFF3DB] text-[#956719] border border-[#F5E2B8]",
+    Confirmed: "bg-[#F5E5DC] text-[#A94B2B] border border-[#ECCDC1]",
+    Preparing: "bg-[#F3EBDD] text-[#846C37] border border-[#E3D6BF]",
+    Ready: "bg-[#E8EDE5] text-[#52684A] border border-[#CDD8C8]",
+    Served: "bg-[#E0F2FE] text-[#0369A1] border border-[#BAE6FD]",
+    Completed: "bg-[#E2E8F0] text-[#334155] border border-[#CBD5E1]",
+    Cancelled: "bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]",
   };
 
-  return styles[status] || "bg-gray-100 text-gray-600";
+  return styles[status] || "bg-gray-100 text-gray-700 border border-gray-200";
+};
+
+const getPaymentBadge = (paymentStatus) => {
+  const norm = String(paymentStatus || "").trim().toUpperCase();
+  if (norm === "PAID") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+        Paid
+      </span>
+    );
+  }
+  if (norm === "PENDING") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+        Payment Pending
+      </span>
+    );
+  }
+  return <span className="text-xs text-stone-400">Uninvoiced</span>;
 };
 
 // ==========================================
@@ -109,13 +133,24 @@ const getStatusStyle = (status) => {
 // ==========================================
 
 export default function Orders() {
+  const { showSuccess, showError, showWarning, showInfo, confirm } = useNotification();
+
+  // Active view tab: 'active' | 'history'
+  const [activeTab, setActiveTab] = useState("active");
+
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [tables, setTables] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // History tab date filter
+  const [historyDateFilter, setHistoryDateFilter] = useState({
+    preset: "today",
+    startDate: "",
+    endDate: "",
+  });
 
   // Create order modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -136,95 +171,96 @@ export default function Orders() {
   const [instructionText, setInstructionText] = useState("");
   const [statusNote, setStatusNote] = useState("");
   const [statusTarget, setStatusTarget] = useState("");
-
   const [additionalItem, setAdditionalItem] = useState("");
   const [additionalQuantity, setAdditionalQuantity] = useState(1);
 
-  // Search and filter
+  // Search and status filter
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  // Notifications
-  const [pageError, setPageError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-
   // ==========================================
-  // LOAD ALL DATA
+  // LOAD ORDERS DATA
   // ==========================================
 
-  const loadData = useCallback(async () => {
+  const loadOrders = useCallback(async () => {
     setLoading(true);
-    setPageError("");
-
     try {
+      let params = {};
+      if (activeTab === "active") {
+        params.view = "active";
+      } else {
+        params.view = "history";
+        params.preset = historyDateFilter.preset;
+        if (historyDateFilter.preset === "custom") {
+          if (historyDateFilter.startDate) params.start_date = historyDateFilter.startDate;
+          if (historyDateFilter.endDate) params.end_date = historyDateFilter.endDate;
+        }
+      }
+
       const [orderData, customerData, tableData, menuData] = await Promise.all([
-        getAllOrders(),
-        getOrderCustomers(),
-        getOrderTables(),
-        getOrderMenuItems(),
+        getAllOrders(params),
+        customers.length ? Promise.resolve(customers) : getOrderCustomers(),
+        getOrderTables(), // Always refresh table status
+        menuItems.length ? Promise.resolve(menuItems) : getOrderMenuItems(),
       ]);
 
       setOrders(orderData);
-      setCustomers(customerData);
+      if (!customers.length) setCustomers(customerData);
       setTables(tableData);
-      setMenuItems(menuData);
+      if (!menuItems.length) setMenuItems(menuData);
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to load orders");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab, historyDateFilter, customers.length, menuItems.length, showError]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadOrders();
+  }, [loadOrders]);
+
+  // Reset status filter when switching tabs
+  const handleTabSwitch = (tab) => {
+    setActiveTab(tab);
+    setStatusFilter("ALL");
+    setSearch("");
+  };
 
   // ==========================================
-  // STATISTICS
-  // ==========================================
-
-  const pendingCount = orders.filter(
-    (order) => order.status === "Pending",
-  ).length;
-
-  const preparingCount = orders.filter(
-    (order) => order.status === "Preparing",
-  ).length;
-
-  const completedCount = orders.filter(
-    (order) => order.status === "Completed",
-  ).length;
-
-  const activeCount = orders.filter(
-    (order) => !["Completed", "Cancelled"].includes(order.status),
-  ).length;
-
-  // ==========================================
-  // SEARCH AND FILTER
+  // FILTERED ORDERS
   // ==========================================
 
   const filteredOrders = useMemo(() => {
-    const searchValue = search.trim().toLowerCase();
+    const query = search.trim().toLowerCase();
 
     return orders.filter((order) => {
-      const matchesSearch =
-        order.order_number.toLowerCase().includes(searchValue) ||
-        order.customer_name.toLowerCase().includes(searchValue) ||
-        String(order.table_number).toLowerCase().includes(searchValue);
+      const matchSearch =
+        !query ||
+        order.order_number?.toLowerCase().includes(query) ||
+        order.customer_name?.toLowerCase().includes(query) ||
+        String(order.table_number || "").toLowerCase().includes(query);
 
-      const matchesStatus =
-        statusFilter === "ALL"
-          ? true
-          : statusFilter === "ACTIVE"
-            ? !["COMPLETED", "CANCELLED"].includes(order.status.toUpperCase())
-            : order.status.toUpperCase() === statusFilter;
+      const matchStatus =
+        statusFilter === "ALL" ||
+        order.status?.toUpperCase() === statusFilter.toUpperCase();
 
-      return matchesSearch && matchesStatus;
+      return matchSearch && matchStatus;
     });
   }, [orders, search, statusFilter]);
 
+  // Active orders metrics
+  const activeMetrics = useMemo(() => {
+    if (activeTab !== "active") return null;
+    const pending = orders.filter((o) => o.status === "Pending").length;
+    const confirmed = orders.filter((o) => o.status === "Confirmed").length;
+    const preparing = orders.filter((o) => o.status === "Preparing").length;
+    const ready = orders.filter((o) => o.status === "Ready").length;
+    const served = orders.filter((o) => o.status === "Served").length;
+    return { pending, confirmed, preparing, ready, served, total: orders.length };
+  }, [orders, activeTab]);
+
   // ==========================================
-  // CREATE ORDER FORM
+  // CREATE ORDER HANDLERS
   // ==========================================
 
   const openCreateModal = () => {
@@ -233,7 +269,6 @@ export default function Orders() {
     setSelectedMenuItem("");
     setItemQuantity(1);
     setFormError("");
-
     setShowCreateModal(true);
   };
 
@@ -246,156 +281,110 @@ export default function Orders() {
 
   const handleFormChange = (event) => {
     const { name, value } = event.target;
-
-    setForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    setForm((previous) => ({ ...previous, [name]: value }));
   };
 
-  // ==========================================
-  // CART MANAGEMENT
-  // ==========================================
+  const handleAddItemToCart = () => {
+    if (!selectedMenuItem) return;
 
-  const handleAddToCart = () => {
-    const menuItem = menuItems.find(
-      (item) => item.id === Number(selectedMenuItem),
-    );
+    const menuItem = menuItems.find((item) => item.id === Number(selectedMenuItem));
+    if (!menuItem) return;
 
-    if (!menuItem) {
-      setFormError("Please select a menu item.");
+    const quantity = Number(itemQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      setFormError("Item quantity must be at least 1.");
       return;
     }
-
-    if (!Number.isInteger(Number(itemQuantity)) || Number(itemQuantity) < 1) {
-      setFormError("Quantity must be at least 1.");
-      return;
-    }
-
-    setFormError("");
 
     setCart((previous) => {
-      const existing = previous.find(
-        (item) => item.menu_item_id === menuItem.id,
-      );
-
+      const existing = previous.find((item) => item.menu_item_id === menuItem.id);
       if (existing) {
         return previous.map((item) =>
           item.menu_item_id === menuItem.id
-            ? {
-                ...item,
-                quantity: item.quantity + Number(itemQuantity),
-              }
-            : item,
+            ? { ...item, quantity: item.quantity + quantity }
+            : item
         );
       }
-
       return [
         ...previous,
         {
           menu_item_id: menuItem.id,
           name: menuItem.name,
-          price: Number(menuItem.price),
-          quantity: Number(itemQuantity),
+          price: menuItem.price,
+          quantity,
         },
       ];
     });
 
     setSelectedMenuItem("");
     setItemQuantity(1);
+    setFormError("");
   };
 
-  const changeCartQuantity = (menuItemId, change) => {
-    setCart((previous) =>
-      previous
-        .map((item) =>
-          item.menu_item_id === menuItemId
-            ? {
-                ...item,
-                quantity: item.quantity + change,
-              }
-            : item,
-        )
-        .filter((item) => item.quantity > 0),
-    );
+  const handleRemoveFromCart = (menuItemId) => {
+    setCart((prev) => prev.filter((item) => item.menu_item_id !== menuItemId));
   };
 
-  const removeCartItem = (menuItemId) => {
-    setCart((previous) =>
-      previous.filter((item) => item.menu_item_id !== menuItemId),
-    );
-  };
-
-  const cartSubtotal = cart.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
-  );
-
-  // ==========================================
-  // CREATE ORDER
-  // ==========================================
+  const cartTotal = useMemo(() => {
+    return cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
+  }, [cart]);
 
   const handleCreateOrder = async (event) => {
     event.preventDefault();
+    setFormError("");
 
-    if (cart.length === 0) {
-      setFormError("Please add at least one menu item.");
+    if (!form.customer_id) {
+      setFormError("Please select a dining customer.");
       return;
     }
-
-    if (!form.customer_id || !form.table_id) {
-      setFormError("Please select a customer and restaurant table.");
+    if (!form.table_id) {
+      setFormError("Please select a restaurant table.");
+      return;
+    }
+    if (cart.length === 0) {
+      setFormError("Add at least one menu item to the order.");
       return;
     }
 
     setSaving(true);
-    setFormError("");
-
-    const orderData = {
-      customer_id: Number(form.customer_id),
-      table_id: Number(form.table_id),
-
-      special_instructions: form.special_instructions.trim() || null,
-
-      items: cart.map((item) => ({
-        menu_item_id: item.menu_item_id,
-        quantity: item.quantity,
-      })),
-    };
-
     try {
-      await createOrder(orderData);
+      const payload = {
+        customer_id: Number(form.customer_id),
+        table_id: Number(form.table_id),
+        special_instructions: form.special_instructions?.trim() || null,
+        items: cart.map((item) => ({
+          menu_item_id: item.menu_item_id,
+          quantity: item.quantity,
+        })),
+      };
 
+      const newOrder = await createOrder(payload);
+      showSuccess(`Order ${newOrder.order_number} placed successfully.`, "Order Created");
       closeCreateModal();
-
-      setSuccessMessage("New restaurant order created successfully.");
-
-      await loadData();
+      await loadOrders();
     } catch (error) {
       setFormError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Create Order");
     } finally {
       setSaving(false);
     }
   };
 
   // ==========================================
-  // OPEN ORDER DETAILS
+  // VIEW / MODIFY ORDER DETAILS
   // ==========================================
 
   const openOrderDetails = async (order) => {
     setShowDetailsModal(true);
-    setSelectedOrder(null);
-    setDetailsError("");
     setDetailsLoading(true);
-
-    setStatusNote("");
+    setDetailsError("");
     setStatusTarget("");
+    setStatusNote("");
+    setInstructionText(order.special_instructions || "");
 
     try {
-      const data = await getOrderById(order.id);
-
-      setSelectedOrder(data);
-      setInstructionText(data.special_instructions || "");
+      const fullOrder = await getOrderById(order.id);
+      setSelectedOrder(fullOrder);
     } catch (error) {
       setDetailsError(getErrorMessage(error));
     } finally {
@@ -403,56 +392,49 @@ export default function Orders() {
     }
   };
 
-  const closeDetailsModal = () => {
+  const closeOrderDetails = () => {
     setShowDetailsModal(false);
     setSelectedOrder(null);
     setDetailsError("");
-    setStatusTarget("");
   };
 
   const refreshSelectedOrder = async () => {
     if (!selectedOrder) return;
-
-    const data = await getOrderById(selectedOrder.id);
-
-    setSelectedOrder(data);
-    setOrders((previous) =>
-      previous.map((order) => (order.id === data.id ? data : order)),
-    );
+    try {
+      const fresh = await getOrderById(selectedOrder.id);
+      setSelectedOrder(fresh);
+      loadOrders();
+    } catch (error) {
+      setDetailsError(getErrorMessage(error));
+    }
   };
 
-  // ==========================================
-  // UPDATE ORDER INSTRUCTIONS
-  // ==========================================
-
-  const handleUpdateInstructions = async () => {
+  const handleSaveInstructions = async () => {
     if (!selectedOrder) return;
-
     setSaving(true);
     setDetailsError("");
-
     try {
       await updateOrder(selectedOrder.id, {
         special_instructions: instructionText.trim() || null,
       });
-
       await refreshSelectedOrder();
-
-      setSuccessMessage("Order instructions updated successfully.");
+      showInfo("Special instructions updated.", "Order Updated");
     } catch (error) {
       setDetailsError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Update Failed");
     } finally {
       setSaving(false);
     }
   };
 
-  // ==========================================
-  // CHANGE ORDER STATUS
-  // ==========================================
-
   const handleStatusUpdate = async () => {
-    if (!selectedOrder || !statusTarget) {
-      return;
+    if (!selectedOrder || !statusTarget) return;
+
+    if (statusTarget === "Completed" && selectedOrder.status === "Served" && !selectedOrder.invoice_id) {
+      showWarning(
+        "An invoice must be generated before this order can be completed. Please navigate to Invoice Management.",
+        "Invoice Required"
+      );
     }
 
     setSaving(true);
@@ -464,26 +446,45 @@ export default function Orders() {
         note: statusNote.trim() || null,
       });
 
-      await refreshSelectedOrder();
+      if (statusTarget === "Completed") {
+        showSuccess(
+          `Order ${selectedOrder.order_number} marked Completed. Table status updated.`,
+          "Order Completed"
+        );
+      } else if (statusTarget === "Cancelled") {
+        showError(
+          `Order ${selectedOrder.order_number} was cancelled.`,
+          "Order Cancelled"
+        );
+      } else {
+        showSuccess(
+          `Order ${selectedOrder.order_number} transitioned to ${statusTarget}.`,
+          "Status Updated"
+        );
+      }
 
       setStatusTarget("");
       setStatusNote("");
 
-      setSuccessMessage(
-        `Order ${selectedOrder.order_number} updated successfully.`,
-      );
-
-      await loadData();
+      // If status is terminal (Completed / Cancelled), it leaves Active Orders automatically
+      if (["Completed", "Cancelled"].includes(statusTarget) && activeTab === "active") {
+        closeOrderDetails();
+      } else {
+        await refreshSelectedOrder();
+      }
+      await loadOrders();
     } catch (error) {
-      setDetailsError(getErrorMessage(error));
+      const msg = getErrorMessage(error);
+      setDetailsError(msg);
+      if (msg.toLowerCase().includes("invoice")) {
+        showWarning(msg, "Invoice Required");
+      } else {
+        showError(msg, "Status Update Failed");
+      }
     } finally {
       setSaving(false);
     }
   };
-
-  // ==========================================
-  // ADD ITEM TO EXISTING ORDER
-  // ==========================================
 
   const handleAddExistingItem = async () => {
     if (!additionalItem || !selectedOrder) {
@@ -502,20 +503,15 @@ export default function Orders() {
 
       setAdditionalItem("");
       setAdditionalQuantity(1);
-
       await refreshSelectedOrder();
-
-      setSuccessMessage("Item added to order successfully.");
+      showSuccess("Item added to order successfully.", "Item Added");
     } catch (error) {
       setDetailsError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Add Item");
     } finally {
       setSaving(false);
     }
   };
-
-  // ==========================================
-  // UPDATE ORDER ITEM QUANTITY
-  // ==========================================
 
   const handleUpdateItemQuantity = (item) => {
     setQuantityModal({ item, quantity: item.quantity });
@@ -537,186 +533,267 @@ export default function Orders() {
         quantity: newQuantity,
       });
       await refreshSelectedOrder();
-      setSuccessMessage("Item quantity updated successfully.");
+      showSuccess("Item quantity updated successfully.", "Quantity Updated");
       setQuantityModal(null);
     } catch (error) {
       setDetailsError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Update Quantity");
     } finally {
       setSaving(false);
     }
   };
-
-  // ==========================================
-  // REMOVE ITEM FROM ORDER
-  // ==========================================
 
   const handleRemoveOrderItem = async (item) => {
-    const confirmed = window.confirm(
-      `Remove ${item.item_name} from this order?`,
-    );
+    const ok = await confirm({
+      title: "Remove Item",
+      message: `Are you sure you want to remove "${item.item_name}" from this order?`,
+      confirmText: "Remove Item",
+      cancelText: "Keep Item",
+      variant: "danger",
+    });
 
-    if (!confirmed) return;
+    if (!ok) return;
 
     setSaving(true);
-
     try {
       await removeOrderItem(selectedOrder.id, item.id);
-
       await refreshSelectedOrder();
-
-      setSuccessMessage("Order item removed successfully.");
+      showError(`Removed "${item.item_name}" from order.`, "Item Removed");
     } catch (error) {
       setDetailsError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Remove Item");
     } finally {
       setSaving(false);
     }
   };
 
-  // ==========================================
-  // PAGE UI
-  // ==========================================
+  const isOrderEditable = selectedOrder && ["Pending", "Confirmed"].includes(selectedOrder.status);
 
   return (
-    <div className="min-h-screen bg-[#F7F5F0] p-4 md:p-6">
+    <div>
       {/* PAGE HEADER */}
-
-      <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <p className="mb-1 text-sm font-medium text-[#C65D35]">
-            Restaurant Operations
-          </p>
-
-          <h1 className="text-2xl font-semibold text-[#29231F] md:text-3xl">
+          <h1 className="text-2xl font-bold text-[#29231F] md:text-[26px]">
             Order Management
           </h1>
-
-          <p className="mt-1 text-sm text-gray-500">
-            Manage restaurant orders and preparation status.
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Coordinate live dining orders and review historical records.
           </p>
         </div>
 
-        <button
-          onClick={openCreateModal}
-          className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B]"
-        >
-          <Plus size={18} />
-          Create New Order
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={openCreateModal}
+            className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#A94B2B]"
+          >
+            <Plus size={17} />
+            Create New Order
+          </button>
+        </div>
       </div>
 
-      {/* NOTIFICATIONS */}
+      {/* VIEW TABS: ACTIVE ORDERS vs ORDER HISTORY */}
+      <div className="mb-6 flex flex-col gap-4 border-b border-[#E9E3DA] pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleTabSwitch("active")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              activeTab === "active"
+                ? "bg-[#C65D35] text-white shadow-xs"
+                : "bg-white text-stone-600 hover:bg-stone-50 border border-stone-200"
+            }`}
+          >
+            <ShoppingCart size={17} />
+            <span>Active Orders</span>
+            {activeMetrics && (
+              <span
+                className={`ml-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  activeTab === "active" ? "bg-white/20 text-white" : "bg-stone-100 text-stone-700"
+                }`}
+              >
+                {activeMetrics.total}
+              </span>
+            )}
+          </button>
 
-      {successMessage && (
-        <Notification
-          message={successMessage}
-          onClose={() => setSuccessMessage("")}
-        />
+          <button
+            type="button"
+            onClick={() => handleTabSwitch("history")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              activeTab === "history"
+                ? "bg-[#C65D35] text-white shadow-xs"
+                : "bg-white text-stone-600 hover:bg-stone-50 border border-stone-200"
+            }`}
+          >
+            <History size={17} />
+            <span>Order History</span>
+          </button>
+        </div>
+
+        {/* History Tab Date Filter */}
+        {activeTab === "history" && (
+          <DateFilter
+            selectedPreset={historyDateFilter.preset}
+            startDate={historyDateFilter.startDate}
+            endDate={historyDateFilter.endDate}
+            onChange={(newFilter) => setHistoryDateFilter(newFilter)}
+          />
+        )}
+      </div>
+
+      {/* ACTIVE METRICS ROW (Visible only in Active Orders) */}
+      {activeTab === "active" && activeMetrics && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div
+            onClick={() => setStatusFilter("ALL")}
+            className={`cursor-pointer rounded-xl border p-3 transition ${
+              statusFilter === "ALL"
+                ? "border-[#C65D35] bg-[#FFF9F5]"
+                : "border-stone-200 bg-white hover:border-stone-300"
+            }`}
+          >
+            <p className="text-xs text-stone-500 font-medium">All Active</p>
+            <p className="text-xl font-bold text-stone-900">{activeMetrics.total}</p>
+          </div>
+
+          <div
+            onClick={() => setStatusFilter("PENDING")}
+            className={`cursor-pointer rounded-xl border p-3 transition ${
+              statusFilter === "PENDING"
+                ? "border-amber-500 bg-amber-50"
+                : "border-stone-200 bg-white hover:border-stone-300"
+            }`}
+          >
+            <p className="text-xs text-amber-700 font-medium">Pending</p>
+            <p className="text-xl font-bold text-amber-900">{activeMetrics.pending}</p>
+          </div>
+
+          <div
+            onClick={() => setStatusFilter("CONFIRMED")}
+            className={`cursor-pointer rounded-xl border p-3 transition ${
+              statusFilter === "CONFIRMED"
+                ? "border-[#C65D35] bg-[#FCF4EF]"
+                : "border-stone-200 bg-white hover:border-stone-300"
+            }`}
+          >
+            <p className="text-xs text-[#A94B2B] font-medium">Confirmed</p>
+            <p className="text-xl font-bold text-[#A94B2B]">{activeMetrics.confirmed}</p>
+          </div>
+
+          <div
+            onClick={() => setStatusFilter("PREPARING")}
+            className={`cursor-pointer rounded-xl border p-3 transition ${
+              statusFilter === "PREPARING"
+                ? "border-yellow-600 bg-yellow-50"
+                : "border-stone-200 bg-white hover:border-stone-300"
+            }`}
+          >
+            <p className="text-xs text-yellow-800 font-medium">In Kitchen</p>
+            <p className="text-xl font-bold text-yellow-900">{activeMetrics.preparing}</p>
+          </div>
+
+          <div
+            onClick={() => setStatusFilter("READY")}
+            className={`cursor-pointer rounded-xl border p-3 transition ${
+              statusFilter === "READY"
+                ? "border-emerald-500 bg-emerald-50"
+                : "border-stone-200 bg-white hover:border-stone-300"
+            }`}
+          >
+            <p className="text-xs text-emerald-800 font-medium">Food Ready</p>
+            <p className="text-xl font-bold text-emerald-900">{activeMetrics.ready}</p>
+          </div>
+
+          <div
+            onClick={() => setStatusFilter("SERVED")}
+            className={`cursor-pointer rounded-xl border p-3 transition ${
+              statusFilter === "SERVED"
+                ? "border-sky-500 bg-sky-50"
+                : "border-stone-200 bg-white hover:border-stone-300"
+            }`}
+          >
+            <p className="text-xs text-sky-800 font-medium">Served / Dining</p>
+            <p className="text-xl font-bold text-sky-900">{activeMetrics.served}</p>
+          </div>
+        </div>
       )}
 
-      {pageError && <ErrorBox message={pageError} />}
-
-      {/* SUMMARY CARDS */}
-
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Total Orders"
-          value={orders.length}
-          icon={<ClipboardList size={19} />}
-          active={statusFilter === "ALL"}
-          onClick={() => setStatusFilter("ALL")}
-        />
-
-        <SummaryCard
-          title="Pending Orders"
-          value={pendingCount}
-          icon={<Clock size={19} />}
-          active={statusFilter === "PENDING"}
-          onClick={() => setStatusFilter("PENDING")}
-        />
-
-        <SummaryCard
-          title="Preparing"
-          value={preparingCount}
-          icon={<ChefHat size={19} />}
-          active={statusFilter === "PREPARING"}
-          onClick={() => setStatusFilter("PREPARING")}
-        />
-
-        <SummaryCard
-          title="Active Orders"
-          value={activeCount}
-          icon={<ShoppingCart size={19} />}
-          active={statusFilter === "ACTIVE"}
-          onClick={() => {
-            setStatusFilter("ACTIVE");
-          }}
-        />
-      </div>
-
-      {/* ORDER TABLE */}
-
-      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
+      {/* ORDERS TABLE CONTAINER */}
+      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white shadow-xs">
         <div className="flex flex-col gap-4 border-b border-[#EEE9E2] p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-semibold text-[#29231F]">Restaurant Orders</h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              {filteredOrders.length} orders found
+            <h2 className="font-bold text-[#29231F]">
+              {activeTab === "active" ? "Ongoing Active Orders" : "Historical Order Records"}
+            </h2>
+            <p className="mt-0.5 text-xs text-stone-500">
+              {filteredOrders.length} {filteredOrders.length === 1 ? "order" : "orders"} found
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               />
-
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search order or customer..."
-                className="w-full rounded-lg border border-[#E9E3DA] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-64"
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search order #, customer, table..."
+                className="w-full rounded-lg border border-[#E9E3DA] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-60"
               />
             </div>
 
+            {/* Filter by status */}
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
             >
-              <option value="ALL">All Orders</option>
-              <option value="PENDING">Pending</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="PREPARING">Preparing</option>
-              <option value="READY">Ready</option>
-              <option value="SERVED">Served</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-              <option value="ACTIVE">All Active</option>
+              {activeTab === "active" ? (
+                <>
+                  <option value="ALL">All Active Statuses</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="PREPARING">Preparing</option>
+                  <option value="READY">Ready</option>
+                  <option value="SERVED">Served</option>
+                </>
+              ) : (
+                <>
+                  <option value="ALL">All History Statuses</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </>
+              )}
             </select>
 
             <button
-              onClick={loadData}
+              onClick={loadOrders}
               disabled={loading}
               title="Refresh orders"
-              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-gray-600 hover:bg-[#F7F5F0]"
+              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] p-2 text-gray-600 hover:bg-[#F7F5F0]"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
+        {/* TABLE */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-gray-500">
+          <table className="w-full min-w-[900px] text-left">
+            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wider text-stone-500 font-semibold">
               <tr>
-                <th className="px-4 py-3">Order Number</th>
+                <th className="px-4 py-3">Order #</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Table</th>
-                <th className="px-4 py-3">Items</th>
+                <th className="px-4 py-3">Ordered Items</th>
                 <th className="px-4 py-3">Subtotal</th>
                 <th className="px-4 py-3">Status</th>
+                {activeTab === "history" && <th className="px-4 py-3">Invoice Ref</th>}
+                {activeTab === "history" && <th className="px-4 py-3">Payment</th>}
                 <th className="px-4 py-3 text-center">Action</th>
               </tr>
             </thead>
@@ -725,8 +802,8 @@ export default function Orders() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="7"
-                    className="px-4 py-12 text-center text-sm text-gray-500"
+                    colSpan={activeTab === "history" ? 9 : 7}
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     Loading orders...
                   </td>
@@ -734,70 +811,101 @@ export default function Orders() {
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="7"
-                    className="px-4 py-12 text-center text-sm text-gray-500"
+                    colSpan={activeTab === "history" ? 9 : 7}
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
-                    No orders found.
+                    {activeTab === "active"
+                      ? "No active orders found. New dining orders will appear here."
+                      : "No historical orders found for the selected date filter."}
                   </td>
                 </tr>
               ) : (
-                filteredOrders
-                  .filter((order) => {
-                    return (
-                      statusFilter !== "ACTIVE" ||
-                      !["Completed", "Cancelled"].includes(order.status)
-                    );
-                  })
-                  .map((order) => (
+                filteredOrders.map((order) => {
+                  const itemsSummary = order.items
+                    .map((item) => `${item.quantity}x ${item.item_name}`)
+                    .join(", ");
+
+                  const orderDate = order.created_at
+                    ? new Date(order.created_at).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "—";
+
+                  return (
                     <tr
                       key={order.id}
-                      className="transition hover:bg-[#FAF9F6]"
+                      className="transition hover:bg-[#FAF9F6] text-sm"
                     >
                       <td className="px-4 py-3">
-                        <p className="font-semibold text-[#29231F]">
+                        <p className="font-semibold text-stone-900">
                           {order.order_number}
                         </p>
-
-                        <p className="mt-1 text-xs text-gray-500">
-                          Order ID: {order.id}
+                        <p className="text-[11px] text-stone-400 mt-0.5">
+                          {orderDate}
                         </p>
                       </td>
 
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="px-4 py-3 text-stone-700">
                         {order.customer_name}
                       </td>
 
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        Table {order.table_number}
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-stone-800">
+                          Table {order.table_number}
+                        </span>
                       </td>
 
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {order.items.length} items
+                      <td className="px-4 py-3 text-stone-600 max-w-xs truncate" title={itemsSummary}>
+                        <span className="font-medium text-stone-800">{order.items.length} items:</span>{" "}
+                        {itemsSummary}
                       </td>
 
-                      <td className="px-4 py-3 text-sm font-semibold text-[#29231F]">
+                      <td className="px-4 py-3 font-semibold text-stone-900">
                         {formatCurrency(order.subtotal)}
                       </td>
 
                       <td className="px-4 py-3">
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(order.status)}`}
+                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusStyle(
+                            order.status
+                          )}`}
                         >
                           {order.status}
                         </span>
                       </td>
 
+                      {activeTab === "history" && (
+                        <td className="px-4 py-3 font-mono text-xs text-stone-700">
+                          {order.invoice_number ? (
+                            <span className="rounded-md bg-stone-100 px-2 py-1 font-semibold text-[#C65D35]">
+                              {order.invoice_number}
+                            </span>
+                          ) : (
+                            <span className="text-stone-400">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {activeTab === "history" && (
+                        <td className="px-4 py-3">
+                          {getPaymentBadge(order.payment_status)}
+                        </td>
+                      )}
+
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => openOrderDetails(order)}
                           title="View order details"
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35] transition"
                         >
-                          <Eye size={17} />
+                          <Eye size={15} />
+                          <span>Details</span>
                         </button>
                       </td>
                     </tr>
-                  ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -807,7 +915,6 @@ export default function Orders() {
       {/* =====================================
           CREATE ORDER MODAL
       ===================================== */}
-
       {showCreateModal && (
         <ModalShell
           title="Create New Order"
@@ -816,212 +923,165 @@ export default function Orders() {
           size="max-w-3xl"
         >
           <form onSubmit={handleCreateOrder} className="space-y-5">
-            {formError && <ErrorBox message={formError} />}
+            {formError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                {formError}
+              </div>
+            )}
 
             {/* CUSTOMER AND TABLE */}
-
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#29231F]">
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
                   Customer
                 </label>
-
                 <select
                   name="customer_id"
                   value={form.customer_id}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
                 >
                   <option value="">Select customer</option>
-
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.full_name} – {customer.phone}
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name} ({c.phone})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-[#29231F]">
-                  Restaurant Table
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Dining Table
                 </label>
-
                 <select
                   name="table_id"
                   value={form.table_id}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
                 >
                   <option value="">Select table</option>
-
-                  {tables.map((table) => (
-                    <option key={table.id} value={table.id}>
-                      Table {table.table_number} – {table.capacity} seats (
-                      {table.status})
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      Table {t.table_number} ({t.seating_capacity} seats) — {t.status}
                     </option>
                   ))}
                 </select>
-
-                <p className="mt-1 text-xs text-gray-500">
-                  Occupied tables can also receive additional independent
-                  orders.
-                </p>
-              </div>
-            </div>
-
-            {/* ADD MENU ITEMS */}
-
-            <div className="rounded-lg border border-[#E9E3DA] bg-[#FAF9F6] p-4">
-              <h3 className="mb-3 font-semibold text-[#29231F]">
-                Add Menu Items
-              </h3>
-
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <select
-                  value={selectedMenuItem}
-                  onChange={(event) => setSelectedMenuItem(event.target.value)}
-                  className="min-w-0 flex-1 rounded-lg border border-[#E9E3DA] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
-                >
-                  <option value="">Select food item</option>
-
-                  {menuItems.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name} – {formatCurrency(item.price)}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  type="number"
-                  min="1"
-                  value={itemQuantity}
-                  onChange={(event) => setItemQuantity(event.target.value)}
-                  className="w-full rounded-lg border border-[#E9E3DA] bg-white px-3 py-2.5 text-sm sm:w-24"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B]"
-                >
-                  <Plus size={16} />
-                  Add
-                </button>
-              </div>
-
-              {/* CART */}
-
-              <div className="mt-4 space-y-2">
-                {cart.length === 0 ? (
-                  <p className="py-5 text-center text-sm text-gray-500">
-                    No items added yet.
-                  </p>
-                ) : (
-                  cart.map((item) => (
-                    <div
-                      key={item.menu_item_id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-[#29231F]">
-                          {item.name}
-                        </p>
-
-                        <p className="mt-1 text-xs text-gray-500">
-                          {formatCurrency(item.price)} each
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeCartQuantity(item.menu_item_id, -1)
-                          }
-                          className="rounded-md border border-[#E9E3DA] p-1.5"
-                        >
-                          <Minus size={14} />
-                        </button>
-
-                        <span className="w-5 text-center text-sm font-medium">
-                          {item.quantity}
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeCartQuantity(item.menu_item_id, 1)
-                          }
-                          className="rounded-md border border-[#E9E3DA] p-1.5"
-                        >
-                          <Plus size={14} />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => removeCartItem(item.menu_item_id)}
-                          className="rounded-md p-1.5 text-[#A94B2B] hover:bg-[#F5E5DC]"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-
-                      <p className="w-full text-right text-sm font-semibold text-[#29231F] sm:w-auto">
-                        {formatCurrency(item.price * item.quantity)}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="mt-4 flex justify-between border-t border-[#E9E3DA] pt-4">
-                <span className="font-medium text-[#29231F]">
-                  Order Subtotal
-                </span>
-
-                <span className="text-lg font-semibold text-[#C65D35]">
-                  {formatCurrency(cartSubtotal)}
-                </span>
               </div>
             </div>
 
             {/* SPECIAL INSTRUCTIONS */}
-
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#29231F]">
-                Special Instructions
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+                Special Instructions (Optional)
               </label>
-
-              <textarea
+              <input
+                type="text"
                 name="special_instructions"
                 value={form.special_instructions}
                 onChange={handleFormChange}
-                rows={2}
-                placeholder="Any special preparation instructions..."
-                className="w-full resize-none rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+                placeholder="e.g. Less spicy, Jain preparation, allergies..."
+                className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
               />
             </div>
 
-            {/* BUTTONS */}
+            {/* ADD ITEM ROW */}
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-700">
+                Add Menu Items
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={selectedMenuItem}
+                  onChange={(e) => setSelectedMenuItem(e.target.value)}
+                  className="flex-1 min-w-[200px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+                >
+                  <option value="">Select item from menu</option>
+                  {menuItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} — ₹{item.price} ({item.category_name || "General"})
+                    </option>
+                  ))}
+                </select>
 
-            <div className="flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-stone-500 font-medium">Qty:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={itemQuantity}
+                    onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-center text-sm outline-none focus:border-[#C65D35]"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddItemToCart}
+                  disabled={!selectedMenuItem}
+                  className="rounded-lg bg-stone-800 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-40 transition"
+                >
+                  Add to Order
+                </button>
+              </div>
+            </div>
+
+            {/* CART PREVIEW */}
+            {cart.length > 0 && (
+              <div className="rounded-xl border border-stone-200 p-4">
+                <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Selected Items ({cart.length})
+                </h4>
+                <div className="divide-y divide-stone-100 max-h-48 overflow-y-auto">
+                  {cart.map((item) => (
+                    <div key={item.menu_item_id} className="flex items-center justify-between py-2 text-sm">
+                      <div>
+                        <span className="font-semibold text-stone-900">{item.name}</span>
+                        <span className="ml-2 text-xs text-stone-500">
+                          ₹{item.price} × {item.quantity}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-stone-900">
+                          ₹{(Number(item.price) * item.quantity).toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFromCart(item.menu_item_id)}
+                          className="text-rose-600 hover:text-rose-800 p-1"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3">
+                  <span className="font-bold text-stone-900 text-sm">Total Estimate:</span>
+                  <span className="text-base font-bold text-[#C65D35]">
+                    ₹{cartTotal.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* BUTTONS */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-stone-200">
               <button
                 type="button"
                 onClick={closeCreateModal}
-                className="rounded-lg border border-[#E9E3DA] px-4 py-2.5 text-sm text-gray-600"
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition"
               >
                 Cancel
               </button>
-
               <button
                 type="submit"
                 disabled={saving || cart.length === 0}
-                className="rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+                className="rounded-lg bg-[#C65D35] px-5 py-2 text-sm font-semibold text-white hover:bg-[#A94B2B] disabled:opacity-50 transition"
               >
-                {saving ? "Creating..." : "Create Order"}
+                {saving ? "Creating Order..." : "Place Order"}
               </button>
             </div>
           </form>
@@ -1031,553 +1091,331 @@ export default function Orders() {
       {/* =====================================
           ORDER DETAILS MODAL
       ===================================== */}
-
-      {showDetailsModal && (
+      {showDetailsModal && selectedOrder && (
         <ModalShell
-          title="Order Details"
-          subtitle="View and manage individual restaurant orders."
-          onClose={closeDetailsModal}
+          title={`Order ${selectedOrder.order_number}`}
+          subtitle={`Customer: ${selectedOrder.customer_name} • Table ${selectedOrder.table_number}`}
+          onClose={closeOrderDetails}
           size="max-w-3xl"
         >
           {detailsLoading ? (
-            <p className="py-10 text-center text-sm text-gray-500">
-              Loading order details...
-            </p>
-          ) : detailsError ? (
-            <ErrorBox message={detailsError} />
+            <div className="py-12 text-center text-sm text-stone-500">Loading order details...</div>
           ) : (
-            selectedOrder && (
-              <div className="space-y-5">
-                {/* ORDER HEADER */}
-
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[#F7F5F0] p-4">
-                  <div>
-                    <h3 className="font-semibold text-[#29231F]">
-                      {selectedOrder.order_number}
-                    </h3>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      Order ID: {selectedOrder.id}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${getStatusStyle(selectedOrder.status)}`}
-                  >
-                    {selectedOrder.status}
-                  </span>
+            <div className="space-y-6">
+              {detailsError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                  {detailsError}
                 </div>
+              )}
 
-                {/* CUSTOMER AND TABLE */}
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <DetailItem
-                    label="Customer"
-                    value={selectedOrder.customer_name}
-                  />
-
-                  <DetailItem
-                    label="Restaurant Table"
-                    value={`Table ${selectedOrder.table_number}`}
-                  />
-                </div>
-
-                {/* ORDER ITEMS */}
-
+              {/* OVERVIEW ROW */}
+              <div className="grid grid-cols-2 gap-4 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:grid-cols-4 text-sm">
                 <div>
-                  <h3 className="mb-3 font-semibold text-[#29231F]">
-                    Ordered Items
-                  </h3>
+                  <p className="text-xs text-stone-500 font-medium">Status</p>
+                  <p className="mt-1 font-bold">
+                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusStyle(selectedOrder.status)}`}>
+                      {selectedOrder.status}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-stone-500 font-medium">Subtotal</p>
+                  <p className="mt-1 font-bold text-stone-900">
+                    {formatCurrency(selectedOrder.subtotal)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-stone-500 font-medium">Invoice</p>
+                  <p className="mt-1 font-semibold text-stone-800 text-xs">
+                    {selectedOrder.invoice_number || "Not Generated"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-stone-500 font-medium">Payment</p>
+                  <div className="mt-1">{getPaymentBadge(selectedOrder.payment_status)}</div>
+                </div>
+              </div>
 
-                  <div className="overflow-x-auto rounded-lg border border-[#E9E3DA]">
-                    <table className="w-full min-w-[500px] text-left">
-                      <thead className="bg-[#FAF9F6] text-xs uppercase text-gray-500">
-                        <tr>
-                          <th className="px-3 py-3">Item</th>
-                          <th className="px-3 py-3">Qty</th>
-                          <th className="px-3 py-3">Unit Price</th>
-                          <th className="px-3 py-3">Total</th>
-                          <th className="px-3 py-3">Action</th>
+              {/* SPECIAL INSTRUCTIONS */}
+              <div>
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Special Instructions
+                </label>
+                {isOrderEditable ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={instructionText}
+                      onChange={(e) => setInstructionText(e.target.value)}
+                      placeholder="Add instructions..."
+                      className="flex-1 rounded-lg border border-stone-300 px-3 py-1.5 text-sm outline-none focus:border-[#C65D35]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveInstructions}
+                      disabled={saving}
+                      className="rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black transition"
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-stone-600 italic">
+                    {selectedOrder.special_instructions || "No special instructions provided."}
+                  </p>
+                )}
+              </div>
+
+              {/* ORDER ITEMS LIST */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="font-bold text-stone-900 text-sm">Ordered Items</h3>
+                  {isOrderEditable && (
+                    <span className="text-xs text-stone-500">
+                      Items can be modified while Pending or Confirmed
+                    </span>
+                  )}
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-stone-200">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-stone-50 text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-2.5">Item</th>
+                        <th className="px-4 py-2.5 text-center">Qty</th>
+                        <th className="px-4 py-2.5 text-right">Price</th>
+                        <th className="px-4 py-2.5 text-right">Total</th>
+                        {isOrderEditable && <th className="px-4 py-2.5 text-center">Action</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {selectedOrder.items.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-2.5 font-medium text-stone-900">{item.item_name}</td>
+                          <td className="px-4 py-2.5 text-center">
+                            {isOrderEditable ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQuantity(item)}
+                                className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-800 hover:bg-stone-200"
+                                title="Edit quantity"
+                              >
+                                {item.quantity}
+                                <Pencil size={11} className="text-stone-500" />
+                              </button>
+                            ) : (
+                              item.quantity
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-stone-600">
+                            ₹{Number(item.unit_price).toFixed(2)}
+                          </td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-stone-900">
+                            ₹{Number(item.line_total).toFixed(2)}
+                          </td>
+                          {isOrderEditable && (
+                            <td className="px-4 py-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveOrderItem(item)}
+                                className="text-rose-600 hover:text-rose-800 p-1"
+                                title="Remove item"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          )}
                         </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-[#F0ECE6]">
-                        {selectedOrder.items.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-3 py-3 text-sm font-medium text-[#29231F]">
-                              {item.item_name}
-                            </td>
-
-                            <td className="px-3 py-3 text-sm">
-                              {["Pending", "Confirmed"].includes(selectedOrder.status) ? (
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    disabled={saving || item.quantity <= 1}
-                                    onClick={async () => {
-                                      if (item.quantity <= 1) return;
-                                      setSaving(true);
-                                      try {
-                                        await updateOrderItem(selectedOrder.id, item.id, {
-                                          quantity: item.quantity - 1,
-                                        });
-                                        await refreshSelectedOrder();
-                                      } catch (err) {
-                                        setDetailsError(getErrorMessage(err));
-                                      } finally {
-                                        setSaving(false);
-                                      }
-                                    }}
-                                    title="Decrease quantity"
-                                    className="rounded border border-[#E9E3DA] p-1 text-gray-600 hover:bg-[#F5E5DC] disabled:opacity-40"
-                                  >
-                                    <Minus size={12} />
-                                  </button>
-                                  <span className="w-5 text-center font-medium">{item.quantity}</span>
-                                  <button
-                                    type="button"
-                                    disabled={saving}
-                                    onClick={async () => {
-                                      setSaving(true);
-                                      try {
-                                        await updateOrderItem(selectedOrder.id, item.id, {
-                                          quantity: item.quantity + 1,
-                                        });
-                                        await refreshSelectedOrder();
-                                      } catch (err) {
-                                        setDetailsError(getErrorMessage(err));
-                                      } finally {
-                                        setSaving(false);
-                                      }
-                                    }}
-                                    title="Increase quantity"
-                                    className="rounded border border-[#E9E3DA] p-1 text-gray-600 hover:bg-[#F5E5DC] disabled:opacity-40"
-                                  >
-                                    <Plus size={12} />
-                                  </button>
-                                </div>
-                              ) : (
-                                item.quantity
-                              )}
-                            </td>
-
-                            <td className="px-3 py-3 text-sm">
-                              {formatCurrency(item.unit_price)}
-                            </td>
-
-                            <td className="px-3 py-3 text-sm font-semibold">
-                              {formatCurrency(item.line_total)}
-                            </td>
-
-                            <td className="px-3 py-3">
-                              {["Pending", "Confirmed"].includes(
-                                selectedOrder.status,
-                              ) && (
-                                <div className="flex gap-1">
-                                  <button
-                                    disabled={saving}
-                                    onClick={() =>
-                                      handleUpdateItemQuantity(item)
-                                    }
-                                    title="Update quantity"
-                                    className="rounded-md p-1.5 hover:bg-[#F5E5DC]"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
-
-                                  <button
-                                    disabled={
-                                      saving || selectedOrder.items.length <= 1
-                                    }
-                                    onClick={() => handleRemoveOrderItem(item)}
-                                    title="Remove item"
-                                    className="rounded-md p-1.5 text-[#A94B2B] hover:bg-[#F5E5DC] disabled:opacity-30"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="mt-3 flex justify-between rounded-lg bg-[#F7F5F0] p-4">
-                    <span className="font-semibold text-[#29231F]">
-                      Subtotal
-                    </span>
-
-                    <span className="text-lg font-semibold text-[#C65D35]">
-                      {formatCurrency(selectedOrder.subtotal)}
-                    </span>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
 
                 {/* ADD ITEM TO EXISTING ORDER */}
+                {isOrderEditable && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                    <select
+                      value={additionalItem}
+                      onChange={(e) => setAdditionalItem(e.target.value)}
+                      className="flex-1 min-w-[180px] rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none"
+                    >
+                      <option value="">Add another item...</option>
+                      {menuItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} (₹{item.price})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      value={additionalQuantity}
+                      onChange={(e) => setAdditionalQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-center text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddExistingItem}
+                      disabled={!additionalItem || saving}
+                      className="rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black transition"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
 
-                {["Pending", "Confirmed"].includes(selectedOrder.status) && (
-                  <div className="rounded-lg border border-[#E9E3DA] p-4">
-                    <h3 className="mb-3 font-semibold text-[#29231F]">
-                      Add More Items
-                    </h3>
+              {/* STATUS TRANSITION PANEL */}
+              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+                <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Update Operational Status
+                </h4>
 
-                    <div className="flex flex-col gap-3 sm:flex-row">
+                {STATUS_TRANSITIONS[selectedOrder.status]?.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <select
-                        value={additionalItem}
-                        onChange={(event) =>
-                          setAdditionalItem(event.target.value)
-                        }
-                        className="min-w-0 flex-1 rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm"
+                        value={statusTarget}
+                        onChange={(e) => setStatusTarget(e.target.value)}
+                        className="flex-1 min-w-[200px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
                       >
-                        <option value="">Select menu item</option>
-
-                        {menuItems.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} – {formatCurrency(item.price)}
+                        <option value="">Select next status transition</option>
+                        {STATUS_TRANSITIONS[selectedOrder.status].map((st) => (
+                          <option key={st} value={st}>
+                            {st} {st === "Completed" ? "(Requires generated invoice)" : ""}
                           </option>
                         ))}
                       </select>
 
-                      <input
-                        type="number"
-                        min="1"
-                        value={additionalQuantity}
-                        onChange={(event) =>
-                          setAdditionalQuantity(event.target.value)
-                        }
-                        className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm sm:w-24"
-                      />
-
                       <button
-                        onClick={handleAddExistingItem}
-                        disabled={saving}
-                        className="rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm text-white hover:bg-[#A94B2B] disabled:opacity-60"
-                      >
-                        Add Item
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* SPECIAL INSTRUCTIONS */}
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-[#29231F]">
-                    Special Instructions
-                  </label>
-
-                  <textarea
-                    value={instructionText}
-                    onChange={(event) => setInstructionText(event.target.value)}
-                    rows={2}
-                    disabled={
-                      !["Pending", "Confirmed"].includes(selectedOrder.status)
-                    }
-                    className="w-full resize-none rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35] disabled:bg-gray-50"
-                  />
-
-                  {["Pending", "Confirmed"].includes(selectedOrder.status) && (
-                    <button
-                      onClick={handleUpdateInstructions}
-                      disabled={saving}
-                      className="mt-2 rounded-lg border border-[#C65D35] px-4 py-2 text-sm font-medium text-[#C65D35]"
-                    >
-                      Save Instructions
-                    </button>
-                  )}
-                </div>
-
-                {/* STATUS MANAGEMENT */}
-
-                <div className="rounded-lg border border-[#E9E3DA] p-4">
-                  <h3 className="mb-3 font-semibold text-[#29231F]">
-                    Update Order Status
-                  </h3>
-
-                  {STATUS_TRANSITIONS[selectedOrder.status].length === 0 ? (
-                    <p className="text-sm text-gray-500">
-                      This order has reached its final status.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      <select
-                        value={statusTarget}
-                        onChange={(event) =>
-                          setStatusTarget(event.target.value)
-                        }
-                        className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm"
-                      >
-                        <option value="">Select next status</option>
-
-                        {STATUS_TRANSITIONS[selectedOrder.status].map(
-                          (status) => (
-                            <option key={status} value={status}>
-                              {status}
-                              {status === "Completed"
-                                ? " (Invoice required)"
-                                : ""}
-                            </option>
-                          ),
-                        )}
-                      </select>
-
-                      <input
-                        value={statusNote}
-                        onChange={(event) => setStatusNote(event.target.value)}
-                        placeholder="Status update note (optional)"
-                        className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm"
-                      />
-
-                      <button
+                        type="button"
                         onClick={handleStatusUpdate}
                         disabled={!statusTarget || saving}
-                        className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-50"
+                        className="rounded-lg bg-[#C65D35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#A94B2B] disabled:opacity-40 transition"
                       >
-                        Update Status
-                        <ArrowRight size={16} />
+                        {saving ? "Updating..." : "Transition Status"}
                       </button>
-
-                      {selectedOrder.status === "Served" && (
-                        <p className="text-xs text-gray-500">
-                          An invoice must be generated before this order can be
-                          completed.
-                        </p>
-                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* STATUS HISTORY */}
+                    <input
+                      type="text"
+                      value={statusNote}
+                      onChange={(e) => setStatusNote(e.target.value)}
+                      placeholder="Optional transition note..."
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs outline-none"
+                    />
 
-                <div>
-                  <h3 className="mb-3 font-semibold text-[#29231F]">
-                    Order Status History
-                  </h3>
-
-                  <div className="space-y-3">
-                    {selectedOrder.status_history.map((history) => (
-                      <div
-                        key={history.id}
-                        className="flex gap-3 rounded-lg bg-[#FAF9F6] p-3"
-                      >
-                        <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#C65D35]" />
-
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-[#29231F]">
-                            {history.previous_status
-                              ? `${history.previous_status} → ${history.new_status}`
-                              : history.new_status}
-                          </p>
-
-                          <p className="mt-1 text-xs text-gray-500">
-                            {history.note || "Status updated"}
-                          </p>
-
-                          <p className="mt-1 text-xs text-gray-400">
-                            {new Date(history.changed_at).toLocaleString(
-                              "en-IN",
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                    {selectedOrder.status === "Served" && (
+                      <p className="text-xs text-amber-700 font-medium">
+                        ⚠️ Reminder: An invoice must be created under Invoice Management before completing this order.
+                      </p>
+                    )}
                   </div>
+                ) : (
+                  <p className="text-xs text-stone-500">
+                    This order is at a terminal status ({selectedOrder.status}) and cannot be transitioned further.
+                  </p>
+                )}
+              </div>
+
+              {/* STATUS AUDIT TRAIL */}
+              <div>
+                <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-700">
+                  Status Audit History
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {selectedOrder.status_history?.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between rounded-lg border border-stone-200 bg-white p-2 text-xs">
+                      <div>
+                        <span className="font-semibold text-stone-800">
+                          {h.previous_status ? `${h.previous_status} → ${h.new_status}` : h.new_status}
+                        </span>
+                        {h.note && <span className="ml-2 text-stone-500 italic">"{h.note}"</span>}
+                      </div>
+                      <span className="text-stone-400">
+                        {new Date(h.changed_at).toLocaleString("en-IN", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )
+            </div>
           )}
         </ModalShell>
       )}
-        {/* QUANTITY EDIT MODAL */}
-        {quantityModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4"
-            onClick={(e) => {
-              if (e.target === e.currentTarget && !saving) setQuantityModal(null);
-            }}
-          >
-            <div className="my-auto w-full max-w-sm overflow-hidden rounded-xl bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-[#EEE9E2] px-5 py-4">
-                <h3 className="font-semibold text-[#29231F]">Update Quantity</h3>
+
+      {/* QUANTITY MODAL */}
+      {quantityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xs rounded-xl bg-white p-5 shadow-2xl">
+            <h3 className="font-bold text-stone-900 text-sm">Update Item Quantity</h3>
+            <p className="text-xs text-stone-500 mt-1">{quantityModal.item.item_name}</p>
+            <form onSubmit={handleSaveQuantityModal} className="mt-4 space-y-4">
+              <input
+                type="number"
+                min="1"
+                value={quantityModal.quantity}
+                onChange={(e) =>
+                  setQuantityModal((prev) => ({
+                    ...prev,
+                    quantity: Math.max(1, parseInt(e.target.value) || 1),
+                  }))
+                }
+                className="w-full rounded-lg border border-stone-300 p-2 text-center text-base font-bold outline-none focus:border-[#C65D35]"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setQuantityModal(null)}
-                  disabled={saving}
-                  className="rounded-lg p-1 text-gray-400 hover:bg-[#F7F5F0] hover:text-[#29231F]"
+                  className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700"
                 >
-                  <X size={18} />
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg bg-[#C65D35] px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  Save
                 </button>
               </div>
-
-              <form onSubmit={handleSaveQuantityModal} className="space-y-4 p-5">
-                <p className="text-sm font-medium text-[#29231F]">
-                  {quantityModal.item.item_name}
-                </p>
-
-                <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
-                    Quantity
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={saving || quantityModal.quantity <= 1}
-                      onClick={() =>
-                        setQuantityModal((prev) => ({
-                          ...prev,
-                          quantity: Math.max(1, prev.quantity - 1),
-                        }))
-                      }
-                      className="rounded-lg border border-[#E9E3DA] p-2 hover:bg-[#F7F5F0] disabled:opacity-40"
-                    >
-                      <Minus size={16} />
-                    </button>
-
-                    <input
-                      type="number"
-                      min="1"
-                      value={quantityModal.quantity}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        setQuantityModal((prev) => ({
-                          ...prev,
-                          quantity: Number.isNaN(val) ? 1 : Math.max(1, val),
-                        }));
-                      }}
-                      className="w-24 rounded-lg border border-[#E9E3DA] py-2 text-center text-sm outline-none focus:border-[#C65D35]"
-                      autoFocus
-                    />
-
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() =>
-                        setQuantityModal((prev) => ({
-                          ...prev,
-                          quantity: prev.quantity + 1,
-                        }))
-                      }
-                      className="rounded-lg border border-[#E9E3DA] p-2 hover:bg-[#F7F5F0]"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 border-t border-[#EEE9E2] pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setQuantityModal(null)}
-                    disabled={saving}
-                    className="rounded-lg border border-[#E9E3DA] px-4 py-2 text-sm text-gray-600 hover:bg-[#F7F5F0]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-lg bg-[#C65D35] px-4 py-2 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
-                  >
-                    {saving ? "Updating..." : "Update Quantity"}
-                  </button>
-                </div>
-              </form>
-            </div>
+            </form>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ==========================================
-// REUSABLE COMPONENTS
-// ==========================================
-
-function SummaryCard({ title, value, icon, active, onClick }) {
+// Modal Container Shell
+function ModalShell({ title, subtitle, onClose, children, size = "max-w-2xl" }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`w-full rounded-xl border p-4 text-left transition ${
-        active
-          ? "border-[#C65D35] bg-[#FFF9F5] shadow-sm"
-          : "border-[#E9E3DA] bg-white hover:border-[#C65D35]/50"
-      }`}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-xs"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-
-          <h3 className="mt-1 text-xl font-semibold text-[#29231F]">{value}</h3>
-        </div>
-
-        <div className="rounded-lg bg-[#F5E5DC] p-2.5 text-[#C65D35]">
-          {icon}
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function ModalShell({ title, subtitle, onClose, children, size = "max-w-xl" }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-      <div
-        className={`my-auto max-h-[92vh] w-full ${size} overflow-y-auto rounded-xl bg-white shadow-xl`}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#EEE9E2] bg-white px-5 py-4">
+      <div className={`w-full ${size} overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150`}>
+        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
           <div>
-            <h2 className="font-semibold text-[#29231F]">{title}</h2>
-            <p className="mt-1 text-xs text-gray-500">{subtitle}</p>
+            <h3 className="text-lg font-bold text-stone-900">{title}</h3>
+            {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
           </div>
-
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
           >
             <X size={18} />
           </button>
         </div>
-
-        <div className="p-5">{children}</div>
+        <div className="max-h-[80vh] overflow-y-auto p-6">{children}</div>
       </div>
-    </div>
-  );
-}
-
-function DetailItem({ label, value }) {
-  return (
-    <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-        {label}
-      </p>
-
-      <p className="break-words text-sm font-medium text-[#29231F]">
-        {value ?? "—"}
-      </p>
-    </div>
-  );
-}
-
-function ErrorBox({ message }) {
-  return (
-    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {message}
-    </div>
-  );
-}
-
-function Notification({ message, onClose }) {
-  return (
-    <div className="mb-4 flex items-center justify-between rounded-lg border border-[#E9D6C8] bg-[#FFF9F5] px-4 py-3 text-sm text-[#A94B2B]">
-      {message}
-
-      <button onClick={onClose}>
-        <X size={16} />
-      </button>
     </div>
   );
 }

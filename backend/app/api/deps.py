@@ -59,6 +59,14 @@ def get_current_user(
             detail="Your account is inactive"
         )
 
+    # Operational access is restricted to the Receptionist role (internally MANAGER); Staff accounts cannot access protected endpoints
+    user_role = getattr(user.role, "value", user.role)
+    if str(user_role).upper() != "MANAGER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Staff accounts are not permitted to access protected resources"
+        )
+
     return user
 
 

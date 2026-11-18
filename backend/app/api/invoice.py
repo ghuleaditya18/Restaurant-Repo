@@ -1,9 +1,11 @@
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 
+from app.core.date_utils import get_date_range
 from app.db.session import get_db
 from app.api.deps import require_roles
 from app.models.entities import (
@@ -29,7 +31,7 @@ from app.schemas.invoice import (
 
 router = APIRouter(
     tags=["Invoice Management"],
-    dependencies=[Depends(require_roles("MANAGER", "STAFF"))],
+    dependencies=[Depends(require_roles("MANAGER"))],
 )
 
 
@@ -173,19 +175,25 @@ def create_invoice(
 
 @router.get("/", response_model=list[InvoiceResponse])
 def get_all_invoices(
+    preset: str | None = "today",
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
-
-    invoices = (
+    query = (
         db.query(Invoice)
         .options(
             joinedload(Invoice.order).joinedload(Order.customer),
             joinedload(Invoice.order).joinedload(Order.table),
             joinedload(Invoice.order).selectinload(Order.items),
         )
-        .order_by(Invoice.id.desc())
-        .all()
     )
+
+    start_dt, end_dt = get_date_range(preset, start_date, end_date)
+    if start_dt is not None and end_dt is not None:
+        query = query.filter(Invoice.created_at >= start_dt, Invoice.created_at <= end_dt)
+
+    invoices = query.order_by(Invoice.id.desc()).all()
 
     return [build_invoice_response(invoice) for invoice in invoices]
 

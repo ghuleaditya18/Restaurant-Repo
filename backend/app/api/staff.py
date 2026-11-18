@@ -137,13 +137,15 @@ def create_staff(
         )
 
     try:
+        import secrets
 
         role_enum = User.__table__.c.role.type.enum_class
+        raw_password = data.password if data.password else secrets.token_urlsafe(32)
 
         new_user = User(
             full_name=data.full_name,
             email=data.email,
-            password_hash=hash_password(data.password),
+            password_hash=hash_password(raw_password),
             role=role_enum.STAFF,
             is_active=True,
         )

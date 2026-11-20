@@ -22,7 +22,7 @@ from app.models.entities import (
     TableStatus,
     PaymentStatus,
 )
-from app.api.deps import require_roles, get_current_user
+from app.api.deps import require_roles, get_current_user, require_restaurant_context
 from app.schemas.order import (
     OrderCreate,
     OrderUpdate,
@@ -40,7 +40,7 @@ from app.schemas.order import (
 
 router = APIRouter(
     tags=["Order Management"],
-    dependencies=[Depends(require_roles("MANAGER"))],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

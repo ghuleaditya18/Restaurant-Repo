@@ -61,13 +61,20 @@ def login(
             detail="Your account is inactive"
         )
 
+    biz_context = getattr(user, "business_context", "RESTAURANT") or "RESTAURANT"
     access_token = create_access_token(
-        data={"sub": str(user.id)}
+        data={
+            "sub": str(user.id),
+            "email": user.email,
+            "role": str(getattr(user.role, "value", user.role)),
+            "business_context": biz_context,
+        }
     )
 
     return {
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "business_context": biz_context,
     }
 
 
@@ -83,6 +90,7 @@ def get_me(
         current_user.role
     )
     phone = current_user.staff_profile.phone if current_user.staff_profile else None
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
 
     return UserResponse(
         id=current_user.id,
@@ -90,6 +98,7 @@ def get_me(
         email=current_user.email,
         role=str(role),
         is_active=current_user.is_active,
+        business_context=biz_context,
         phone=phone,
     )
 
@@ -142,6 +151,7 @@ def update_profile(
 
     role = getattr(current_user.role, "value", current_user.role)
     contact_phone = current_user.staff_profile.phone if current_user.staff_profile else phone
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
 
     return UserResponse(
         id=current_user.id,
@@ -149,5 +159,6 @@ def update_profile(
         email=current_user.email,
         role=str(role),
         is_active=current_user.is_active,
+        business_context=biz_context,
         phone=contact_phone,
     )

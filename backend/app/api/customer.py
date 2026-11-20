@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db
 from app.models.entities import Customer
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 
 from app.schemas.customer import (
     CustomerCreate,
@@ -17,7 +17,8 @@ from app.schemas.customer import (
 # ==========================================
 
 router = APIRouter(
-    tags=["Customer Management"], dependencies=[Depends(require_roles("MANAGER"))]
+    tags=["Customer Management"],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

@@ -26,6 +26,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { updateProfile } from "../services/authService";
 import { RESTAURANT_ABOUT } from "../config/restaurantAbout";
+import { SPA_ABOUT, SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
 import {
   BUTTON_VARIANTS,
   INPUT_STYLES,
@@ -212,6 +213,9 @@ export default function Settings() {
   const { user, updateUser } = useAuth();
   const { showSuccess, showError, confirm } = useNotification();
 
+  const isSpaContext = user?.business_context === "SPA";
+  const currentHelpSections = isSpaContext ? SPA_HELP_SECTIONS : HELP_SECTIONS;
+
   // Active section tab: 'profile' | 'help' | 'about' (appearance removed in favor of top header toggle)
   const rawTab = searchParams.get("tab");
   const activeTab = rawTab === "help" || rawTab === "about" ? rawTab : "profile";
@@ -352,9 +356,9 @@ export default function Settings() {
 
   const filteredHelpSections = useMemo(() => {
     const q = helpSearch.trim().toLowerCase();
-    if (!q) return HELP_SECTIONS;
+    if (!q) return currentHelpSections;
 
-    return HELP_SECTIONS.map((sec) => {
+    return currentHelpSections.map((sec) => {
       const matchingItems = sec.items.filter(
         (it) => it.q.toLowerCase().includes(q) || it.a.toLowerCase().includes(q)
       );
@@ -363,7 +367,7 @@ export default function Settings() {
         items: matchingItems,
       };
     }).filter((sec) => sec.items.length > 0);
-  }, [helpSearch]);
+  }, [helpSearch, currentHelpSections]);
 
   return (
     <div className="space-y-6">
@@ -374,7 +378,7 @@ export default function Settings() {
             Settings
           </h1>
           <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Manage your profile details, access operational help, and view restaurant information.
+            Manage your profile details, access operational help, and view {isSpaContext ? "spa facility" : "restaurant"} information.
           </p>
         </div>
 
@@ -436,7 +440,7 @@ export default function Settings() {
                 <div>
                   <div className="flex items-center gap-2.5">
                     <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100">
-                      {user?.full_name || "Receptionist User"}
+                      {user?.full_name || (isSpaContext ? "Spa Receptionist" : "Receptionist User")}
                     </h2>
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
                       <ShieldCheck size={12} />
@@ -448,7 +452,10 @@ export default function Settings() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                     <span className="rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 font-semibold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-                      Role: Receptionist
+                      {isSpaContext ? "Role: Spa Receptionist" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
+                    </span>
+                    <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
+                      {isSpaContext ? "Context: Spa & Wellness" : "Context: Restaurant"}
                     </span>
                     {user?.phone ? (
                       <span className="inline-flex items-center gap-1 text-stone-500 dark:text-stone-400">
@@ -457,7 +464,7 @@ export default function Settings() {
                       </span>
                     ) : (
                       <span className="text-stone-400 dark:text-stone-500 italic">
-                        Contact not provided
+                        {isSpaContext ? "Contact: Not configured" : "Contact not provided"}
                       </span>
                     )}
                   </div>
@@ -491,7 +498,9 @@ export default function Settings() {
                   Personal & Account Information
                 </h3>
                 <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  Current receptionist identity and authorized communication credentials.
+                  {isSpaContext
+                    ? "Current Spa receptionist identity and authorized communication credentials."
+                    : "Current receptionist identity and authorized communication credentials."}
                 </p>
               </div>
 
@@ -504,7 +513,9 @@ export default function Settings() {
                     {user?.full_name || "—"}
                   </p>
                   <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
-                    Recorded on order transitions and system audit trails.
+                    {isSpaContext
+                      ? "Recorded on booking status transitions and therapy audit trails."
+                      : "Recorded on order transitions and system audit trails."}
                   </p>
                 </div>
 
@@ -527,10 +538,12 @@ export default function Settings() {
                   </p>
                   <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     <Phone size={14} className="text-stone-400 shrink-0" />
-                    <span>{user?.phone || "Not provided"}</span>
+                    <span>{user?.phone || (isSpaContext ? "Not configured" : "Not provided")}</span>
                   </div>
                   <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
-                    Direct mobile number for internal restaurant coordination.
+                    {isSpaContext
+                      ? "Direct mobile number for internal wellness coordination."
+                      : "Direct mobile number for internal restaurant coordination."}
                   </p>
                 </div>
 
@@ -540,10 +553,12 @@ export default function Settings() {
                   </p>
                   <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     <ShieldCheck size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>Receptionist</span>
+                    <span>{isSpaContext ? "Spa Receptionist" : (user?.role || "Receptionist")}</span>
                   </div>
                   <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
-                    Authorized for Orders, Tables, Invoices, and Billing.
+                    {isSpaContext
+                      ? "Authorized for Spa Appointments, Therapies, Invoices, and Billing."
+                      : "Authorized for Orders, Tables, Invoices, and Billing."}
                   </p>
                 </div>
 
@@ -660,7 +675,7 @@ export default function Settings() {
                     </label>
                     <input
                       type="text"
-                      value="Receptionist"
+                      value={isSpaContext ? "Spa Receptionist" : "Receptionist"}
                       disabled
                       className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-850 px-3 py-2 text-sm text-stone-500 dark:text-stone-400 cursor-not-allowed"
                     />
@@ -721,10 +736,12 @@ export default function Settings() {
           {/* SEARCH HERO */}
           <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 shadow-xs">
             <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-              DineFlow Knowledge Base & Help Centre
+              {isSpaContext ? "DineFlow Spa Knowledge Base & Help Centre" : "DineFlow Knowledge Base & Help Centre"}
             </h3>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Search operational guides, workflow explanations, troubleshooting steps, and billing policies.
+              {isSpaContext
+                ? "Search operational guides, therapy slot booking rules, check-in flows, staff schedules, and billing policies."
+                : "Search operational guides, workflow explanations, troubleshooting steps, and billing policies."}
             </p>
 
             <div className="relative mt-4 w-full sm:max-w-[500px]">
@@ -732,7 +749,11 @@ export default function Settings() {
                 type="text"
                 value={helpSearch}
                 onChange={(e) => setHelpSearch(e.target.value)}
-                placeholder="Search topics, e.g. table occupied, cancel stale order, GST invoice, dark mode..."
+                placeholder={
+                  isSpaContext
+                    ? "Search topics, e.g. time slots, check-in, complete session, GST invoice..."
+                    : "Search topics, e.g. table occupied, cancel stale order, GST invoice, dark mode..."
+                }
                 className="h-11 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850 pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F5B716] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F5B716]/30"
               />
               <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -755,7 +776,7 @@ export default function Settings() {
                 <HelpCircle size={36} className="mx-auto text-stone-400 mb-2" />
                 <h4 className="font-bold text-stone-800 dark:text-stone-200">No matching help topics found</h4>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Try searching with different keywords like 'invoice', 'orders', 'table', or 'payment'.
+                  Try searching with different keywords like {isSpaContext ? "'booking', 'slots', 'therapist', or 'invoice'" : "'invoice', 'orders', 'table', or 'payment'"}.
                 </p>
                 <button
                   type="button"
@@ -818,10 +839,274 @@ export default function Settings() {
       )}
 
       {/* =========================================================================
-          TAB 3: ABOUT OUR RESTAURANT (STATIC RESTAURANT PROFILE)
+          TAB 3: ABOUT (CONTEXT-AWARE: SPA FACILITY OR RESTAURANT PROFILE)
          ========================================================================= */}
       {activeTab === "about" && (
-        <div className="space-y-6">
+        isSpaContext ? (
+          <div className="space-y-6">
+            {/* A. SPA OVERVIEW & HERO BANNER */}
+            <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 sm:p-8 shadow-xs">
+              {/* Ambient Background Accent */}
+              <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#F5B716]/10 blur-3xl dark:bg-[#F5B716]/5" />
+
+              <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-3 max-w-2xl">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF08A] dark:bg-[#713F12]/50 border border-[#FDE047] dark:border-[#EAB308]/60 px-3 py-0.5 text-xs font-bold text-[#854D0E] dark:text-[#FEF08A]">
+                      <Sparkles size={13} />
+                      {SPA_ABOUT.overview.facilityType}
+                    </span>
+                    <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-3 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                      Context: {SPA_ABOUT.overview.businessContext}
+                    </span>
+                    <span className="rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs text-stone-500 dark:text-stone-400">
+                      Est. {SPA_ABOUT.overview.establishedYear}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
+                      {SPA_ABOUT.overview.facilityName === "Not configured" ? "Spa Facility Profile" : SPA_ABOUT.overview.facilityName}
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-stone-500 dark:text-stone-400">
+                      Tagline: <span className="italic">{SPA_ABOUT.overview.tagline}</span>
+                    </p>
+                  </div>
+
+                  <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300 pt-1">
+                    This profile presents the registered facility information, operational schedule, and system parameters governing DineFlow's Spa &amp; Wellness operations. Unconfigured business details are marked accordingly until provisioned by an administrator.
+                  </p>
+                </div>
+
+                {/* Decorative Visual Card */}
+                <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#1C1917] p-6 text-center w-52 shrink-0 shadow-2xs">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F5B716] text-[#1C1917] shadow-xs">
+                    <Sparkles size={28} />
+                  </div>
+                  <h4 className="mt-3 text-sm font-bold text-stone-900 dark:text-stone-100">
+                    Spa &amp; Wellness
+                  </h4>
+                  <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400 leading-tight">
+                    Therapy management &amp; holistic scheduling
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* B. FACILITY DETAILS & OPERATIONAL PARAMETERS */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* FACILITY DETAILS */}
+              <div className={CARD_STYLES.base}>
+                <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <MapPin size={18} className="text-[#F5B716]" />
+                    <span>Facility Registration &amp; Contact</span>
+                  </h3>
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                    Official business identification and facility communication channels.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Facility Name:</span>
+                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
+                      {SPA_ABOUT.overview.facilityName}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Facility Type:</span>
+                    <span className="font-medium text-stone-900 dark:text-stone-100">
+                      {SPA_ABOUT.overview.facilityType}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Physical Address:</span>
+                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
+                      {SPA_ABOUT.overview.address}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Owner / Management:</span>
+                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
+                      {SPA_ABOUT.overview.ownerName}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Contact Phone:</span>
+                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
+                      {SPA_ABOUT.overview.contactPhone}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Official Email:</span>
+                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
+                      {SPA_ABOUT.overview.officialEmail}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Achievements / Accreditations:</span>
+                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
+                      {SPA_ABOUT.overview.achievements}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* OPERATIONAL SYSTEM PARAMETERS */}
+              <div className={CARD_STYLES.base}>
+                <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Clock size={18} className="text-[#F5B716]" />
+                    <span>Operational System Parameters</span>
+                  </h3>
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                    Active operational rules governing scheduling, slots, and invoicing.
+                  </p>
+                </div>
+
+                <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Operating Hours:</span>
+                    <span className="font-semibold text-stone-900 dark:text-stone-100">
+                      {SPA_ABOUT.operationalConfig.operatingHours}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Operating Timezone:</span>
+                    <span className="font-semibold text-stone-900 dark:text-stone-100">
+                      {SPA_ABOUT.operationalConfig.timezone}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Slot Interval:</span>
+                    <span className="font-semibold text-stone-900 dark:text-stone-100">
+                      {SPA_ABOUT.operationalConfig.slotInterval}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Default Tax Rate:</span>
+                    <span className="font-semibold text-stone-900 dark:text-stone-100">
+                      {SPA_ABOUT.operationalConfig.defaultTaxRate}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Booking Lifecycle:</span>
+                    <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                      {SPA_ABOUT.operationalConfig.workflow}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1 py-2.5">
+                    <span className="font-semibold text-stone-700 dark:text-stone-300">Concurrency Protection:</span>
+                    <span className="text-[11px] text-stone-600 dark:text-stone-400 font-mono bg-stone-50 dark:bg-stone-850 p-2 rounded-lg border border-stone-100 dark:border-stone-800">
+                      {SPA_ABOUT.operationalConfig.concurrencyProtection}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* C. SPA OPERATIONAL WORKFLOWS */}
+            <div className={CARD_STYLES.base}>
+              <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-5">
+                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-[#F5B716]" />
+                  <span>Spa Operating Principles &amp; Workflow Standards</span>
+                </h3>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  Standardized execution protocols ensuring seamless therapy delivery and client satisfaction.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      01
+                    </span>
+                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      Three-Stage Lifecycle
+                    </h4>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                    Appointments follow a strict state progression: Booked → In Progress → Completed. Direct bypasses are prevented at the database level.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      02
+                    </span>
+                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      Dynamic Slot Availability
+                    </h4>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                    Appointment slots calculate cumulative treatment duration against therapist working shifts, with automatic exclusion of past time slots for current-day bookings.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      03
+                    </span>
+                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      Concurrency-Safe Scheduling
+                    </h4>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                    Therapist availability checks and booking transactions are protected by PostgreSQL row locks, preventing race conditions or accidental double-booking.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      04
+                    </span>
+                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      Compliant Invoicing
+                    </h4>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                    Official GST invoices unlock immediately upon session completion with itemized therapy pricing, configurable GST tax rates, and download-ready PDF receipts.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      05
+                    </span>
+                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      Flexible Settlement Modes
+                    </h4>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                    Supports full settlement, installment payments, and multi-mode payment splitting (UPI, Cards, Cash) with real-time balance tracking.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                      06
+                    </span>
+                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                      Therapist Shift Roster
+                    </h4>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                    Weekly therapist schedules are managed per weekday (Monday–Sunday) within standard operating hours, ensuring therapists are never scheduled outside duty shifts.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
           {/* A. RESTAURANT OVERVIEW & HERO BANNER */}
           <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 sm:p-8 shadow-xs">
             {/* Ambient Background Accent */}
@@ -1079,7 +1364,8 @@ export default function Settings() {
             </div>
           </div>
         </div>
-      )}
+      )
+    )}
     </div>
   );
 }

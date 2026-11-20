@@ -10,6 +10,7 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    business_context: str = "RESTAURANT"
 
 
 class UserResponse(BaseModel):
@@ -20,6 +21,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     is_active: bool
+    business_context: str = "RESTAURANT"
     phone: str | None = None
 
 

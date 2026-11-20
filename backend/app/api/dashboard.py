@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 from app.core.date_utils import get_date_range
 from app.db.session import get_db
 from app.services.order_service import cancel_stale_orders
@@ -30,7 +30,7 @@ from app.schemas.dashboard import (
 
 router = APIRouter(
     tags=["Dashboard"],
-    dependencies=[Depends(require_roles("MANAGER"))],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

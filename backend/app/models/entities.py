@@ -132,6 +132,13 @@ class User(TimestampMixin, Base):
         nullable=False
     )
 
+    business_context: Mapped[str] = mapped_column(
+        String(50),
+        default="RESTAURANT",
+        server_default="RESTAURANT",
+        nullable=False
+    )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

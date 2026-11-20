@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.date_utils import get_date_range
 from app.db.session import get_db
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 from app.models.entities import (
     Order,
     OrderStatus,
@@ -31,7 +31,7 @@ from app.schemas.invoice import (
 
 router = APIRouter(
     tags=["Invoice Management"],
-    dependencies=[Depends(require_roles("MANAGER"))],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

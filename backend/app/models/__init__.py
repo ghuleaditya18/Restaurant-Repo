@@ -11,6 +11,22 @@ from app.models.entities import (
     Invoice,
     Payment,
 )
+from app.models.spa import (
+    SpaBookingStatus,
+    SpaPaymentStatus,
+    SpaPaymentMethod,
+    SpaServiceCategory,
+    SpaService,
+    SpaCustomer,
+    SpaStaff,
+    SpaStaffAvailability,
+    SpaBooking,
+    SpaBookingService,
+    SpaBookingStatusHistory,
+    SpaInvoice,
+    SpaInvoiceItem,
+    SpaPayment,
+)
 
 __all__ = [
     "User",
@@ -24,4 +40,18 @@ __all__ = [
     "OrderStatusHistory",
     "Invoice",
     "Payment",
+    "SpaBookingStatus",
+    "SpaPaymentStatus",
+    "SpaPaymentMethod",
+    "SpaServiceCategory",
+    "SpaService",
+    "SpaCustomer",
+    "SpaStaff",
+    "SpaStaffAvailability",
+    "SpaBooking",
+    "SpaBookingService",
+    "SpaBookingStatusHistory",
+    "SpaInvoice",
+    "SpaInvoiceItem",
+    "SpaPayment",
 ]

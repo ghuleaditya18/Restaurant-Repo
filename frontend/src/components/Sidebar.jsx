@@ -13,9 +13,10 @@ import {
   X,
   Menu,
   ChefHat,
+  Sparkles,
 } from "lucide-react";
 
-const menuItems = [
+const restaurantMenuItems = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard, end: true },
   { name: "Orders", path: "/orders", icon: ClipboardList },
   { name: "Tables", path: "/tables", icon: Grid3X3 },
@@ -23,6 +24,16 @@ const menuItems = [
   { name: "Customers", path: "/customers", icon: Users },
   { name: "Staff Management", path: "/staff", icon: UserCog },
   { name: "Invoices", path: "/invoices", icon: FileText },
+  { name: "Settings", path: "/settings", icon: Settings },
+];
+
+const spaMenuItems = [
+  { name: "Dashboard", path: "/spa/dashboard", icon: LayoutDashboard, end: true },
+  { name: "Bookings", path: "/spa/bookings", icon: ClipboardList },
+  { name: "Services", path: "/spa/services", icon: Sparkles },
+  { name: "Customers", path: "/spa/customers", icon: Users },
+  { name: "Therapist Management", path: "/spa/staff", icon: UserCog },
+  { name: "Invoices", path: "/spa/invoices", icon: FileText },
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 
@@ -75,7 +86,7 @@ function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -84,7 +95,11 @@ function Sidebar({
     navigate("/login", { replace: true });
   };
 
-  const visibleMenuItems = menuItems;
+  const isSpa = user?.business_context === "SPA";
+  const visibleMenuItems = isSpa ? spaMenuItems : restaurantMenuItems;
+  const brandTitle = isSpa ? "DineFlow Spa" : "DineFlow";
+  const brandLink = isSpa ? "/spa/dashboard" : "/";
+  const BrandIcon = isSpa ? Sparkles : ChefHat;
 
   return (
     <>
@@ -106,16 +121,16 @@ function Sidebar({
         {/* Branding & Close Button */}
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
           <Link
-            to="/"
+            to={brandLink}
             onClick={onClose}
             className="group flex items-center gap-2.5 transition-opacity hover:opacity-95 min-w-0 cursor-pointer"
-            title="DineFlow - Dashboard"
+            title={`${brandTitle} - Dashboard`}
           >
             <div className="rounded-lg bg-[#F5B716] p-2 text-[#1C1917] shadow-xs group-hover:bg-[#E5A910] transition-colors shrink-0 font-bold">
-              <ChefHat size={19} />
+              <BrandIcon size={19} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide text-white truncate">DineFlow</h1>
+              <h1 className="text-base font-bold tracking-wide text-white truncate">{brandTitle}</h1>
             </div>
           </Link>
 
@@ -133,7 +148,7 @@ function Sidebar({
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-3.5 py-4">
           <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-stone-400">
-            Main Navigation
+            {isSpa ? "Spa Navigation" : "Main Navigation"}
           </p>
           <SidebarNav items={visibleMenuItems} onClose={onClose} collapsed={false} />
         </div>
@@ -172,26 +187,26 @@ function Sidebar({
             </button>
 
             <Link
-              to="/"
+              to={brandLink}
               className="group flex items-center justify-center rounded-lg bg-[#F5B716] p-2 text-[#1C1917] shadow-xs group-hover:bg-[#E5A910] transition-colors cursor-pointer font-bold"
-              title="DineFlow - Dashboard"
-              aria-label="DineFlow - Dashboard"
+              title={`${brandTitle} - Dashboard`}
+              aria-label={`${brandTitle} - Dashboard`}
             >
-              <ChefHat size={20} />
+              <BrandIcon size={20} />
             </Link>
           </div>
         ) : (
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
             <Link
-              to="/"
+              to={brandLink}
               className="group flex items-center gap-2.5 transition-opacity hover:opacity-95 min-w-0 cursor-pointer"
-              title="DineFlow - Dashboard"
+              title={`${brandTitle} - Dashboard`}
             >
               <div className="rounded-lg bg-[#F5B716] p-2 text-[#1C1917] shrink-0 shadow-xs group-hover:bg-[#E5A910] transition-colors font-bold">
-                <ChefHat size={20} />
+                <BrandIcon size={20} />
               </div>
               <div className="min-w-0 overflow-hidden">
-                <h1 className="text-base font-bold tracking-wide text-white truncate">DineFlow</h1>
+                <h1 className="text-base font-bold tracking-wide text-white truncate">{brandTitle}</h1>
               </div>
             </Link>
 
@@ -211,7 +226,7 @@ function Sidebar({
         <div className={`flex-1 overflow-y-auto overflow-x-hidden py-4 ${collapsed ? "px-2" : "px-3.5"}`}>
           {!collapsed && (
             <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-stone-400">
-              Main Navigation
+              {isSpa ? "Spa Navigation" : "Main Navigation"}
             </p>
           )}
 

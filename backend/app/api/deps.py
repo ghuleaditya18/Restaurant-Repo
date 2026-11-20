@@ -97,3 +97,28 @@ def require_roles(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+# Business context authorization
+def require_restaurant_context(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if str(biz_context).upper() != "RESTAURANT":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Restaurant account required"
+        )
+    return current_user
+
+
+def require_spa_context(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if str(biz_context).upper() != "SPA":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Spa account required"
+        )
+    return current_user

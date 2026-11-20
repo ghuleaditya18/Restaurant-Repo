@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.models import Order, OrderStatusHistory, User, Staff
 
 from app.core.security import hash_password
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 
 from app.schemas.staff import (
     StaffCreate,
@@ -19,7 +19,7 @@ from app.schemas.staff import (
 
 
 router = APIRouter(
-    dependencies=[Depends(require_roles("MANAGER"))]
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)]
 )
 
 

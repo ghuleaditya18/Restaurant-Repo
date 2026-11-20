@@ -10,7 +10,7 @@ from app.models.entities import (
     OrderStatus,
     TableStatus,
 )
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 
 from app.schemas.table import (
     TableCreate,
@@ -23,7 +23,8 @@ from app.schemas.table import (
 # ==========================================
 
 router = APIRouter(
-    tags=["Table Management"], dependencies=[Depends(require_roles("MANAGER"))]
+    tags=["Table Management"],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

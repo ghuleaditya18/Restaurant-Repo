@@ -1,7 +1,11 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-function ProtectedRoute({ children, allowedRoles = ["MANAGER", "RECEPTIONIST"] }) {
+function ProtectedRoute({
+  children,
+  allowedRoles = ["MANAGER", "RECEPTIONIST"],
+  allowedContext = null,
+}) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -28,6 +32,16 @@ function ProtectedRoute({ children, allowedRoles = ["MANAGER", "RECEPTIONIST"] }
     !allowedRoles.map((r) => r.toUpperCase()).includes(role)
   ) {
     return <Navigate to="/login" replace />;
+  }
+
+  const userContext = (user.business_context || "RESTAURANT").toUpperCase();
+
+  if (allowedContext) {
+    const requiredContext = allowedContext.toUpperCase();
+    if (requiredContext !== userContext) {
+      // Cross-business redirection: Spa user attempting restaurant route -> /spa/dashboard; Restaurant user -> /
+      return <Navigate to={userContext === "SPA" ? "/spa/dashboard" : "/"} replace />;
+    }
   }
 
   return children;

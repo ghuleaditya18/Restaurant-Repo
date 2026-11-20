@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.date_utils import get_date_range, get_kolkata_now
 from app.db.session import get_db
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 
 from app.models.entities import (
     Invoice,
@@ -21,7 +21,8 @@ from app.schemas.payment import (
 )
 
 router = APIRouter(
-    tags=["Payment Management"], dependencies=[Depends(require_roles("MANAGER"))]
+    tags=["Payment Management"],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

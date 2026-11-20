@@ -22,6 +22,14 @@ const pageTitles = {
   "/staff": "Staff Management",
   "/invoices": "Invoices",
   "/settings": "Settings",
+  "/spa/dashboard": "Spa Dashboard",
+  "/spa/bookings": "Spa Bookings",
+  "/spa/services": "Spa Services",
+  "/spa/customers": "Spa Customers",
+  "/spa/staff": "Therapist Management",
+  "/spa/therapists": "Therapist Management",
+  "/spa/invoices": "Spa Invoice Management",
+  "/spa/payments": "Spa Invoice Management",
 };
 
 function Header({ onOpenMobileMenu }) {
@@ -32,7 +40,7 @@ function Header({ onOpenMobileMenu }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  const title = pageTitles[location.pathname] || "Dashboard";
+  const title = pageTitles[location.pathname] || (user?.business_context === "SPA" ? "Spa Dashboard" : "Dashboard");
 
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "short",
@@ -45,10 +53,11 @@ function Header({ onOpenMobileMenu }) {
     ? user.full_name.trim().charAt(0).toUpperCase()
     : "R";
 
-  const userName = user?.full_name || "Receptionist User";
+  const isSpa = user?.business_context === "SPA";
+  const userName = user?.full_name || (isSpa ? "Spa Receptionist" : "Receptionist User");
   const userEmail = user?.email || "";
   const userPhone = user?.phone || "";
-  const userRole = "Receptionist";
+  const userRole = isSpa ? "Spa Receptionist" : "Receptionist";
 
   const handleLogout = () => {
     setDropdownOpen(false);

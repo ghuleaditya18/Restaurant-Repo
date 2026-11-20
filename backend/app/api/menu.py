@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db
 from app.models.entities import MenuCategory, MenuItem
-from app.api.deps import require_roles
+from app.api.deps import require_roles, require_restaurant_context
 from app.core.image_upload import save_menu_image, remove_menu_image
 
 from app.schemas.menu import (
@@ -18,7 +18,8 @@ from app.schemas.menu import (
 )
 
 router = APIRouter(
-    tags=["Menu Management"], dependencies=[Depends(require_roles("MANAGER"))]
+    tags=["Menu Management"],
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
 )
 
 

@@ -158,8 +158,12 @@ function Login() {
     setSubmitting(true);
 
     try {
-      await login(email.trim().toLowerCase(), password);
-      navigate("/", { replace: true });
+      const loggedUser = await login(email.trim().toLowerCase(), password);
+      if (loggedUser?.business_context === "SPA") {
+        navigate("/spa/dashboard", { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     } catch (err) {
       const status = err.response?.status;
       const data = err.response?.data;

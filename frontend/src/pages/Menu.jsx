@@ -771,16 +771,16 @@ export default function Menu() {
   // ==========================================
 
   return (
-    <div className="w-full bg-[#F7F5F0] p-4 md:p-6">
+    <div className="space-y-6">
       {/* PAGE HEADER */}
 
       <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-semibold text-[#29231F] md:text-2xl">
+          <h1 className="text-xl font-semibold text-[#1C1917] md:text-2xl">
             Menu Management
           </h1>
 
-          <p className="mt-1 text-sm text-[#8A817B]">
+          <p className="mt-1 text-sm text-[#78716C]">
             Manage menu items, categories and availability.
           </p>
         </div>
@@ -789,7 +789,7 @@ export default function Menu() {
           <button
             type="button"
             onClick={openCategoryManager}
-            className="flex items-center gap-2 rounded-lg border border-[#E9E3DA] bg-white px-4 py-2.5 text-sm font-medium text-[#29231F] hover:bg-[#FAF9F6]"
+            className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm font-medium text-[#1C1917] hover:bg-[#FAF9F6]"
           >
             <Tags size={17} />
             Manage Categories
@@ -798,7 +798,7 @@ export default function Menu() {
           <button
             type="button"
             onClick={openAddItemModal}
-            className="flex items-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B]"
+            className="flex items-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer"
           >
             <Plus size={17} />
             Add Menu Item
@@ -811,7 +811,7 @@ export default function Menu() {
       {successMessage && (
         <div
           role="status"
-          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[#E9E3DA] border-l-4 border-l-[#C65D35] bg-white px-4 py-2.5 text-sm text-[#29231F]"
+          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
         >
           <span>{successMessage}</span>
 
@@ -819,7 +819,7 @@ export default function Menu() {
             type="button"
             onClick={() => setSuccessMessage("")}
             aria-label="Dismiss message"
-            className="text-[#8A817B] hover:text-[#29231F]"
+            className="text-[#78716C] hover:text-[#1C1917]"
           >
             <X size={16} />
           </button>
@@ -875,16 +875,16 @@ export default function Menu() {
 
       {/* MENU TABLE CONTAINER */}
 
-      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
+      <div className="overflow-hidden rounded-xl border border-[#E7E5E4] bg-white">
         {/* SEARCH AND FILTER */}
 
-        <div className="flex flex-col gap-3 border-b border-[#EEE9E2] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#E7E5E4] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-[#29231F]">
+            <h2 className="text-base font-semibold text-[#1C1917]">
               Restaurant Menu
             </h2>
 
-            <p className="mt-0.5 text-xs text-[#8A817B]">
+            <p className="mt-0.5 text-xs text-[#78716C]">
               {filteredItems.length} menu{" "}
               {filteredItems.length === 1 ? "item" : "items"} found
             </p>
@@ -894,7 +894,7 @@ export default function Menu() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A817B]"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78716C]"
               />
 
               <input
@@ -903,7 +903,7 @@ export default function Menu() {
                 aria-label="Search menu items"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-[#E9E3DA] bg-white py-2 pl-9 pr-8 text-sm text-[#29231F] outline-none focus:border-[#C65D35] sm:w-60"
+                className="w-full rounded-lg border border-[#E7E5E4] bg-white py-2 pl-9 pr-8 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-60"
               />
 
               {search && (
@@ -911,7 +911,7 @@ export default function Menu() {
                   type="button"
                   onClick={() => setSearch("")}
                   aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A817B] hover:text-[#29231F]"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-[#1C1917]"
                 >
                   <X size={15} />
                 </button>
@@ -922,7 +922,7 @@ export default function Menu() {
               value={selectedCategory}
               aria-label="Filter by category"
               onChange={(event) => setSelectedCategory(event.target.value)}
-              className="rounded-lg border border-[#E9E3DA] bg-white px-3 py-2 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
             >
               <option value="ALL">All Categories</option>
 
@@ -937,7 +937,7 @@ export default function Menu() {
               value={availabilityFilter}
               aria-label="Filter by availability"
               onChange={(event) => setAvailabilityFilter(event.target.value)}
-              className="rounded-lg border border-[#E9E3DA] bg-white px-3 py-2 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
             >
               <option value="ALL">All Items</option>
               <option value="AVAILABLE">Available</option>
@@ -950,7 +950,7 @@ export default function Menu() {
               disabled={loading}
               title="Refresh menu"
               aria-label="Refresh menu"
-              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] px-3 py-2 text-[#29231F] hover:bg-[#F7F5F0] disabled:opacity-60"
+              className="flex items-center justify-center rounded-lg border border-[#E7E5E4] px-3 py-2 text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -961,7 +961,7 @@ export default function Menu() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-[#8A817B]">
+            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-[#78716C]">
               <tr>
                 <th className="px-4 py-3 font-medium">Menu Item</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell">
@@ -980,7 +980,7 @@ export default function Menu() {
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-10 text-center text-sm text-[#8A817B]"
+                    className="px-4 py-10 text-center text-sm text-[#78716C]"
                   >
                     Loading menu items...
                   </td>
@@ -989,7 +989,7 @@ export default function Menu() {
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-10 text-center text-sm text-[#8A817B]"
+                    className="px-4 py-10 text-center text-sm text-[#78716C]"
                   >
                     <p>No menu items found.</p>
 
@@ -997,7 +997,7 @@ export default function Menu() {
                       <button
                         type="button"
                         onClick={clearFilters}
-                        className="mt-2 font-medium text-[#C65D35] hover:underline"
+                        className="mt-2 font-medium text-amber-800 hover:underline"
                       >
                         Clear search and filters
                       </button>
@@ -1013,33 +1013,33 @@ export default function Menu() {
                         <MenuImage
                           src={getItemImage(item)}
                           alt={item.name}
-                          className="h-11 w-11 shrink-0 rounded-lg border border-[#E9E3DA]"
+                          className="h-11 w-11 shrink-0 rounded-lg border border-[#E7E5E4]"
                           iconSize={16}
                         />
 
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-[#29231F]">
+                          <p className="truncate text-sm font-medium text-[#1C1917]">
                             {item.name}
                           </p>
 
-                          <p className="max-w-[16rem] truncate text-xs text-[#8A817B] lg:max-w-sm">
+                          <p className="max-w-[16rem] truncate text-xs text-[#78716C] lg:max-w-sm">
                             {item.description || "No description"}
                           </p>
 
                           {/* Shown only when the Category column is hidden */}
-                          <p className="truncate text-xs text-[#8A817B] md:hidden">
+                          <p className="truncate text-xs text-[#78716C] md:hidden">
                             {item.category_name}
                           </p>
                         </div>
                       </div>
                     </td>
 
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-[#29231F] md:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-[#1C1917] md:table-cell">
                       {item.category_name || "—"}
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span className="inline-flex items-center text-sm font-semibold text-[#29231F]">
+                      <span className="inline-flex items-center text-sm font-semibold text-[#1C1917]">
                         <IndianRupee size={13} />
                         {formatPrice(item.price)}
                       </span>
@@ -1056,7 +1056,7 @@ export default function Menu() {
                           onClick={() => setViewingItemId(item.id)}
                           title="View details"
                           aria-label={`View ${item.name}`}
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="rounded-lg p-2 text-[#1C1917] hover:bg-stone-100 hover:text-stone-900"
                         >
                           <Eye size={16} />
                         </button>
@@ -1066,7 +1066,7 @@ export default function Menu() {
                           onClick={() => openEditItemModal(item)}
                           title="Edit menu item"
                           aria-label={`Edit ${item.name}`}
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="rounded-lg p-2 text-[#1C1917] hover:bg-stone-100 hover:text-stone-900"
                         >
                           <Pencil size={16} />
                         </button>
@@ -1085,10 +1085,10 @@ export default function Menu() {
                               ? "Mark unavailable"
                               : "Mark available"
                           }: ${item.name}`}
-                          className={`rounded-lg p-2 hover:bg-[#F5E5DC] hover:text-[#C65D35] disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`rounded-lg p-2 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 ${
                             item.is_available
-                              ? "text-[#29231F]"
-                              : "text-[#8A817B]"
+                              ? "text-[#1C1917]"
+                              : "text-[#78716C]"
                           }`}
                         >
                           <Power
@@ -1106,7 +1106,7 @@ export default function Menu() {
                           onClick={() => requestDeleteItem(item)}
                           title="Delete menu item"
                           aria-label={`Delete ${item.name}`}
-                          className="rounded-lg p-2 text-[#6B625B] hover:bg-[#EEEAE4] hover:text-[#A94B2B]"
+                          className="rounded-lg p-2 text-[#6B625B] hover:bg-red-50 hover:text-red-700"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -1134,18 +1134,18 @@ export default function Menu() {
           <MenuImage
             src={getItemImage(viewingItem)}
             alt={viewingItem.name}
-            className="mb-5 aspect-[16/9] w-full rounded-lg border border-[#E9E3DA]"
+            className="mb-5 aspect-[16/9] w-full rounded-lg border border-[#E7E5E4]"
             iconSize={40}
             showLabel
           />
 
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="break-words text-lg font-semibold text-[#29231F]">
+              <h3 className="break-words text-lg font-semibold text-[#1C1917]">
                 {viewingItem.name}
               </h3>
 
-              <p className="mt-0.5 text-sm text-[#8A817B]">
+              <p className="mt-0.5 text-sm text-[#78716C]">
                 {viewingItem.category_name || "—"}
               </p>
             </div>
@@ -1153,12 +1153,12 @@ export default function Menu() {
             <AvailabilityBadge available={viewingItem.is_available} />
           </div>
 
-          <div className="mb-5 rounded-lg bg-[#F7F5F0] p-4">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8A817B]">
+          <div className="mb-5 rounded-lg bg-[#FAFAF9] p-4">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#78716C]">
               Description
             </p>
 
-            <p className="whitespace-pre-line break-words text-sm text-[#29231F]">
+            <p className="whitespace-pre-line break-words text-sm text-[#1C1917]">
               {viewingItem.description || "No description provided."}
             </p>
           </div>
@@ -1186,7 +1186,7 @@ export default function Menu() {
             )}
           </div>
 
-          <div className="mt-6 flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
+          <div className="mt-6 flex justify-end gap-3 border-t border-[#E7E5E4] pt-4">
             <button
               type="button"
               onClick={() => {
@@ -1194,7 +1194,7 @@ export default function Menu() {
                 setViewingItemId(null);
                 openEditItemModal(item);
               }}
-              className="flex items-center gap-2 rounded-lg border border-[#E9E3DA] px-4 py-2 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0]"
+              className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-4 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9]"
             >
               <Pencil size={15} />
               Edit
@@ -1203,7 +1203,7 @@ export default function Menu() {
             <button
               type="button"
               onClick={() => setViewingItemId(null)}
-              className="rounded-lg bg-[#C65D35] px-5 py-2 text-sm font-medium text-white hover:bg-[#A94B2B]"
+              className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer"
             >
               Close
             </button>
@@ -1228,9 +1228,9 @@ export default function Menu() {
             {/* FOOD IMAGE */}
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#29231F]">
+              <label className="mb-1.5 block text-sm font-medium text-[#1C1917]">
                 Food Image
-                <span className="ml-1 text-xs font-normal text-[#8A817B]">
+                <span className="ml-1 text-xs font-normal text-[#78716C]">
                   (optional)
                 </span>
               </label>
@@ -1239,7 +1239,7 @@ export default function Menu() {
                 <MenuImage
                   src={formImagePreview}
                   alt="Food image preview"
-                  className="h-24 w-24 shrink-0 rounded-lg border border-[#E9E3DA]"
+                  className="h-24 w-24 shrink-0 rounded-lg border border-[#E7E5E4]"
                   iconSize={26}
                 />
 
@@ -1248,7 +1248,7 @@ export default function Menu() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0]"
+                      className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-3 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9]"
                     >
                       <ImagePlus size={15} />
                       {formImagePreview ? "Change Image" : "Choose Image"}
@@ -1258,14 +1258,14 @@ export default function Menu() {
                       <button
                         type="button"
                         onClick={handleImageRemove}
-                        className="rounded-lg px-3 py-2 text-sm font-medium text-[#6B625B] hover:bg-[#EEEAE4] hover:text-[#A94B2B]"
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-[#6B625B] hover:bg-red-50 hover:text-red-700"
                       >
                         Remove
                       </button>
                     )}
                   </div>
 
-                  <p className="text-xs text-[#8A817B]">
+                  <p className="text-xs text-[#78716C]">
                     JPG, PNG or WebP, up to {MAX_IMAGE_SIZE_MB} MB.
                   </p>
                 </div>
@@ -1300,7 +1300,7 @@ export default function Menu() {
             <div>
               <label
                 htmlFor="item-category_id"
-                className="mb-1.5 block text-sm font-medium text-[#29231F]"
+                className="mb-1.5 block text-sm font-medium text-[#1C1917]"
               >
                 Category
               </label>
@@ -1311,10 +1311,10 @@ export default function Menu() {
                 value={itemForm.category_id}
                 onChange={handleItemChange}
                 aria-invalid={Boolean(itemErrors.category_id)}
-                className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#29231F] outline-none ${
+                className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none ${
                   itemErrors.category_id
                     ? "border-red-400"
-                    : "border-[#E9E3DA] focus:border-[#C65D35]"
+                    : "border-[#E7E5E4] focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
                 }`}
               >
                 <option value="">Select category</option>
@@ -1341,7 +1341,7 @@ export default function Menu() {
               )}
 
               {!categories.some((category) => category.is_active) && (
-                <p className="mt-1.5 text-xs text-[#8A817B]">
+                <p className="mt-1.5 text-xs text-[#78716C]">
                   No active categories. Create or activate one in Manage
                   Categories first.
                 </p>
@@ -1364,10 +1364,10 @@ export default function Menu() {
             <div>
               <label
                 htmlFor="item-description"
-                className="mb-1.5 block text-sm font-medium text-[#29231F]"
+                className="mb-1.5 block text-sm font-medium text-[#1C1917]"
               >
                 Description
-                <span className="ml-1 text-xs font-normal text-[#8A817B]">
+                <span className="ml-1 text-xs font-normal text-[#78716C]">
                   (optional)
                 </span>
               </label>
@@ -1379,16 +1379,16 @@ export default function Menu() {
                 onChange={handleItemChange}
                 rows={3}
                 placeholder="Enter item description"
-                className="w-full resize-none rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+                className="w-full resize-none rounded-lg border border-[#E7E5E4] px-3 py-2.5 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
               />
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
+            <div className="flex justify-end gap-3 border-t border-[#E7E5E4] pt-4">
               <button
                 type="button"
                 onClick={closeItemModal}
                 disabled={saving}
-                className="rounded-lg border border-[#E9E3DA] px-4 py-2.5 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0] disabled:opacity-60"
+                className="rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -1398,7 +1398,7 @@ export default function Menu() {
                 disabled={
                   saving || !categories.some((category) => category.is_active)
                 }
-                className="rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-[#F5B716] px-5 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving
                   ? "Saving..."
@@ -1432,7 +1432,7 @@ export default function Menu() {
             <button
               type="button"
               onClick={openAddCategoryForm}
-              className="flex items-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B]"
+              className="flex items-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer"
             >
               <FolderPlus size={16} />
               Add Category
@@ -1441,29 +1441,29 @@ export default function Menu() {
 
           <div className="max-h-[45vh] space-y-3 overflow-y-auto">
             {categories.length === 0 ? (
-              <p className="py-8 text-center text-sm text-[#8A817B]">
+              <p className="py-8 text-center text-sm text-[#78716C]">
                 No categories available. Create your first category.
               </p>
             ) : (
               categories.map((category) => (
                 <div
                   key={category.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-[#E9E3DA] p-4"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-[#E7E5E4] p-4"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium text-[#29231F]">
+                    <p className="font-medium text-[#1C1917]">
                       {category.name}
                     </p>
 
-                    <p className="mt-1 truncate text-xs text-[#8A817B]">
+                    <p className="mt-1 truncate text-xs text-[#78716C]">
                       {category.description || "No description"}
                     </p>
 
                     <span
                       className={`mt-2 inline-block rounded-full px-2.5 py-1 text-xs font-medium ${
                         category.is_active
-                          ? "bg-[#F5E5DC] text-[#A94B2B]"
-                          : "bg-[#EEEAE4] text-[#6B625B]"
+                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          : "bg-stone-100 text-stone-500 border border-stone-200"
                       }`}
                     >
                       {category.is_active ? "Active" : "Inactive"}
@@ -1476,7 +1476,7 @@ export default function Menu() {
                       onClick={() => openEditCategoryForm(category)}
                       title="Edit category"
                       aria-label={`Edit ${category.name}`}
-                      className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                      className="rounded-lg p-2 text-[#1C1917] hover:bg-stone-100 hover:text-stone-900"
                     >
                       <Pencil size={16} />
                     </button>
@@ -1493,8 +1493,8 @@ export default function Menu() {
                       aria-label={`${
                         category.is_active ? "Deactivate" : "Activate"
                       } ${category.name}`}
-                      className={`rounded-lg p-2 hover:bg-[#F5E5DC] hover:text-[#C65D35] disabled:cursor-not-allowed disabled:opacity-50 ${
-                        category.is_active ? "text-[#29231F]" : "text-[#8A817B]"
+                      className={`rounded-lg p-2 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        category.is_active ? "text-[#1C1917]" : "text-[#78716C]"
                       }`}
                     >
                       <Power size={16} />
@@ -1505,7 +1505,7 @@ export default function Menu() {
                       onClick={() => requestDeleteCategory(category)}
                       title="Delete category"
                       aria-label={`Delete ${category.name}`}
-                      className="rounded-lg p-2 text-[#6B625B] hover:bg-[#EEEAE4] hover:text-[#A94B2B]"
+                      className="rounded-lg p-2 text-[#6B625B] hover:bg-red-50 hover:text-red-700"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -1518,8 +1518,8 @@ export default function Menu() {
           {/* CATEGORY FORM */}
 
           {showCategoryForm && (
-            <div className="mt-5 rounded-lg border border-[#E9E3DA] bg-[#FAF9F6] p-4">
-              <h3 className="mb-4 font-semibold text-[#29231F]">
+            <div className="mt-5 rounded-lg border border-[#E7E5E4] bg-[#FAF9F6] p-4">
+              <h3 className="mb-4 font-semibold text-[#1C1917]">
                 {editingCategory ? "Edit Category" : "Create Category"}
               </h3>
 
@@ -1544,10 +1544,10 @@ export default function Menu() {
                 <div>
                   <label
                     htmlFor="category-description"
-                    className="mb-1.5 block text-sm font-medium text-[#29231F]"
+                    className="mb-1.5 block text-sm font-medium text-[#1C1917]"
                   >
                     Description
-                    <span className="ml-1 text-xs font-normal text-[#8A817B]">
+                    <span className="ml-1 text-xs font-normal text-[#78716C]">
                       (optional)
                     </span>
                   </label>
@@ -1559,7 +1559,7 @@ export default function Menu() {
                     onChange={handleCategoryChange}
                     placeholder="Category description"
                     rows={2}
-                    className="w-full resize-none rounded-lg border border-[#E9E3DA] bg-white px-3 py-2.5 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+                    className="w-full resize-none rounded-lg border border-[#E7E5E4] bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
                   />
                 </div>
 
@@ -1571,7 +1571,7 @@ export default function Menu() {
                       setEditingCategory(null);
                     }}
                     disabled={categorySaving}
-                    className="rounded-lg border border-[#E9E3DA] bg-white px-4 py-2 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0] disabled:opacity-60"
+                    className="rounded-lg border border-[#E7E5E4] bg-white px-4 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
                   >
                     Cancel
                   </button>
@@ -1579,7 +1579,7 @@ export default function Menu() {
                   <button
                     type="submit"
                     disabled={categorySaving}
-                    className="rounded-lg bg-[#C65D35] px-4 py-2 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+                    className="rounded-lg bg-[#F5B716] px-4 py-2 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer disabled:opacity-60"
                   >
                     {categorySaving
                       ? "Saving..."
@@ -1607,14 +1607,14 @@ export default function Menu() {
           maxWidth="max-w-md"
           layer="z-[60]"
         >
-          <p className="text-sm text-[#29231F]">{confirmState.message}</p>
+          <p className="text-sm text-[#1C1917]">{confirmState.message}</p>
 
           <div className="mt-6 flex justify-end gap-3">
             <button
               type="button"
               onClick={() => setConfirmState(null)}
               disabled={confirmBusy}
-              className="rounded-lg border border-[#E9E3DA] px-4 py-2 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0] disabled:opacity-60"
+              className="rounded-lg border border-[#E7E5E4] px-4 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
             >
               Cancel
             </button>
@@ -1623,7 +1623,7 @@ export default function Menu() {
               type="button"
               onClick={runConfirmedAction}
               disabled={confirmBusy}
-              className="rounded-lg bg-[#C65D35] px-4 py-2 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+              className="rounded-lg bg-[#F5B716] px-4 py-2 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer disabled:opacity-60"
             >
               {confirmBusy ? "Please wait..." : confirmState.confirmLabel}
             </button>
@@ -1655,14 +1655,14 @@ function MenuImage({
   if (!src || failed) {
     return (
       <div
-        className={`flex flex-col items-center justify-center gap-1.5 bg-[#F5E5DC] text-[#C65D35] ${className}`}
+        className={`flex flex-col items-center justify-center gap-1.5 bg-stone-100 text-stone-400 border border-stone-200 ${className}`}
         role="img"
         aria-label="No image available"
       >
         <ImageOff size={iconSize} />
 
         {showLabel && (
-          <span className="text-xs font-medium text-[#A94B2B]">
+          <span className="text-xs font-medium text-stone-500">
             {src ? "Image could not be loaded" : "No image uploaded"}
           </span>
         )}
@@ -1676,7 +1676,7 @@ function MenuImage({
       alt={alt}
       loading="lazy"
       onError={() => setFailed(true)}
-      className={`bg-[#F7F5F0] object-cover ${className}`}
+      className={`bg-[#FAFAF9] object-cover ${className}`}
     />
   );
 }
@@ -1686,8 +1686,8 @@ function AvailabilityBadge({ available }) {
     <span
       className={`inline-block shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
         available
-          ? "bg-[#F5E5DC] text-[#A94B2B]"
-          : "bg-[#EEEAE4] text-[#6B625B]"
+          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+          : "bg-stone-100 text-stone-500 border border-stone-200"
       }`}
     >
       {available ? "Available" : "Unavailable"}
@@ -1698,11 +1698,11 @@ function AvailabilityBadge({ available }) {
 function DetailItem({ label, value }) {
   return (
     <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8A817B]">
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#78716C]">
         {label}
       </p>
 
-      <p className="break-words text-sm font-medium text-[#29231F]">
+      <p className="break-words text-sm font-medium text-[#1C1917]">
         {value ?? "—"}
       </p>
     </div>
@@ -1718,19 +1718,19 @@ function SummaryCard({ title, value, icon, active, onClick }) {
       title={`Show ${title.toLowerCase()}`}
       className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
         active
-          ? "border-[#C65D35] bg-[#FFF9F5]"
-          : "border-[#E9E3DA] bg-white hover:border-[#C65D35]/50 hover:bg-[#FAF9F6]"
+          ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
+          : "border-stone-200/90 bg-white hover:border-stone-300"
       }`}
     >
       <div>
-        <p className="text-xs font-medium text-[#8A817B]">{title}</p>
+        <p className="text-xs font-medium text-[#78716C]">{title}</p>
 
-        <p className="mt-0.5 text-xl font-semibold leading-tight text-[#29231F]">
+        <p className="mt-0.5 text-xl font-semibold leading-tight text-[#1C1917]">
           {value}
         </p>
       </div>
 
-      <div className="rounded-lg bg-[#F5E5DC] p-2 text-[#C65D35]">{icon}</div>
+      <div className="rounded-xl bg-[#FEF9C3] p-2 text-amber-900 border border-yellow-200">{icon}</div>
     </button>
   );
 }
@@ -1769,7 +1769,7 @@ function ModalShell({
 
   return (
     <div
-      className={`fixed inset-0 ${layer} flex items-center justify-center overflow-y-auto bg-[#29231F]/50 p-4`}
+      className={`fixed inset-0 ${layer} flex items-center justify-center overflow-y-auto bg-[#1C1917]/50 p-4`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !disableClose) onClose();
       }}
@@ -1780,18 +1780,18 @@ function ModalShell({
         aria-label={title}
         className={`my-auto max-h-[90vh] w-full ${maxWidth} overflow-y-auto rounded-xl bg-white shadow-xl`}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#EEE9E2] bg-white px-5 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E7E5E4] bg-white px-5 py-4">
           <div>
-            <h2 className="font-semibold text-[#29231F]">{title}</h2>
+            <h2 className="font-semibold text-[#1C1917]">{title}</h2>
 
-            <p className="mt-0.5 text-xs text-[#8A817B]">{subtitle}</p>
+            <p className="mt-0.5 text-xs text-[#78716C]">{subtitle}</p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
             disabled={disableClose}
-            className="rounded-lg p-2 text-[#8A817B] hover:bg-[#F7F5F0] disabled:opacity-50"
+            className="rounded-lg p-2 text-[#78716C] hover:bg-[#FAFAF9] disabled:opacity-50"
             aria-label="Close dialog"
           >
             <X size={18} />
@@ -1832,7 +1832,7 @@ function FormField({
     <div>
       <label
         htmlFor={id}
-        className="mb-1.5 block text-sm font-medium text-[#29231F]"
+        className="mb-1.5 block text-sm font-medium text-[#1C1917]"
       >
         {label}
       </label>
@@ -1849,8 +1849,8 @@ function FormField({
         step={step}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#29231F] outline-none ${
-          error ? "border-red-400" : "border-[#E9E3DA] focus:border-[#C65D35]"
+        className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none ${
+          error ? "border-red-400" : "border-[#E7E5E4] focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
         }`}
       />
 

@@ -86,29 +86,29 @@ export function NotificationProvider({ children }) {
         {toasts.map((toast) => {
           const styles = {
             success: {
-              card: "border-emerald-200 bg-emerald-50 text-emerald-900 shadow-emerald-900/10",
-              icon: <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />,
-              closeBtn: "text-emerald-700 hover:bg-emerald-100",
+              card: "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/90 text-emerald-900 dark:text-emerald-100 shadow-emerald-900/10",
+              icon: <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />,
+              closeBtn: "text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50",
             },
             error: {
-              card: "border-rose-200 bg-rose-50 text-rose-900 shadow-rose-900/10",
-              icon: <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />,
-              closeBtn: "text-rose-700 hover:bg-rose-100",
+              card: "border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/90 text-rose-900 dark:text-rose-100 shadow-rose-900/10",
+              icon: <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />,
+              closeBtn: "text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50",
             },
             warning: {
-              card: "border-amber-200 bg-amber-50 text-amber-900 shadow-amber-900/10",
-              icon: <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />,
-              closeBtn: "text-amber-700 hover:bg-amber-100",
+              card: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/90 text-amber-900 dark:text-amber-100 shadow-amber-900/10",
+              icon: <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />,
+              closeBtn: "text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50",
             },
             info: {
-              card: "border-sky-200 bg-sky-50 text-sky-900 shadow-sky-900/10",
-              icon: <Info className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />,
-              closeBtn: "text-sky-700 hover:bg-sky-100",
+              card: "border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/90 text-sky-900 dark:text-sky-100 shadow-sky-900/10",
+              icon: <Info className="h-5 w-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />,
+              closeBtn: "text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50",
             },
           }[toast.type] || {
-            card: "border-stone-200 bg-stone-50 text-stone-900 shadow-stone-900/10",
-            icon: <Info className="h-5 w-5 text-stone-600 shrink-0 mt-0.5" />,
-            closeBtn: "text-stone-700 hover:bg-stone-100",
+            card: "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-stone-900/10",
+            icon: <Info className="h-5 w-5 text-stone-600 dark:text-stone-400 shrink-0 mt-0.5" />,
+            closeBtn: "text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800",
           };
 
           return (
@@ -126,7 +126,7 @@ export function NotificationProvider({ children }) {
               <button
                 type="button"
                 onClick={() => removeToast(toast.id)}
-                className={`p-1 rounded-lg transition-colors ${styles.closeBtn}`}
+                className={`p-1 rounded-lg transition-colors ${styles.closeBtn} cursor-pointer`}
                 aria-label="Dismiss notification"
               >
                 <X size={15} />
@@ -138,16 +138,16 @@ export function NotificationProvider({ children }) {
 
       {/* CONFIRMATION MODAL */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-100 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1C1917] p-6 shadow-2xl border border-stone-100 dark:border-stone-800 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-start gap-4">
               <div
                 className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                   confirmDialog.variant === "danger"
-                    ? "bg-rose-100 text-rose-600"
+                    ? "bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400"
                     : confirmDialog.variant === "warning"
-                    ? "bg-amber-100 text-amber-600"
-                    : "bg-orange-100 text-[#C65D35]"
+                    ? "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
+                    : "bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800"
                 }`}
               >
                 {confirmDialog.variant === "danger" ? (
@@ -159,8 +159,8 @@ export function NotificationProvider({ children }) {
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-bold text-stone-900">{confirmDialog.title}</h3>
-                <p className="mt-1 text-sm text-stone-600 leading-relaxed whitespace-pre-line">
+                <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">{confirmDialog.title}</h3>
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-300 leading-relaxed whitespace-pre-line">
                   {confirmDialog.message}
                 </p>
               </div>
@@ -170,19 +170,19 @@ export function NotificationProvider({ children }) {
               <button
                 type="button"
                 onClick={confirmDialog.onCancel}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition"
+                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition cursor-pointer"
               >
                 {confirmDialog.cancelText}
               </button>
               <button
                 type="button"
                 onClick={confirmDialog.onConfirm}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition ${
+                className={`rounded-lg px-4 py-2 text-sm font-bold transition cursor-pointer shadow-xs ${
                   confirmDialog.variant === "danger"
-                    ? "bg-rose-600 hover:bg-rose-700"
+                    ? "bg-rose-600 hover:bg-rose-700 text-white"
                     : confirmDialog.variant === "warning"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : "bg-[#C65D35] hover:bg-[#A94B2B]"
+                    ? "bg-amber-600 hover:bg-amber-700 text-white"
+                    : "bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917]"
                 }`}
               >
                 {confirmDialog.confirmText}
@@ -195,6 +195,7 @@ export function NotificationProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {

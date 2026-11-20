@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -16,11 +19,28 @@ from app.api.dashboard import router as dashboard_router
 
 from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import get_db
+from app.services.order_service import stale_orders_background_worker
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the background worker for automatic stale order expiration
+    worker_task = asyncio.create_task(stale_orders_background_worker(interval_seconds=300))
+    try:
+        yield
+    finally:
+        worker_task.cancel()
+        try:
+            await worker_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
 
 app = FastAPI(
     title="Restaurant Management System",
     description="Restaurant Management System API",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

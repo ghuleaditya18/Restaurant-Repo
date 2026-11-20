@@ -27,7 +27,7 @@ function DashboardLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F7F5F0]">
+    <div className="flex min-h-screen bg-[var(--bg-page)] text-[var(--text-main)] transition-colors duration-200">
       <Sidebar
         mobileOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}

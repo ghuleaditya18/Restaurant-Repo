@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import { NotificationProvider } from "./context/NotificationContext";
 
 import DashboardLayout from "./layouts/DashboardLayout";
@@ -12,6 +13,7 @@ import Customers from "./pages/Customers";
 import Tables from "./pages/Tables";
 import Orders from "./pages/Orders";
 import Invoices from "./pages/Invoices";
+import Settings from "./pages/Settings";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -20,7 +22,7 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-[#C65D35]">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] text-[var(--text-main)] font-semibold text-sm">
         Verifying your session...
       </div>
     );
@@ -47,6 +49,7 @@ function AppRoutes() {
         <Route path="customers" element={<Customers />} />
         <Route path="staff" element={<Staff />} />
         <Route path="invoices" element={<Invoices />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -57,11 +60,13 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <NotificationProvider>
-          <AppRoutes />
-        </NotificationProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <AppRoutes />
+          </NotificationProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

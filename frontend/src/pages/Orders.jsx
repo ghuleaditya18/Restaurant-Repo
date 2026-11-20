@@ -9,6 +9,8 @@ import {
   RefreshCw,
   Trash2,
   History,
+  Check,
+  AlertTriangle,
 } from "lucide-react";
 
 import {
@@ -26,6 +28,14 @@ import {
 } from "../services/orderService";
 import DateFilter from "../components/DateFilter";
 import { useNotification } from "../context/NotificationContext";
+import {
+  ORDER_WORKFLOW_STAGES,
+  getWorkflowStageLabel,
+  getDetailedStatusLabel,
+  getOrderStatusBadgeStyle,
+  getWorkflowStepNumber,
+  STATUS_ACTION_LABELS,
+} from "../utils/orderWorkflow";
 
 // ==========================================
 // CONSTANTS
@@ -72,32 +82,18 @@ const formatCurrency = (amount) => {
   }).format(Number(amount || 0));
 };
 
-const getStatusStyle = (status) => {
-  const styles = {
-    Pending: "bg-[#FFF3DB] text-[#956719] border border-[#F5E2B8]",
-    Confirmed: "bg-[#F5E5DC] text-[#A94B2B] border border-[#ECCDC1]",
-    Preparing: "bg-[#F3EBDD] text-[#846C37] border border-[#E3D6BF]",
-    Ready: "bg-[#E8EDE5] text-[#52684A] border border-[#CDD8C8]",
-    Served: "bg-[#E0F2FE] text-[#0369A1] border border-[#BAE6FD]",
-    Completed: "bg-[#E2E8F0] text-[#334155] border border-[#CBD5E1]",
-    Cancelled: "bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]",
-  };
-
-  return styles[status] || "bg-gray-100 text-gray-700 border border-gray-200";
-};
-
 const getPaymentBadge = (paymentStatus) => {
   const norm = String(paymentStatus || "").trim().toUpperCase();
   if (norm === "PAID") {
     return (
-      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 border border-emerald-200">
         Paid
       </span>
     );
   }
   if (norm === "PENDING") {
     return (
-      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+      <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
         Payment Pending
       </span>
     );
@@ -106,11 +102,86 @@ const getPaymentBadge = (paymentStatus) => {
 };
 
 // ==========================================
+// WORKFLOW PROGRESSION STEPPER COMPONENT
+// ==========================================
+
+function OrderWorkflowStepper({ status }) {
+  const currentStep = getWorkflowStepNumber(status);
+  const isCancelled = status === "Cancelled";
+
+  if (isCancelled) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50/70 p-3 text-xs text-red-800">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={16} className="text-red-600 shrink-0" />
+          <span className="font-bold">Order Cancelled</span>
+          <span className="text-red-600 text-[11px]">— This order was halted before completion.</span>
+        </div>
+        <span className="rounded-md bg-red-100 px-2 py-0.5 font-bold uppercase text-[10px]">
+          Terminated
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+          Workflow Progression
+        </span>
+        <span className="text-xs font-semibold text-stone-700">
+          Stage {currentStep} of 4: <span className="font-bold text-[#1C1917]">{getWorkflowStageLabel(status)}</span>
+        </span>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 pt-2">
+        {ORDER_WORKFLOW_STAGES.map((st) => {
+          const isDone = currentStep > st.step;
+          const isCurrent = currentStep === st.step;
+
+          return (
+            <div key={st.key} className="flex flex-col items-center text-center">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-all ${
+                  isDone
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : isCurrent
+                    ? "bg-[#F5B716] text-[#1C1917] ring-4 ring-[#FEF9C3] shadow-xs font-extrabold"
+                    : "bg-stone-200 text-stone-500"
+                }`}
+              >
+                {isDone ? <Check size={14} className="stroke-[3]" /> : st.step}
+              </div>
+
+              <p
+                className={`mt-1.5 text-xs font-semibold ${
+                  isCurrent
+                    ? "text-[#1C1917] font-bold"
+                    : isDone
+                    ? "text-emerald-800"
+                    : "text-stone-400"
+                }`}
+              >
+                {st.label}
+              </p>
+              <p className="hidden text-[10px] text-stone-500 md:block mt-0.5 truncate max-w-full">
+                {st.description}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
 // MAIN COMPONENT
 // ==========================================
 
 export default function Orders() {
-  const { showSuccess, showError, showWarning, showInfo, confirm } = useNotification();
+  const { showSuccess, showError, showWarning, confirm } = useNotification();
 
   // Active view tab: 'active' | 'history'
   const [activeTab, setActiveTab] = useState("active");
@@ -151,7 +222,7 @@ export default function Orders() {
   const [additionalItem, setAdditionalItem] = useState("");
   const [additionalQuantity, setAdditionalQuantity] = useState(1);
 
-  // Search and status filter
+  // Search and workflow status filter
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -162,7 +233,7 @@ export default function Orders() {
   const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
-      let params = {};
+      const params = {};
       if (activeTab === "active") {
         params.view = "active";
       } else {
@@ -176,21 +247,21 @@ export default function Orders() {
 
       const [orderData, customerData, tableData, menuData] = await Promise.all([
         getAllOrders(params),
-        customers.length ? Promise.resolve(customers) : getOrderCustomers(),
-        getOrderTables(), // Always refresh table status
-        menuItems.length ? Promise.resolve(menuItems) : getOrderMenuItems(),
+        getOrderCustomers(),
+        getOrderTables(),
+        getOrderMenuItems(),
       ]);
 
       setOrders(orderData);
-      if (!customers.length) setCustomers(customerData);
+      setCustomers(customerData);
       setTables(tableData);
-      if (!menuItems.length) setMenuItems(menuData);
+      setMenuItems(menuData);
     } catch (error) {
       showError(getErrorMessage(error), "Failed to load orders");
     } finally {
       setLoading(false);
     }
-  }, [activeTab, historyDateFilter, customers.length, menuItems.length, showError]);
+  }, [activeTab, historyDateFilter, showError]);
 
   useEffect(() => {
     loadOrders();
@@ -217,23 +288,44 @@ export default function Orders() {
         order.customer_name?.toLowerCase().includes(query) ||
         String(order.table_number || "").toLowerCase().includes(query);
 
-      const matchStatus =
-        statusFilter === "ALL" ||
-        order.status?.toUpperCase() === statusFilter.toUpperCase();
+      const workflowStage = getWorkflowStageLabel(order.status).toUpperCase();
+      const rawStatus = String(order.status || "").toUpperCase();
+
+      let matchStatus;
+      if (statusFilter === "ALL") {
+        matchStatus = true;
+      } else if (statusFilter === "STAGE_ORDERED") {
+        matchStatus = ["PENDING", "CONFIRMED"].includes(rawStatus);
+      } else if (statusFilter === "STAGE_IN_PROGRESS") {
+        matchStatus = ["PREPARING", "READY"].includes(rawStatus);
+      } else if (statusFilter === "STAGE_SERVED") {
+        matchStatus = rawStatus === "SERVED";
+      } else if (statusFilter === "STAGE_COMPLETED") {
+        matchStatus = rawStatus === "COMPLETED";
+      } else if (statusFilter === "STAGE_CANCELLED") {
+        matchStatus = rawStatus === "CANCELLED";
+      } else {
+        matchStatus = rawStatus === statusFilter.toUpperCase() || workflowStage === statusFilter.toUpperCase();
+      }
 
       return matchSearch && matchStatus;
     });
   }, [orders, search, statusFilter]);
 
-  // Active orders metrics
-  const activeMetrics = useMemo(() => {
+  // 4-Stage workflow metrics for Active tab
+  const workflowMetrics = useMemo(() => {
     if (activeTab !== "active") return null;
-    const pending = orders.filter((o) => o.status === "Pending").length;
-    const confirmed = orders.filter((o) => o.status === "Confirmed").length;
-    const preparing = orders.filter((o) => o.status === "Preparing").length;
-    const ready = orders.filter((o) => o.status === "Ready").length;
+
+    const ordered = orders.filter((o) => ["Pending", "Confirmed"].includes(o.status)).length;
+    const inProgress = orders.filter((o) => ["Preparing", "Ready"].includes(o.status)).length;
     const served = orders.filter((o) => o.status === "Served").length;
-    return { pending, confirmed, preparing, ready, served, total: orders.length };
+
+    return {
+      total: orders.length,
+      ordered,
+      inProgress,
+      served,
+    };
   }, [orders, activeTab]);
 
   // ==========================================
@@ -253,49 +345,49 @@ export default function Orders() {
     setShowCreateModal(false);
     setForm(EMPTY_FORM);
     setCart([]);
+    setSelectedMenuItem("");
+    setItemQuantity(1);
     setFormError("");
   };
 
-  const handleFormChange = (event) => {
-    const { name, value } = event.target;
-    setForm((previous) => ({ ...previous, [name]: value }));
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleAddItemToCart = () => {
     if (!selectedMenuItem) return;
 
-    const menuItem = menuItems.find((item) => item.id === Number(selectedMenuItem));
+    const menuItem = menuItems.find((m) => String(m.id) === String(selectedMenuItem));
     if (!menuItem) return;
 
-    const quantity = Number(itemQuantity);
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      setFormError("Item quantity must be at least 1.");
-      return;
-    }
+    const qty = parseInt(itemQuantity, 10);
+    if (!qty || qty < 1) return;
 
-    setCart((previous) => {
-      const existing = previous.find((item) => item.menu_item_id === menuItem.id);
-      if (existing) {
-        return previous.map((item) =>
-          item.menu_item_id === menuItem.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
+    setCart((prevCart) => {
+      const existingIndex = prevCart.findIndex(
+        (item) => String(item.menu_item_id) === String(selectedMenuItem)
+      );
+
+      if (existingIndex > -1) {
+        const next = [...prevCart];
+        next[existingIndex].quantity += qty;
+        return next;
       }
+
       return [
-        ...previous,
+        ...prevCart,
         {
           menu_item_id: menuItem.id,
           name: menuItem.name,
           price: menuItem.price,
-          quantity,
+          quantity: qty,
         },
       ];
     });
 
     setSelectedMenuItem("");
     setItemQuantity(1);
-    setFormError("");
   };
 
   const handleRemoveFromCart = (menuItemId) => {
@@ -306,29 +398,31 @@ export default function Orders() {
     return cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
   }, [cart]);
 
-  const handleCreateOrder = async (event) => {
-    event.preventDefault();
+  const handleCreateOrder = async (e) => {
+    e.preventDefault();
     setFormError("");
 
     if (!form.customer_id) {
-      setFormError("Please select a dining customer.");
+      setFormError("Please select a customer.");
       return;
     }
+
     if (!form.table_id) {
-      setFormError("Please select a restaurant table.");
+      setFormError("Please select a dining table.");
       return;
     }
+
     if (cart.length === 0) {
-      setFormError("Add at least one menu item to the order.");
+      setFormError("Please add at least one menu item to the order.");
       return;
     }
 
     setSaving(true);
     try {
       const payload = {
-        customer_id: Number(form.customer_id),
-        table_id: Number(form.table_id),
-        special_instructions: form.special_instructions?.trim() || null,
+        customer_id: parseInt(form.customer_id, 10),
+        table_id: parseInt(form.table_id, 10),
+        special_instructions: form.special_instructions.trim() || null,
         items: cart.map((item) => ({
           menu_item_id: item.menu_item_id,
           quantity: item.quantity,
@@ -336,22 +430,25 @@ export default function Orders() {
       };
 
       const newOrder = await createOrder(payload);
-      showSuccess(`Order ${newOrder.order_number} placed successfully.`, "Order Created");
+      showSuccess(
+        `Order ${newOrder.order_number} created successfully.`,
+        "Order Created"
+      );
       closeCreateModal();
       await loadOrders();
     } catch (error) {
       setFormError(getErrorMessage(error));
-      showError(getErrorMessage(error), "Failed to Create Order");
     } finally {
       setSaving(false);
     }
   };
 
   // ==========================================
-  // VIEW / MODIFY ORDER DETAILS
+  // ORDER DETAILS HANDLERS
   // ==========================================
 
   const openOrderDetails = async (order) => {
+    setSelectedOrder(order);
     setShowDetailsModal(true);
     setDetailsLoading(true);
     setDetailsError("");
@@ -362,6 +459,7 @@ export default function Orders() {
     try {
       const fullOrder = await getOrderById(order.id);
       setSelectedOrder(fullOrder);
+      setInstructionText(fullOrder.special_instructions || "");
     } catch (error) {
       setDetailsError(getErrorMessage(error));
     } finally {
@@ -373,14 +471,17 @@ export default function Orders() {
     setShowDetailsModal(false);
     setSelectedOrder(null);
     setDetailsError("");
+    setStatusTarget("");
+    setStatusNote("");
+    setQuantityModal(null);
   };
 
   const refreshSelectedOrder = async () => {
     if (!selectedOrder) return;
     try {
-      const fresh = await getOrderById(selectedOrder.id);
-      setSelectedOrder(fresh);
-      loadOrders();
+      const refreshed = await getOrderById(selectedOrder.id);
+      setSelectedOrder(refreshed);
+      setInstructionText(refreshed.special_instructions || "");
     } catch (error) {
       setDetailsError(getErrorMessage(error));
     }
@@ -389,13 +490,13 @@ export default function Orders() {
   const handleSaveInstructions = async () => {
     if (!selectedOrder) return;
     setSaving(true);
-    setDetailsError("");
     try {
       await updateOrder(selectedOrder.id, {
         special_instructions: instructionText.trim() || null,
       });
       await refreshSelectedOrder();
-      showInfo("Special instructions updated.", "Order Updated");
+      showSuccess("Special instructions updated.", "Order Updated");
+      await loadOrders();
     } catch (error) {
       setDetailsError(getErrorMessage(error));
       showError(getErrorMessage(error), "Update Failed");
@@ -407,14 +508,22 @@ export default function Orders() {
   const handleStatusUpdate = async () => {
     if (!selectedOrder || !statusTarget) return;
 
-    if (statusTarget === "Completed" && selectedOrder.status === "Served" && !selectedOrder.invoice_id) {
-      showWarning(
-        "An invoice must be generated before this order can be completed. Please navigate to Invoice Management.",
-        "Invoice Required"
-      );
+    if (statusTarget === "Completed" && selectedOrder.status === "Served") {
+      if (!selectedOrder.invoice_id) {
+        showWarning(
+          "An invoice must be generated before this order can be completed. Please navigate to Invoices.",
+          "Invoice Required"
+        );
+        return;
+      }
+      if (selectedOrder.payment_status !== "Paid") {
+        showWarning(
+          "Invoice must be paid before completing the order. Please record payment in Invoices / Payments.",
+          "Payment Pending"
+        );
+        return;
+      }
     }
-
-    setSaving(true);
     setDetailsError("");
 
     try {
@@ -422,6 +531,8 @@ export default function Orders() {
         status: statusTarget,
         note: statusNote.trim() || null,
       });
+
+      const nextStage = getWorkflowStageLabel(statusTarget);
 
       if (statusTarget === "Completed") {
         showSuccess(
@@ -435,7 +546,7 @@ export default function Orders() {
         );
       } else {
         showSuccess(
-          `Order ${selectedOrder.order_number} transitioned to ${statusTarget}.`,
+          `Order ${selectedOrder.order_number} advanced to ${nextStage} (${statusTarget}).`,
           "Status Updated"
         );
       }
@@ -470,18 +581,16 @@ export default function Orders() {
     }
 
     setSaving(true);
-    setDetailsError("");
-
     try {
       await addOrderItem(selectedOrder.id, {
-        menu_item_id: Number(additionalItem),
-        quantity: Number(additionalQuantity),
+        menu_item_id: parseInt(additionalItem, 10),
+        quantity: parseInt(additionalQuantity, 10) || 1,
       });
-
-      setAdditionalItem("");
-      setAdditionalQuantity(1);
       await refreshSelectedOrder();
       showSuccess("Item added to order successfully.", "Item Added");
+      setAdditionalItem("");
+      setAdditionalQuantity(1);
+      await loadOrders();
     } catch (error) {
       setDetailsError(getErrorMessage(error));
       showError(getErrorMessage(error), "Failed to Add Item");
@@ -490,12 +599,14 @@ export default function Orders() {
     }
   };
 
-  const handleUpdateItemQuantity = (item) => {
-    setQuantityModal({ item, quantity: item.quantity });
+  const handleOpenQuantityModal = (item) => {
+    setQuantityModal({
+      item,
+      quantity: item.quantity,
+    });
   };
 
-  const handleSaveQuantityModal = async (e) => {
-    if (e) e.preventDefault();
+  const handleSaveQuantity = async () => {
     if (!quantityModal || !selectedOrder) return;
 
     const newQuantity = Number(quantityModal.quantity);
@@ -547,50 +658,52 @@ export default function Orders() {
   const isOrderEditable = selectedOrder && ["Pending", "Confirmed"].includes(selectedOrder.status);
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* PAGE HEADER */}
-      <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-[#29231F] md:text-[26px]">
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
             Order Management
           </h1>
           <p className="mt-1 text-xs text-stone-500 sm:text-sm">
-            Coordinate live dining orders and review historical records.
+            Coordinate the 4-stage dining workflow:{" "}
+            <span className="font-semibold text-stone-700">Ordered → In Progress → Served → Completed</span>
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={openCreateModal}
-            className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#A94B2B]"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
           >
             <Plus size={17} />
-            Create New Order
+            <span>Create New Order</span>
           </button>
         </div>
       </div>
 
       {/* VIEW TABS: ACTIVE ORDERS vs ORDER HISTORY */}
-      <div className="mb-6 flex flex-col gap-4 border-b border-[#E9E3DA] pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-4 border-b border-stone-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => handleTabSwitch("active")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
               activeTab === "active"
-                ? "bg-[#C65D35] text-white shadow-xs"
-                : "bg-white text-stone-600 hover:bg-stone-50 border border-stone-200"
+                ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"
             }`}
           >
             <ShoppingCart size={17} />
             <span>Active Orders</span>
-            {activeMetrics && (
+            {workflowMetrics && (
               <span
-                className={`ml-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  activeTab === "active" ? "bg-white/20 text-white" : "bg-stone-100 text-stone-700"
+                className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                  activeTab === "active" ? "bg-[#1C1917] text-[#F5B716]" : "bg-stone-100 text-stone-700"
                 }`}
               >
-                {activeMetrics.total}
+                {workflowMetrics.total}
               </span>
             )}
           </button>
@@ -598,10 +711,10 @@ export default function Orders() {
           <button
             type="button"
             onClick={() => handleTabSwitch("history")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
               activeTab === "history"
-                ? "bg-[#C65D35] text-white shadow-xs"
-                : "bg-white text-stone-600 hover:bg-stone-50 border border-stone-200"
+                ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
+                : "bg-white text-stone-600 hover:bg-stone-100 border border-stone-200"
             }`}
           >
             <History size={17} />
@@ -620,89 +733,79 @@ export default function Orders() {
         )}
       </div>
 
-      {/* ACTIVE METRICS ROW (Visible only in Active Orders) */}
-      {activeTab === "active" && activeMetrics && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* ACTIVE WORKFLOW METRICS ROW */}
+      {activeTab === "active" && workflowMetrics && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div
             onClick={() => setStatusFilter("ALL")}
-            className={`cursor-pointer rounded-xl border p-3 transition ${
+            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
               statusFilter === "ALL"
-                ? "border-[#C65D35] bg-[#FFF9F5]"
+                ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
                 : "border-stone-200 bg-white hover:border-stone-300"
             }`}
           >
-            <p className="text-xs text-stone-500 font-medium">All Active</p>
-            <p className="text-xl font-bold text-stone-900">{activeMetrics.total}</p>
+            <p className="text-xs text-stone-500 font-semibold uppercase tracking-wider">All Active</p>
+            <p className="mt-1 text-2xl font-bold text-[#1C1917]">{workflowMetrics.total}</p>
+            <p className="mt-1 text-[11px] text-stone-400">Total dining orders</p>
           </div>
 
           <div
-            onClick={() => setStatusFilter("PENDING")}
-            className={`cursor-pointer rounded-xl border p-3 transition ${
-              statusFilter === "PENDING"
-                ? "border-amber-500 bg-amber-50"
+            onClick={() => setStatusFilter("STAGE_ORDERED")}
+            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+              statusFilter === "STAGE_ORDERED"
+                ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
                 : "border-stone-200 bg-white hover:border-stone-300"
             }`}
           >
-            <p className="text-xs text-amber-700 font-medium">Pending</p>
-            <p className="text-xl font-bold text-amber-900">{activeMetrics.pending}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-yellow-800 font-semibold uppercase tracking-wider">1. Ordered</p>
+              <span className="h-2 w-2 rounded-full bg-yellow-500" />
+            </div>
+            <p className="mt-1 text-2xl font-bold text-yellow-950">{workflowMetrics.ordered}</p>
+            <p className="mt-1 text-[11px] text-stone-500">Pending & Confirmed</p>
           </div>
 
           <div
-            onClick={() => setStatusFilter("CONFIRMED")}
-            className={`cursor-pointer rounded-xl border p-3 transition ${
-              statusFilter === "CONFIRMED"
-                ? "border-[#C65D35] bg-[#FCF4EF]"
+            onClick={() => setStatusFilter("STAGE_IN_PROGRESS")}
+            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+              statusFilter === "STAGE_IN_PROGRESS"
+                ? "border-amber-400 bg-amber-50 ring-1 ring-amber-400"
                 : "border-stone-200 bg-white hover:border-stone-300"
             }`}
           >
-            <p className="text-xs text-[#A94B2B] font-medium">Confirmed</p>
-            <p className="text-xl font-bold text-[#A94B2B]">{activeMetrics.confirmed}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-amber-800 font-semibold uppercase tracking-wider">2. In Progress</p>
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            </div>
+            <p className="mt-1 text-2xl font-bold text-amber-950">{workflowMetrics.inProgress}</p>
+            <p className="mt-1 text-[11px] text-stone-500">In Kitchen & Ready</p>
           </div>
 
           <div
-            onClick={() => setStatusFilter("PREPARING")}
-            className={`cursor-pointer rounded-xl border p-3 transition ${
-              statusFilter === "PREPARING"
-                ? "border-yellow-600 bg-yellow-50"
+            onClick={() => setStatusFilter("STAGE_SERVED")}
+            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+              statusFilter === "STAGE_SERVED"
+                ? "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-400"
                 : "border-stone-200 bg-white hover:border-stone-300"
             }`}
           >
-            <p className="text-xs text-yellow-800 font-medium">In Kitchen</p>
-            <p className="text-xl font-bold text-yellow-900">{activeMetrics.preparing}</p>
-          </div>
-
-          <div
-            onClick={() => setStatusFilter("READY")}
-            className={`cursor-pointer rounded-xl border p-3 transition ${
-              statusFilter === "READY"
-                ? "border-emerald-500 bg-emerald-50"
-                : "border-stone-200 bg-white hover:border-stone-300"
-            }`}
-          >
-            <p className="text-xs text-emerald-800 font-medium">Food Ready</p>
-            <p className="text-xl font-bold text-emerald-900">{activeMetrics.ready}</p>
-          </div>
-
-          <div
-            onClick={() => setStatusFilter("SERVED")}
-            className={`cursor-pointer rounded-xl border p-3 transition ${
-              statusFilter === "SERVED"
-                ? "border-sky-500 bg-sky-50"
-                : "border-stone-200 bg-white hover:border-stone-300"
-            }`}
-          >
-            <p className="text-xs text-sky-800 font-medium">Served / Dining</p>
-            <p className="text-xl font-bold text-sky-900">{activeMetrics.served}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-emerald-800 font-semibold uppercase tracking-wider">3. Served</p>
+              <span className="h-2 w-2 rounded-full bg-emerald-600" />
+            </div>
+            <p className="mt-1 text-2xl font-bold text-emerald-950">{workflowMetrics.served}</p>
+            <p className="mt-1 text-[11px] text-stone-500">Delivered / Dining</p>
           </div>
         </div>
       )}
 
       {/* ORDERS TABLE CONTAINER */}
-      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white shadow-xs">
-        <div className="flex flex-col gap-4 border-b border-[#EEE9E2] p-4 md:flex-row md:items-center md:justify-between">
+      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
+        {/* TABLE FILTER BAR */}
+        <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-[#29231F]">
-              {activeTab === "active" ? "Ongoing Active Orders" : "Historical Order Records"}
+            <h2 className="font-bold text-[#1C1917]">
+              {activeTab === "active" ? "Live Active Dining Orders" : "Order History Archive"}
             </h2>
             <p className="mt-0.5 text-xs text-stone-500">
               {filteredOrders.length} {filteredOrders.length === 1 ? "order" : "orders"} found
@@ -713,69 +816,68 @@ export default function Orders() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
               />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search order #, customer, table..."
-                className="w-full rounded-lg border border-[#E9E3DA] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-60"
+                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-64"
               />
             </div>
 
-            {/* Filter by status */}
+            {/* Filter by workflow stage */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
             >
               {activeTab === "active" ? (
                 <>
-                  <option value="ALL">All Active Statuses</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="CONFIRMED">Confirmed</option>
-                  <option value="PREPARING">Preparing</option>
-                  <option value="READY">Ready</option>
-                  <option value="SERVED">Served</option>
+                  <option value="ALL">All Active Stages</option>
+                  <option value="STAGE_ORDERED">Stage 1: Ordered (Pending/Confirmed)</option>
+                  <option value="STAGE_IN_PROGRESS">Stage 2: In Progress (Kitchen/Ready)</option>
+                  <option value="STAGE_SERVED">Stage 3: Served (Delivered)</option>
                 </>
               ) : (
                 <>
-                  <option value="ALL">All History Statuses</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="ALL">All Historical Records</option>
+                  <option value="STAGE_COMPLETED">Stage 4: Completed</option>
+                  <option value="STAGE_CANCELLED">Cancelled</option>
                 </>
               )}
             </select>
 
             <button
+              type="button"
               onClick={loadOrders}
               disabled={loading}
               title="Refresh orders"
-              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] p-2 text-gray-600 hover:bg-[#F7F5F0]"
+              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white p-2 text-stone-600 hover:bg-stone-100 transition cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
-        {/* TABLE */}
+        {/* DATA TABLE */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wider text-stone-500 font-semibold">
+          <table className="w-full min-w-[760px] text-left">
+            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
               <tr>
-                <th className="px-4 py-3">Order #</th>
+                <th className="px-4 py-3">Order Number</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Table</th>
-                <th className="px-4 py-3">Ordered Items</th>
+                <th className="px-4 py-3">Summary</th>
                 <th className="px-4 py-3">Subtotal</th>
-                <th className="px-4 py-3">Status</th>
-                {activeTab === "history" && <th className="px-4 py-3">Invoice Ref</th>}
+                <th className="px-4 py-3">Workflow Status</th>
+                {activeTab === "history" && <th className="px-4 py-3">Invoice</th>}
                 {activeTab === "history" && <th className="px-4 py-3">Payment</th>}
-                <th className="px-4 py-3 text-center">Action</th>
+                <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#F0ECE6]">
+            <tbody className="divide-y divide-stone-100 text-sm">
               {loading ? (
                 <tr>
                   <td
@@ -802,64 +904,71 @@ export default function Orders() {
                     .map((item) => `${item.quantity}x ${item.item_name}`)
                     .join(", ");
 
-                  const orderDate = order.created_at
-                    ? new Date(order.created_at).toLocaleString("en-IN", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })
-                    : "—";
+                  const badgeInfo = getOrderStatusBadgeStyle(order.status);
+                  const workflowLabel = getWorkflowStageLabel(order.status);
+                  const detailedLabel = getDetailedStatusLabel(order.status);
 
                   return (
                     <tr
                       key={order.id}
-                      className="transition hover:bg-[#FAF9F6] text-sm"
+                      className="transition hover:bg-stone-50/70 dark:hover:bg-stone-850/60"
                     >
-                      <td className="px-4 py-3">
-                        <p className="font-semibold text-stone-900">
-                          {order.order_number}
-                        </p>
-                        <p className="text-[11px] text-stone-400 mt-0.5">
-                          {orderDate}
-                        </p>
+                      <td className="px-4 py-3 font-semibold text-stone-900 dark:text-stone-100">
+                        {order.order_number}
                       </td>
 
-                      <td className="px-4 py-3 text-stone-700">
-                        {order.customer_name}
+                      <td className="px-4 py-3 text-stone-800 dark:text-stone-200">
+                        <p className="font-medium">{order.customer_name || "—"}</p>
+                        <p className="text-xs text-stone-500 dark:text-stone-400">{order.customer_phone || ""}</p>
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className="font-medium text-stone-800">
-                          Table {order.table_number}
+                        <span className="inline-flex items-center rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:text-stone-300">
+                          {order.table_number ? `Table ${order.table_number}` : "Takeaway"}
                         </span>
                       </td>
 
-                      <td className="px-4 py-3 text-stone-600 max-w-xs truncate" title={itemsSummary}>
-                        <span className="font-medium text-stone-800">{order.items.length} items:</span>{" "}
-                        {itemsSummary}
+                      <td className="px-4 py-3 max-w-[220px]">
+                        <p className="truncate text-xs text-stone-600 dark:text-stone-300" title={itemsSummary}>
+                          {itemsSummary || "No items"}
+                        </p>
+                        {order.special_instructions && (
+                          <p
+                            className="mt-0.5 truncate text-[11px] font-medium text-amber-800 dark:text-amber-300"
+                            title={order.special_instructions}
+                          >
+                            Note: {order.special_instructions}
+                          </p>
+                        )}
                       </td>
 
-                      <td className="px-4 py-3 font-semibold text-stone-900">
+                      <td className="px-4 py-3 font-semibold text-stone-900 dark:text-stone-100">
                         {formatCurrency(order.subtotal)}
                       </td>
 
                       <td className="px-4 py-3">
                         <span
-                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusStyle(
-                            order.status
-                          )}`}
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ${badgeInfo.badge}`}
+                          title={`Backend state: ${order.status}`}
                         >
-                          {order.status}
+                          <span className={`h-1.5 w-1.5 rounded-full ${badgeInfo.dot}`} />
+                          <span className="font-semibold">{workflowLabel}</span>
+                          {detailedLabel !== workflowLabel && (
+                            <span className="text-[10px] opacity-75 font-normal">
+                              ({order.status})
+                            </span>
+                          )}
                         </span>
                       </td>
 
                       {activeTab === "history" && (
-                        <td className="px-4 py-3 font-mono text-xs text-stone-700">
+                        <td className="px-4 py-3 font-mono text-xs text-stone-700 dark:text-stone-300">
                           {order.invoice_number ? (
-                            <span className="rounded-md bg-stone-100 px-2 py-1 font-semibold text-[#C65D35]">
+                            <span className="rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-1 font-semibold text-stone-800 dark:text-stone-200">
                               {order.invoice_number}
                             </span>
                           ) : (
-                            <span className="text-stone-400">—</span>
+                            <span className="text-stone-400 dark:text-stone-500">—</span>
                           )}
                         </td>
                       )}
@@ -872,11 +981,12 @@ export default function Orders() {
 
                       <td className="px-4 py-3 text-center">
                         <button
+                          type="button"
                           onClick={() => openOrderDetails(order)}
                           title="View order details"
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35] transition"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer shadow-2xs"
                         >
-                          <Eye size={15} />
+                          <Eye size={14} />
                           <span>Details</span>
                         </button>
                       </td>
@@ -894,14 +1004,14 @@ export default function Orders() {
       ===================================== */}
       {showCreateModal && (
         <ModalShell
-          title="Create New Order"
-          subtitle="Select customer, table and menu items."
+          title="Create New Dining Order"
+          subtitle="Select customer, table and add dishes to the order."
           onClose={closeCreateModal}
           size="max-w-3xl"
         >
           <form onSubmit={handleCreateOrder} className="space-y-5">
             {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
                 {formError}
               </div>
             )}
@@ -910,14 +1020,14 @@ export default function Orders() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Customer
+                  Customer <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="customer_id"
                   value={form.customer_id}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
                 >
                   <option value="">Select customer</option>
                   {customers.map((c) => (
@@ -930,16 +1040,16 @@ export default function Orders() {
 
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Dining Table
+                  Dining Table <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="table_id"
                   value={form.table_id}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
                 >
-                  <option value="">Select table</option>
+                  <option value="">Select dining table</option>
                   {tables.map((t) => (
                     <option key={t.id} value={t.id}>
                       Table {t.table_number} ({t.seating_capacity} seats) — {t.status}
@@ -952,20 +1062,20 @@ export default function Orders() {
             {/* SPECIAL INSTRUCTIONS */}
             <div>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
-                Special Instructions (Optional)
+                Kitchen Instructions (Optional)
               </label>
               <input
                 type="text"
                 name="special_instructions"
                 value={form.special_instructions}
                 onChange={handleFormChange}
-                placeholder="e.g. Less spicy, Jain preparation, allergies..."
-                className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+                placeholder="e.g., Less spicy, Jain preparation, allergic to peanuts..."
+                className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
               />
             </div>
 
             {/* ADD ITEM ROW */}
-            <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+            <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
               <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-700">
                 Add Menu Items
               </label>
@@ -973,7 +1083,7 @@ export default function Orders() {
                 <select
                   value={selectedMenuItem}
                   onChange={(e) => setSelectedMenuItem(e.target.value)}
-                  className="flex-1 min-w-[200px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+                  className="flex-1 min-w-[200px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716]"
                 >
                   <option value="">Select item from menu</option>
                   {menuItems.map((item) => (
@@ -989,8 +1099,8 @@ export default function Orders() {
                     type="number"
                     min="1"
                     value={itemQuantity}
-                    onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-center text-sm outline-none focus:border-[#C65D35]"
+                    onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-2 text-center text-sm outline-none focus:border-[#F5B716]"
                   />
                 </div>
 
@@ -998,7 +1108,7 @@ export default function Orders() {
                   type="button"
                   onClick={handleAddItemToCart}
                   disabled={!selectedMenuItem}
-                  className="rounded-lg bg-stone-800 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-40 transition"
+                  className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-800 disabled:opacity-40 transition cursor-pointer"
                 >
                   Add to Order
                 </button>
@@ -1009,7 +1119,7 @@ export default function Orders() {
             {cart.length > 0 && (
               <div className="rounded-xl border border-stone-200 p-4">
                 <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Selected Items ({cart.length})
+                  Selected Dishes ({cart.length})
                 </h4>
                 <div className="divide-y divide-stone-100 max-h-48 overflow-y-auto">
                   {cart.map((item) => (
@@ -1027,7 +1137,7 @@ export default function Orders() {
                         <button
                           type="button"
                           onClick={() => handleRemoveFromCart(item.menu_item_id)}
-                          className="text-rose-600 hover:text-rose-800 p-1"
+                          className="text-red-600 hover:text-red-800 p-1 cursor-pointer"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -1037,7 +1147,7 @@ export default function Orders() {
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3">
                   <span className="font-bold text-stone-900 text-sm">Total Estimate:</span>
-                  <span className="text-base font-bold text-[#C65D35]">
+                  <span className="text-base font-bold text-amber-800">
                     ₹{cartTotal.toFixed(2)}
                   </span>
                 </div>
@@ -1049,16 +1159,16 @@ export default function Orders() {
               <button
                 type="button"
                 onClick={closeCreateModal}
-                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition"
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving || cart.length === 0}
-                className="rounded-lg bg-[#C65D35] px-5 py-2 text-sm font-semibold text-white hover:bg-[#A94B2B] disabled:opacity-50 transition"
+                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-50 transition cursor-pointer shadow-xs"
               >
-                {saving ? "Creating Order..." : "Place Order"}
+                {saving ? "Creating Order..." : "Place Order (Ordered Stage)"}
               </button>
             </div>
           </form>
@@ -1071,7 +1181,7 @@ export default function Orders() {
       {showDetailsModal && selectedOrder && (
         <ModalShell
           title={`Order ${selectedOrder.order_number}`}
-          subtitle={`Customer: ${selectedOrder.customer_name} • Table ${selectedOrder.table_number}`}
+          subtitle={`Customer: ${selectedOrder.customer_name || "Guest"} • Table ${selectedOrder.table_number || "Takeaway"}`}
           onClose={closeOrderDetails}
           size="max-w-3xl"
         >
@@ -1080,35 +1190,39 @@ export default function Orders() {
           ) : (
             <div className="space-y-6">
               {detailsError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
                   {detailsError}
                 </div>
               )}
 
-              {/* OVERVIEW ROW */}
-              <div className="grid grid-cols-2 gap-4 rounded-xl border border-stone-200 bg-stone-50 p-4 sm:grid-cols-4 text-sm">
+              {/* WORKFLOW STEPPER */}
+              <OrderWorkflowStepper status={selectedOrder.status} />
+
+              {/* OVERVIEW CARDS */}
+              <div className="grid grid-cols-2 gap-3.5 rounded-xl border border-stone-200 bg-stone-50/70 p-4 sm:grid-cols-4 text-sm">
                 <div>
-                  <p className="text-xs text-stone-500 font-medium">Status</p>
-                  <p className="mt-1 font-bold">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusStyle(selectedOrder.status)}`}>
-                      {selectedOrder.status}
+                  <p className="text-xs text-stone-500 font-semibold uppercase tracking-wider">Workflow Stage</p>
+                  <div className="mt-1">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ${getOrderStatusBadgeStyle(selectedOrder.status).badge}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${getOrderStatusBadgeStyle(selectedOrder.status).dot}`} />
+                      <span>{getWorkflowStageLabel(selectedOrder.status)}</span>
                     </span>
-                  </p>
+                  </div>
                 </div>
                 <div>
-                  <p className="text-xs text-stone-500 font-medium">Subtotal</p>
-                  <p className="mt-1 font-bold text-stone-900">
+                  <p className="text-xs text-stone-500 font-semibold uppercase tracking-wider">Subtotal</p>
+                  <p className="mt-1 font-bold text-stone-900 text-base">
                     {formatCurrency(selectedOrder.subtotal)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-stone-500 font-medium">Invoice</p>
-                  <p className="mt-1 font-semibold text-stone-800 text-xs">
-                    {selectedOrder.invoice_number || "Not Generated"}
+                  <p className="text-xs text-stone-500 font-semibold uppercase tracking-wider">Invoice</p>
+                  <p className="mt-1 font-semibold text-stone-800 text-xs font-mono">
+                    {selectedOrder.invoice_number || "Not Invoiced"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-stone-500 font-medium">Payment</p>
+                  <p className="text-xs text-stone-500 font-semibold uppercase tracking-wider">Payment</p>
                   <div className="mt-1">{getPaymentBadge(selectedOrder.payment_status)}</div>
                 </div>
               </div>
@@ -1116,7 +1230,7 @@ export default function Orders() {
               {/* SPECIAL INSTRUCTIONS */}
               <div>
                 <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Special Instructions
+                  Special Kitchen Instructions
                 </label>
                 {isOrderEditable ? (
                   <div className="flex gap-2">
@@ -1125,13 +1239,13 @@ export default function Orders() {
                       value={instructionText}
                       onChange={(e) => setInstructionText(e.target.value)}
                       placeholder="Add instructions..."
-                      className="flex-1 rounded-lg border border-stone-300 px-3 py-1.5 text-sm outline-none focus:border-[#C65D35]"
+                      className="flex-1 rounded-lg border border-stone-300 px-3 py-1.5 text-sm outline-none focus:border-[#F5B716]"
                     />
                     <button
                       type="button"
                       onClick={handleSaveInstructions}
                       disabled={saving}
-                      className="rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black transition"
+                      className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800 transition cursor-pointer"
                     >
                       Save
                     </button>
@@ -1149,56 +1263,54 @@ export default function Orders() {
                   <h3 className="font-bold text-stone-900 text-sm">Ordered Items</h3>
                   {isOrderEditable && (
                     <span className="text-xs text-stone-500">
-                      Items can be modified while Pending or Confirmed
+                      Dishes can be added or adjusted while in Ordered stage
                     </span>
                   )}
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-stone-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-stone-50 text-xs font-semibold text-stone-500 uppercase tracking-wider">
+                <div className="overflow-x-auto rounded-lg border border-stone-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-stone-50 text-stone-600 font-semibold">
                       <tr>
-                        <th className="px-4 py-2.5">Item</th>
-                        <th className="px-4 py-2.5 text-center">Qty</th>
-                        <th className="px-4 py-2.5 text-right">Price</th>
-                        <th className="px-4 py-2.5 text-right">Total</th>
-                        {isOrderEditable && <th className="px-4 py-2.5 text-center">Action</th>}
+                        <th className="px-3 py-2">Dish</th>
+                        <th className="px-3 py-2">Unit Price</th>
+                        <th className="px-3 py-2">Quantity</th>
+                        <th className="px-3 py-2">Item Total</th>
+                        {isOrderEditable && <th className="px-3 py-2 text-center">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {selectedOrder.items.map((item) => (
-                        <tr key={item.id}>
-                          <td className="px-4 py-2.5 font-medium text-stone-900">{item.item_name}</td>
-                          <td className="px-4 py-2.5 text-center">
-                            {isOrderEditable ? (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateItemQuantity(item)}
-                                className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-800 hover:bg-stone-200"
-                                title="Edit quantity"
-                              >
-                                {item.quantity}
-                                <Pencil size={11} className="text-stone-500" />
-                              </button>
-                            ) : (
-                              item.quantity
-                            )}
+                      {selectedOrder.items?.map((item) => (
+                        <tr key={item.id} className="hover:bg-stone-50/50">
+                          <td className="px-3 py-2 font-medium text-stone-900">
+                            {item.item_name}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-stone-600">
-                            ₹{Number(item.unit_price).toFixed(2)}
+                          <td className="px-3 py-2 text-stone-600">
+                            ₹{item.price_at_order}
                           </td>
-                          <td className="px-4 py-2.5 text-right font-semibold text-stone-900">
-                            ₹{Number(item.line_total).toFixed(2)}
+                          <td className="px-3 py-2 font-semibold text-stone-900">
+                            {item.quantity}
+                          </td>
+                          <td className="px-3 py-2 font-semibold text-stone-900">
+                            ₹{(Number(item.price_at_order) * item.quantity).toFixed(2)}
                           </td>
                           {isOrderEditable && (
-                            <td className="px-4 py-2.5 text-center">
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenQuantityModal(item)}
+                                title="Edit quantity"
+                                className="mr-2 text-stone-600 hover:text-stone-900 p-1 cursor-pointer"
+                              >
+                                <Pencil size={14} />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleRemoveOrderItem(item)}
-                                className="text-rose-600 hover:text-rose-800 p-1"
                                 title="Remove item"
+                                className="text-red-600 hover:text-red-800 p-1 cursor-pointer"
                               >
-                                <Trash2 size={15} />
+                                <Trash2 size={14} />
                               </button>
                             </td>
                           )}
@@ -1210,13 +1322,13 @@ export default function Orders() {
 
                 {/* ADD ITEM TO EXISTING ORDER */}
                 {isOrderEditable && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 p-2.5">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-stone-50/70 p-2.5">
                     <select
                       value={additionalItem}
                       onChange={(e) => setAdditionalItem(e.target.value)}
-                      className="flex-1 min-w-[180px] rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none"
+                      className="flex-1 min-w-[180px] rounded-lg border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-[#F5B716]"
                     >
-                      <option value="">Add another item...</option>
+                      <option value="">Add another dish...</option>
                       {menuItems.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.name} (₹{item.price})
@@ -1227,25 +1339,25 @@ export default function Orders() {
                       type="number"
                       min="1"
                       value={additionalQuantity}
-                      onChange={(e) => setAdditionalQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => setAdditionalQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
                       className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-center text-xs"
                     />
                     <button
                       type="button"
                       onClick={handleAddExistingItem}
                       disabled={!additionalItem || saving}
-                      className="rounded-lg bg-stone-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black transition"
+                      className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800 transition cursor-pointer"
                     >
-                      Add
+                      Add Dish
                     </button>
                   </div>
                 )}
               </div>
 
               {/* STATUS TRANSITION PANEL */}
-              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+              <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4">
                 <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Update Operational Status
+                  Advance Workflow Stage
                 </h4>
 
                 {STATUS_TRANSITIONS[selectedOrder.status]?.length > 0 ? (
@@ -1254,12 +1366,12 @@ export default function Orders() {
                       <select
                         value={statusTarget}
                         onChange={(e) => setStatusTarget(e.target.value)}
-                        className="flex-1 min-w-[200px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-[#C65D35]"
+                        className="flex-1 min-w-[220px] rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none focus:border-[#F5B716]"
                       >
-                        <option value="">Select next status transition</option>
-                        {STATUS_TRANSITIONS[selectedOrder.status].map((st) => (
-                          <option key={st} value={st}>
-                            {st} {st === "Completed" ? "(Requires generated invoice)" : ""}
+                        <option value="">Select next workflow transition...</option>
+                        {STATUS_ACTION_LABELS[selectedOrder.status]?.map((action) => (
+                          <option key={action.target} value={action.target}>
+                            {action.label}
                           </option>
                         ))}
                       </select>
@@ -1268,9 +1380,9 @@ export default function Orders() {
                         type="button"
                         onClick={handleStatusUpdate}
                         disabled={!statusTarget || saving}
-                        className="rounded-lg bg-[#C65D35] px-4 py-2 text-sm font-semibold text-white hover:bg-[#A94B2B] disabled:opacity-40 transition"
+                        className="rounded-lg bg-[#F5B716] px-4 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-40 transition cursor-pointer shadow-xs"
                       >
-                        {saving ? "Updating..." : "Transition Status"}
+                        {saving ? "Updating..." : "Advance Stage"}
                       </button>
                     </div>
 
@@ -1278,19 +1390,19 @@ export default function Orders() {
                       type="text"
                       value={statusNote}
                       onChange={(e) => setStatusNote(e.target.value)}
-                      placeholder="Optional transition note..."
-                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs outline-none"
+                      placeholder="Optional stage transition note..."
+                      className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs outline-none focus:border-[#F5B716]"
                     />
 
                     {selectedOrder.status === "Served" && (
-                      <p className="text-xs text-amber-700 font-medium">
-                        ⚠️ Reminder: An invoice must be created under Invoice Management before completing this order.
+                      <p className="text-xs text-amber-800 font-semibold bg-amber-50 p-2 rounded-md border border-amber-200">
+                        ⚠️ Requirement: An invoice must be generated in Invoice Management before completing this order.
                       </p>
                     )}
                   </div>
                 ) : (
                   <p className="text-xs text-stone-500">
-                    This order is at a terminal status ({selectedOrder.status}) and cannot be transitioned further.
+                    This order is at terminal status ({selectedOrder.status}) and cannot be transitioned further.
                   </p>
                 )}
               </div>
@@ -1298,39 +1410,69 @@ export default function Orders() {
               {/* STATUS AUDIT TRAIL */}
               <div>
                 <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-700">
-                  Status Audit History
+                  Workflow History Trail
                 </h4>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {selectedOrder.status_history?.map((h) => (
-                    <div key={h.id} className="flex items-center justify-between rounded-lg border border-stone-200 bg-white p-2 text-xs">
-                      <div>
-                        <span className="font-semibold text-stone-800">
-                          {h.previous_status ? `${h.previous_status} → ${h.new_status}` : h.new_status}
+                <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/50 p-3 max-h-48 overflow-y-auto">
+                  {selectedOrder.status_history && selectedOrder.status_history.length > 0 ? (
+                    selectedOrder.status_history.map((hist, idx) => (
+                      <div
+                        key={hist.id || idx}
+                        className="flex items-start justify-between border-b border-stone-100 pb-2 text-xs last:border-b-0 last:pb-0"
+                      >
+                        <div>
+                          <span className="font-semibold text-stone-800">
+                            {hist.previous_status ? `${getWorkflowStageLabel(hist.previous_status)} → ` : ""}
+                            {getWorkflowStageLabel(hist.new_status)}
+                          </span>
+                          <span className="text-[11px] text-stone-500 ml-1">
+                            ({hist.new_status})
+                          </span>
+                          {hist.notes && (
+                            <p className="text-stone-600 mt-0.5 italic">{hist.notes}</p>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-stone-400">
+                          {new Date(hist.changed_at).toLocaleTimeString("en-IN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
-                        {h.note && <span className="ml-2 text-stone-500 italic">"{h.note}"</span>}
                       </div>
-                      <span className="text-stone-400">
-                        {new Date(h.changed_at).toLocaleString("en-IN", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-xs text-stone-500">No previous transitions recorded.</p>
+                  )}
                 </div>
+              </div>
+
+              {/* CLOSE BUTTON */}
+              <div className="flex justify-end pt-3 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={closeOrderDetails}
+                  className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
             </div>
           )}
         </ModalShell>
       )}
 
-      {/* QUANTITY MODAL */}
+      {/* EDIT QUANTITY MODAL */}
       {quantityModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xs rounded-xl bg-white p-5 shadow-2xl">
-            <h3 className="font-bold text-stone-900 text-sm">Update Item Quantity</h3>
-            <p className="text-xs text-stone-500 mt-1">{quantityModal.item.item_name}</p>
-            <form onSubmit={handleSaveQuantityModal} className="mt-4 space-y-4">
+        <ModalShell
+          title="Update Dish Quantity"
+          subtitle={`Adjust quantity for "${quantityModal.item?.item_name}".`}
+          onClose={() => setQuantityModal(null)}
+          size="max-w-sm"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700 mb-1">
+                Quantity
+              </label>
               <input
                 type="number"
                 min="1"
@@ -1338,60 +1480,63 @@ export default function Orders() {
                 onChange={(e) =>
                   setQuantityModal((prev) => ({
                     ...prev,
-                    quantity: Math.max(1, parseInt(e.target.value) || 1),
+                    quantity: e.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-stone-300 p-2 text-center text-base font-bold outline-none focus:border-[#C65D35]"
-                autoFocus
+                className="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-[#F5B716]"
               />
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setQuantityModal(null)}
-                  className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-[#C65D35] px-3 py-1.5 text-xs font-semibold text-white"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setQuantityModal(null)}
+                className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQuantity}
+                disabled={saving}
+                className="rounded-lg bg-[#F5B716] px-4 py-1.5 text-xs font-bold text-[#1C1917] hover:bg-[#E5A910]"
+              >
+                {saving ? "Saving..." : "Save Quantity"}
+              </button>
+            </div>
           </div>
-        </div>
+        </ModalShell>
       )}
     </div>
   );
 }
 
-// Modal Container Shell
-function ModalShell({ title, subtitle, onClose, children, size = "max-w-2xl" }) {
+// ==========================================
+// MODAL SHELL HELPER
+// ==========================================
+
+function ModalShell({ title, subtitle, onClose, size = "max-w-2xl", children }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-xs"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className={`w-full ${size} overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150`}>
-        <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-2xs">
+      <div
+        className={`w-full ${size} max-h-[90vh] overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
+      >
+        <div className="mb-5 flex items-start justify-between border-b border-stone-100 pb-4">
           <div>
-            <h3 className="text-lg font-bold text-stone-900">{title}</h3>
-            {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
+            <h2 className="text-lg font-bold text-[#1C1917]">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>}
           </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
+            aria-label="Close modal"
           >
             <X size={18} />
           </button>
         </div>
-        <div className="max-h-[80vh] overflow-y-auto p-6">{children}</div>
+
+        {children}
       </div>
     </div>
   );

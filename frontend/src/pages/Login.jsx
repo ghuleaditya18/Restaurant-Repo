@@ -215,42 +215,42 @@ function Login() {
   // ---------- Styling helpers ----------
 
   const getInputClass = (hasError) =>
-    `w-full outline-none text-sm text-[#29231F] bg-transparent ${
-      hasError ? "placeholder:text-red-300" : ""
+    `w-full outline-none text-sm text-[#1C1917] bg-transparent ${
+      hasError ? "placeholder:text-red-300" : "placeholder:text-stone-400"
     }`;
 
   const getWrapperClass = (hasError) =>
     `flex items-center gap-3 mt-2 border rounded-xl px-4 py-3 transition ${
       hasError
-        ? "border-red-400"
-        : "border-[#EAE4DD] focus-within:border-[#C65D35]"
+        ? "border-red-400 focus-within:ring-2 focus-within:ring-red-100"
+        : "border-stone-300 focus-within:border-[#F5B716] focus-within:ring-2 focus-within:ring-[#F5B716]/30"
     }`;
 
 
   return (
-    <div className="min-h-screen bg-[#F7F5F0] flex items-center justify-center p-5">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-[#EAE4DD] p-8 sm:p-10">
+    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-5">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-stone-200/90 p-8 sm:p-10">
 
         {/* Branding */}
         <div className="flex justify-center mb-7">
-          <div className="bg-[#C65D35] text-white p-4 rounded-2xl shadow-xs">
+          <div className="bg-[#F5B716] text-[#1C1917] p-4 rounded-2xl shadow-xs">
             <ChefHat size={30} />
           </div>
         </div>
 
         {/* Application Name */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-[#29231F]">DineFlow</h1>
-          <p className="text-sm text-[#8A817B] mt-2">
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917]">DineFlow</h1>
+          <p className="text-xs text-stone-500 mt-1 font-medium">
             Restaurant Management System
           </p>
         </div>
 
         {/* Welcome Message */}
         <div className="mb-7">
-          <h2 className="text-xl font-bold text-[#29231F]">Welcome Back</h2>
-          <p className="text-sm text-[#8A817B] mt-2">
-            Sign in to access your account.
+          <h2 className="text-xl font-bold text-[#1C1917]">Welcome Back</h2>
+          <p className="text-xs text-stone-500 mt-1 font-medium">
+            Sign in to access your operations dashboard.
           </p>
         </div>
 
@@ -261,13 +261,13 @@ function Login() {
           <div>
             <label
               htmlFor="email"
-              className="text-sm font-semibold text-[#29231F]"
+              className="text-xs font-bold uppercase tracking-wider text-stone-700"
             >
               Email Address
             </label>
 
             <div className={getWrapperClass(errors.email)}>
-              <Mail size={19} className="text-[#8A817B] shrink-0" />
+              <Mail size={18} className="text-stone-400 shrink-0" />
 
               <input
                 id="email"
@@ -288,7 +288,7 @@ function Login() {
               <p
                 id="email-error"
                 role="alert"
-                className="text-red-600 text-xs mt-2"
+                className="text-red-600 text-xs mt-1.5"
               >
                 {errors.email}
               </p>
@@ -299,13 +299,13 @@ function Login() {
           <div>
             <label
               htmlFor="password"
-              className="text-sm font-semibold text-[#29231F]"
+              className="text-xs font-bold uppercase tracking-wider text-stone-700"
             >
               Password
             </label>
 
             <div className={getWrapperClass(errors.password)}>
-              <Lock size={19} className="text-[#8A817B] shrink-0" />
+              <Lock size={18} className="text-stone-400 shrink-0" />
 
               <input
                 id="password"
@@ -326,11 +326,11 @@ function Login() {
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="text-[#8A817B] hover:text-[#29231F] transition shrink-0"
+                className="text-stone-400 hover:text-stone-700 transition shrink-0 cursor-pointer"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 title={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
 
@@ -338,7 +338,7 @@ function Login() {
               <p
                 id="password-error"
                 role="alert"
-                className="text-red-600 text-xs mt-2"
+                className="text-red-600 text-xs mt-1.5"
               >
                 {errors.password}
               </p>
@@ -349,7 +349,7 @@ function Login() {
           {serverError && (
             <div
               role="alert"
-              className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-xl"
+              className="bg-red-50 border border-red-200 text-red-700 text-xs font-medium p-3 rounded-xl"
             >
               {serverError}
             </div>
@@ -359,7 +359,7 @@ function Login() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 bg-[#C65D35] hover:bg-[#A94C2B] disabled:opacity-60 text-white font-semibold py-3.5 rounded-xl transition"
+            className="w-full flex items-center justify-center gap-2 bg-[#F5B716] hover:bg-[#E5A910] disabled:opacity-60 text-[#1C1917] font-bold py-3.5 rounded-xl transition shadow-xs cursor-pointer"
           >
             {submitting ? "Signing in..." : "Sign In"}
             {!submitting && <ArrowRight size={18} />}
@@ -367,7 +367,7 @@ function Login() {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-xs text-[#A39A93] mt-8">
+        <p className="text-center text-xs text-stone-400 mt-8">
           Authorized restaurant personnel only.
         </p>
       </div>

@@ -35,15 +35,14 @@ def validate_phone(value: str) -> str:
     return value
 
 
-def validate_email(value: str | None) -> str | None:
-
+def validate_mandatory_email(value: str) -> str:
     if value is None:
-        return None
+        raise ValueError("Customer email is required.")
 
     value = value.strip().lower()
 
     if not value:
-        return None
+        raise ValueError("Customer email cannot be empty or whitespace only.")
 
     if len(value) > 150 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
         raise ValueError("Enter a valid email address.")
@@ -72,7 +71,7 @@ class CustomerCreate(BaseModel):
 
     phone: str
 
-    email: str | None = Field(default=None, max_length=150)
+    email: str = Field(..., min_length=5, max_length=150)
 
     address: str | None = None
 
@@ -89,7 +88,7 @@ class CustomerCreate(BaseModel):
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value):
-        return validate_email(value)
+        return validate_mandatory_email(value)
 
     @field_validator("address")
     @classmethod
@@ -133,7 +132,9 @@ class CustomerUpdate(BaseModel):
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value):
-        return validate_email(value)
+        if value is None:
+            raise ValueError("Customer email cannot be null.")
+        return validate_mandatory_email(value)
 
     @field_validator("address")
     @classmethod

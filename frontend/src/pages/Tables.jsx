@@ -197,11 +197,9 @@ export default function Tables() {
     try {
       if (editingTable) {
         await updateTable(editingTable.id, tableData);
-
         setSuccessMessage("Table details updated successfully.");
       } else {
         await createTable(tableData);
-
         setSuccessMessage("New table created successfully.");
       }
 
@@ -320,56 +318,59 @@ export default function Tables() {
   // ==========================================
 
   return (
-    <div className="min-h-screen bg-[#F7F5F0] p-4 md:p-6">
+    <div className="space-y-6">
       {/* PAGE HEADER */}
-
-      <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold text-[#29231F] md:text-3xl">
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
             Table Management
           </h1>
 
-          <p className="mt-1 text-sm text-gray-500">
-            Manage restaurant seating and table availability.
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Manage dining seating capacity and real-time occupancy status.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={openAddModal}
-          className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B]"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
         >
           <Plus size={18} />
-          Add New Table
+          <span>Add New Table</span>
         </button>
       </div>
 
       {/* SUCCESS MESSAGE */}
-
       {successMessage && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-[#E9D6C8] bg-[#FFF9F5] px-4 py-3 text-sm text-[#A94B2B]">
-          {successMessage}
-
-          <button onClick={() => setSuccessMessage("")}>
+        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage("")}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
       )}
 
       {/* ERROR MESSAGE */}
-
       {pageError && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {pageError}
-
-          <button onClick={() => setPageError("")}>
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <span>{pageError}</span>
+          <button
+            type="button"
+            onClick={() => setPageError("")}
+            className="text-red-700 hover:text-red-900 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
       )}
 
       {/* SUMMARY CARDS */}
-
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryCard
           title="Total Tables"
           value={tables.length}
@@ -382,6 +383,7 @@ export default function Tables() {
           title="Available"
           value={availableCount}
           icon={<CheckCircle2 size={19} />}
+          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={statusFilter === "AVAILABLE"}
           onClick={() => setStatusFilter("AVAILABLE")}
         />
@@ -390,6 +392,7 @@ export default function Tables() {
           title="Occupied"
           value={occupiedCount}
           icon={<Clock size={19} />}
+          badgeColor="bg-amber-50 text-amber-800 border-amber-200"
           active={statusFilter === "OCCUPIED"}
           onClick={() => setStatusFilter("OCCUPIED")}
         />
@@ -398,22 +401,20 @@ export default function Tables() {
           title="Inactive"
           value={inactiveCount}
           icon={<Ban size={19} />}
+          badgeColor="bg-stone-100 text-stone-600 border-stone-200"
           active={statusFilter === "INACTIVE"}
           onClick={() => setStatusFilter("INACTIVE")}
         />
       </div>
 
       {/* TABLE LIST CONTAINER */}
-
-      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
+      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
         {/* SEARCH AND FILTER */}
-
-        <div className="flex flex-col gap-4 border-b border-[#EEE9E2] p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-semibold text-[#29231F]">Restaurant Tables</h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              {filteredTables.length} tables found
+            <h2 className="font-bold text-[#1C1917]">Restaurant Tables</h2>
+            <p className="mt-0.5 text-xs text-stone-500">
+              {filteredTables.length} {filteredTables.length === 1 ? "table" : "tables"} found
             </p>
           </div>
 
@@ -421,22 +422,21 @@ export default function Tables() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
               />
-
               <input
                 type="text"
                 placeholder="Search table number..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-[#E9E3DA] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-60"
+                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-60"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
             >
               <option value="ALL">All Tables</option>
               <option value="AVAILABLE">Available</option>
@@ -445,10 +445,11 @@ export default function Tables() {
             </select>
 
             <button
+              type="button"
               onClick={loadTables}
               disabled={loading}
               title="Refresh tables"
-              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-gray-600 hover:bg-[#F7F5F0]"
+              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-stone-600 hover:bg-stone-50 transition cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -456,10 +457,9 @@ export default function Tables() {
         </div>
 
         {/* TABLE RECORDS */}
-
         <div className="overflow-x-auto">
           <table className="w-full min-w-[700px] text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-gray-500">
+            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
               <tr>
                 <th className="px-4 py-3">Table Number</th>
                 <th className="px-4 py-3">Capacity</th>
@@ -469,12 +469,12 @@ export default function Tables() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#F0ECE6]">
+            <tbody className="divide-y divide-stone-100 text-sm">
               {loading ? (
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-12 text-center text-sm text-gray-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     Loading restaurant tables...
                   </td>
@@ -483,104 +483,119 @@ export default function Tables() {
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-12 text-center text-sm text-gray-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     No restaurant tables found.
                   </td>
                 </tr>
               ) : (
-                filteredTables.map((table) => (
-                  <tr key={table.id} className="transition hover:bg-[#FAF9F6]">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#F5E5DC] text-[#C65D35]">
-                          <Armchair size={18} />
+                filteredTables.map((table) => {
+                  const isOccupied = table.status?.toLowerCase() === "occupied";
+                  return (
+                    <tr key={table.id} className="transition hover:bg-stone-50/70">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`flex h-9 w-9 items-center justify-center rounded-lg border ${
+                            isOccupied
+                              ? "bg-amber-50 text-amber-800 border-amber-200"
+                              : "bg-[#FEF9C3] text-amber-900 border-yellow-200"
+                          }`}>
+                            <Armchair size={18} />
+                          </div>
+
+                          <div>
+                            <p className="font-semibold text-stone-900">
+                              Table {table.table_number}
+                            </p>
+                            <p className="text-xs text-stone-400">
+                              ID: {table.id}
+                            </p>
+                          </div>
                         </div>
+                      </td>
 
-                        <div>
-                          <p className="font-medium text-[#29231F]">
-                            Table {table.table_number}
-                          </p>
+                      <td className="px-4 py-3 text-sm text-stone-600">
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          <Users size={15} className="text-stone-400" />
+                          {table.capacity} seats
+                        </span>
+                      </td>
 
-                          <p className="text-xs text-gray-500">
-                            ID: {table.id}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      <span className="inline-flex items-center gap-1">
-                        <Users size={15} />
-                        {table.capacity} seats
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          table.status?.toLowerCase() === "occupied"
-                            ? "bg-[#F5E5DC] text-[#A94B2B]"
-                            : "bg-[#EEEAE4] text-[#6B625B]"
-                        }`}
-                      >
-                        {table.status}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          table.is_active
-                            ? "bg-[#F5E5DC] text-[#A94B2B]"
-                            : "bg-[#EEEAE4] text-[#6B625B]"
-                        }`}
-                      >
-                        {table.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={() => openViewModal(table)}
-                          title="View table"
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            isOccupied
+                              ? "bg-amber-50 text-amber-800 border border-amber-200"
+                              : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                          }`}
                         >
-                          <Eye size={16} />
-                        </button>
+                          <span className={`h-1.5 w-1.5 rounded-full ${isOccupied ? "bg-amber-500" : "bg-emerald-500"}`} />
+                          <span>{table.status}</span>
+                        </span>
+                      </td>
 
-                        <button
-                          onClick={() => openEditModal(table)}
-                          title="Edit table"
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
-                        >
-                          <Pencil size={16} />
-                        </button>
-
-                        <button
-                          onClick={() => handleStatusChange(table)}
-                          title={
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             table.is_active
-                              ? "Deactivate table"
-                              : "Activate table"
-                          }
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                              ? "bg-stone-100 text-stone-800 border border-stone-200"
+                              : "bg-stone-100 text-stone-400 border border-stone-200"
+                          }`}
                         >
-                          <Power size={16} />
-                        </button>
+                          {table.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
 
-                        <button
-                          onClick={() => handleDelete(table)}
-                          title="Delete table"
-                          className="rounded-lg p-2 text-[#6B625B] hover:bg-[#EEEAE4] hover:text-[#A94B2B]"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openViewModal(table)}
+                            title="View table details"
+                            className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                          >
+                            <Eye size={16} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(table)}
+                            title="Edit table"
+                            className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                          >
+                            <Pencil size={16} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(table)}
+                            title={
+                              table.is_active
+                                ? "Deactivate table"
+                                : "Activate table"
+                            }
+                            className={`rounded-lg p-2 transition cursor-pointer ${
+                              table.is_active
+                                ? "text-amber-700 hover:bg-amber-50"
+                                : "text-emerald-700 hover:bg-emerald-50"
+                            }`}
+                          >
+                            <Power size={16} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(table)}
+                            title="Delete table"
+                            className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -588,11 +603,10 @@ export default function Tables() {
       </div>
 
       {/* ADD / EDIT MODAL */}
-
       {showModal && (
         <ModalShell
-          title={editingTable ? "Edit Table" : "Add New Table"}
-          subtitle="Enter restaurant table information."
+          title={editingTable ? "Edit Dining Table" : "Add New Dining Table"}
+          subtitle="Enter seating and table identification information."
           onClose={() => setShowModal(false)}
         >
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -621,29 +635,29 @@ export default function Tables() {
 
             {editingTable && (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
                   Occupancy Status
                 </label>
                 <select
                   name="status"
                   value={form.status || "Available"}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 outline-none transition focus:border-[#F5B716]"
                 >
                   <option value="Available">Available</option>
                   <option value="Occupied">Occupied</option>
                 </select>
-                <p className="mt-1 text-xs text-gray-400">
-                  Tables with active orders cannot be manually marked Available.
+                <p className="mt-1 text-xs text-stone-500">
+                  Tables with active dining orders cannot be manually marked Available.
                 </p>
               </div>
             )}
 
-            <div className="flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
+            <div className="flex justify-end gap-3 border-t border-stone-100 pt-4">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-[#E9E3DA] px-4 py-2.5 text-sm text-gray-600"
+                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -651,7 +665,7 @@ export default function Tables() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-60 transition cursor-pointer shadow-xs"
               >
                 {saving
                   ? "Saving..."
@@ -665,15 +679,14 @@ export default function Tables() {
       )}
 
       {/* VIEW TABLE MODAL */}
-
       {showViewModal && (
         <ModalShell
           title="Table Details"
-          subtitle="Restaurant seating information."
+          subtitle="Dining seating specifications and live state."
           onClose={closeViewModal}
         >
           {viewLoading ? (
-            <p className="py-10 text-center text-sm text-gray-500">
+            <p className="py-10 text-center text-sm text-stone-500">
               Loading table details...
             </p>
           ) : viewError ? (
@@ -685,7 +698,7 @@ export default function Tables() {
 
                 <DetailItem
                   label="Table Number"
-                  value={viewingTable.table_number}
+                  value={`Table ${viewingTable.table_number}`}
                 />
 
                 <DetailItem
@@ -715,25 +728,25 @@ export default function Tables() {
 // REUSABLE COMPONENTS
 // ==========================================
 
-function SummaryCard({ title, value, icon, active, onClick }) {
+function SummaryCard({ title, value, icon, active, onClick, badgeColor }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`w-full rounded-xl border p-4 text-left transition ${
+      className={`w-full rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer shadow-xs ${
         active
-          ? "border-[#C65D35] bg-[#FFF9F5] shadow-sm"
-          : "border-[#E9E3DA] bg-white hover:border-[#C65D35]/50"
+          ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
+          : "border-stone-200/90 bg-white hover:border-stone-300"
       }`}
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <h3 className="mt-1 text-xl font-semibold text-[#29231F]">{value}</h3>
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">{title}</p>
+          <h3 className="mt-1 text-2xl font-bold text-[#1C1917]">{value}</h3>
         </div>
 
-        <div className="rounded-lg bg-[#F5E5DC] p-2.5 text-[#C65D35]">
+        <div className={`rounded-xl p-2.5 ${badgeColor || "bg-[#FEF9C3] text-amber-900 border border-yellow-200"}`}>
           {icon}
         </div>
       </div>
@@ -743,24 +756,25 @@ function SummaryCard({ title, value, icon, active, onClick }) {
 
 function ModalShell({ title, subtitle, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-      <div className="my-auto max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-xl">
-        <div className="sticky top-0 flex items-center justify-between border-b border-[#EEE9E2] bg-white px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs">
+      <div className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="sticky top-0 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
           <div>
-            <h2 className="font-semibold text-[#29231F]">{title}</h2>
-            <p className="mt-1 text-xs text-gray-500">{subtitle}</p>
+            <h2 className="text-lg font-bold text-[#1C1917]">{title}</h2>
+            <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
             aria-label="Close dialog"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="p-5">{children}</div>
+        <div className="p-6">{children}</div>
       </div>
     </div>
   );
@@ -768,7 +782,7 @@ function ModalShell({ title, subtitle, onClose, children }) {
 
 function ErrorBox({ message }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700">
       {message}
     </div>
   );
@@ -787,8 +801,8 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-[#29231F]">
-        {label}
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
 
       <input
@@ -801,7 +815,7 @@ function FormField({
         maxLength={maxLength}
         min={min}
         step={type === "number" ? "1" : undefined}
-        className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
       />
     </div>
   );
@@ -809,12 +823,12 @@ function FormField({
 
 function DetailItem({ label, value }) {
   return (
-    <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+    <div className="rounded-lg border border-stone-100 bg-stone-50/70 p-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">
         {label}
       </p>
 
-      <p className="break-words text-sm font-medium text-[#29231F]">
+      <p className="break-words text-sm font-bold text-[#1C1917]">
         {value ?? "—"}
       </p>
     </div>

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.api.deps import require_roles
 from app.core.date_utils import get_date_range
 from app.db.session import get_db
+from app.services.order_service import cancel_stale_orders
 from app.models.entities import (
     Customer,
     Invoice,
@@ -40,6 +41,9 @@ def get_dashboard_summary(
     end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
+    # Automatically evaluate and cancel stale orders exceeding inactivity timeout
+    cancel_stale_orders(db)
+
     start_dt, end_dt = get_date_range(preset=preset, start_date=start_date, end_date=end_date)
 
     # Date-filtered orders query
@@ -119,7 +123,7 @@ def get_dashboard_summary(
         or Decimal("0.00")
     )
 
-    # Active tables and current orders count per table (always based on live orders, NEVER date-filtered)
+    # Active tables and current orders count per table for current business date (Asia/Kolkata)
     active_tables = (
         db.query(RestaurantTable)
         .filter(RestaurantTable.is_active.is_(True))
@@ -127,13 +131,17 @@ def get_dashboard_summary(
         .all()
     )
 
-    active_order_counts = dict(
-        db.query(Order.table_id, func.count(Order.id))
-        .filter(
-            Order.status.notin_([OrderStatus.COMPLETED, OrderStatus.CANCELLED])
+    active_order_query = db.query(Order.table_id, func.count(Order.id)).filter(
+        Order.status.notin_([OrderStatus.COMPLETED, OrderStatus.CANCELLED])
+    )
+    if today_start is not None and today_end is not None:
+        active_order_query = active_order_query.filter(
+            Order.created_at >= today_start,
+            Order.created_at <= today_end,
         )
-        .group_by(Order.table_id)
-        .all()
+
+    active_order_counts = dict(
+        active_order_query.group_by(Order.table_id).all()
     )
 
     # Reconcile table statuses if needed so table availability counts match reality

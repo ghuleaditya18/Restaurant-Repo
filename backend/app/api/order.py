@@ -5,9 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 
-from app.core.date_utils import get_date_range
+from app.core.date_utils import get_date_range, get_kolkata_now
 
 from app.db.session import get_db
+from app.services.order_service import cancel_stale_orders
 from app.models.entities import (
     User,
     Customer,
@@ -19,6 +20,7 @@ from app.models.entities import (
     OrderStatusHistory,
     OrderStatus,
     TableStatus,
+    PaymentStatus,
 )
 from app.api.deps import require_roles, get_current_user
 from app.schemas.order import (
@@ -55,6 +57,7 @@ EDITABLE_STATUSES = {
 ALLOWED_TRANSITIONS = {
     OrderStatus.PENDING: {
         OrderStatus.CONFIRMED,
+        OrderStatus.PREPARING,
         OrderStatus.CANCELLED,
     },
     OrderStatus.CONFIRMED: {
@@ -63,6 +66,7 @@ ALLOWED_TRANSITIONS = {
     },
     OrderStatus.PREPARING: {
         OrderStatus.READY,
+        OrderStatus.SERVED,
         OrderStatus.CANCELLED,
     },
     OrderStatus.READY: {
@@ -176,21 +180,30 @@ def ensure_editable_order(order):
 def refresh_table_status(db: Session, table_id: int):
     db.flush()
 
-    active_order = (
+    today_start, today_end = get_date_range("today")
+    query = (
         db.query(Order.id)
         .filter(
             Order.table_id == table_id,
             Order.status.notin_(list(TERMINAL_STATUSES)),
         )
-        .first()
     )
+    if today_start is not None and today_end is not None:
+        query = query.filter(
+            Order.created_at >= today_start,
+            Order.created_at <= today_end,
+        )
+
+    active_order = query.first()
 
     table = db.query(RestaurantTable).filter(RestaurantTable.id == table_id).first()
 
     if table:
-        table.status = (
+        expected_status = (
             TableStatus.OCCUPIED if active_order else TableStatus.AVAILABLE
         )
+        if table.status != expected_status:
+            table.status = expected_status
 
 
 # ==========================================
@@ -301,6 +314,9 @@ def get_all_orders(
     end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
+    # Automatically evaluate and cancel stale orders exceeding inactivity timeout
+    cancel_stale_orders(db)
+
     query = db.query(Order).options(
         joinedload(Order.customer),
         joinedload(Order.table),
@@ -365,16 +381,24 @@ def get_order_tables(
         .all()
     )
 
+    today_start, today_end = get_date_range("today")
+
     updated = False
     for table in tables:
-        active_order = (
+        query = (
             db.query(Order.id)
             .filter(
                 Order.table_id == table.id,
                 Order.status.notin_(list(TERMINAL_STATUSES)),
             )
-            .first()
         )
+        if today_start is not None and today_end is not None:
+            query = query.filter(
+                Order.created_at >= today_start,
+                Order.created_at <= today_end,
+            )
+        active_order = query.first()
+
         expected_status = (
             TableStatus.OCCUPIED if active_order else TableStatus.AVAILABLE
         )
@@ -629,6 +653,11 @@ def update_order_status(
                 status_code=400,
                 detail="Generate the invoice before completing the order.",
             )
+        if order.invoice.payment_status != PaymentStatus.PAID:
+            raise HTTPException(
+                status_code=400,
+                detail="Invoice must be paid before completing the order.",
+            )
 
     previous_status = order.status
 
@@ -642,6 +671,7 @@ def update_order_status(
                 new_status=data.status,
                 changed_by_user_id=current_user.id,
                 note=data.note,
+                changed_at=get_kolkata_now(),
             )
         )
 

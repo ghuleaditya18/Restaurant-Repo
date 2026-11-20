@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Plus, Search, Pencil, Eye, Trash2, X, RefreshCw } from "lucide-react";
+import { Plus, Search, Pencil, Eye, Trash2, X, RefreshCw, Mail, Phone, MapPin } from "lucide-react";
 
 import {
   getAllCustomers,
@@ -59,7 +59,7 @@ export default function Customers() {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState("");
 
-  // Search and filters
+  // Search
   const [search, setSearch] = useState("");
 
   // Notifications
@@ -76,7 +76,6 @@ export default function Customers() {
 
     try {
       const data = await getAllCustomers();
-
       setCustomers(data);
     } catch (error) {
       setPageError(getErrorMessage(error));
@@ -158,13 +157,24 @@ export default function Customers() {
     setSaving(true);
     setFormError("");
 
+    const trimmedEmail = form.email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setFormError("Email address is mandatory for all customer records.");
+      setSaving(false);
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setFormError("Please enter a valid email address (e.g. name@domain.com).");
+      setSaving(false);
+      return;
+    }
+
     const customerData = {
       full_name: form.full_name.trim(),
-
       phone: form.phone.trim(),
-
-      email: form.email.trim().toLowerCase() || null,
-
+      email: trimmedEmail,
       address: form.address.trim() || null,
     };
 
@@ -205,7 +215,6 @@ export default function Customers() {
 
     try {
       const data = await getCustomerById(customer.id);
-
       setViewingCustomer(data);
     } catch (error) {
       setViewError(getErrorMessage(error));
@@ -213,10 +222,6 @@ export default function Customers() {
       setViewLoading(false);
     }
   };
-
-  // ==========================================
-  // CLOSE VIEW MODAL
-  // ==========================================
 
   const closeViewModal = () => {
     setShowViewModal(false);
@@ -259,97 +264,112 @@ export default function Customers() {
     }
   };
 
-  // ==========================================
-  // PAGE UI
-  // ==========================================
-
   return (
-    <div className="min-h-screen bg-[#F7F5F0] p-4 md:p-6">
+    <div className="space-y-6">
       {/* PAGE HEADER */}
-
-      <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold text-[#29231F] md:text-3xl">
-            Customer Management
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
+            Customer Directory
           </h1>
 
-          <p className="mt-1 text-sm text-gray-500">
-            Manage restaurant customer records and information.
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Maintain guest dining records, contacts, and order profiles.
           </p>
         </div>
 
         <button
+          type="button"
           onClick={openAddModal}
-          className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#A94B2B]"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
         >
           <Plus size={18} />
-          Add Customer
+          <span>Add Customer</span>
         </button>
       </div>
 
       {/* SUCCESS MESSAGE */}
-
       {successMessage && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-[#E9D6C8] bg-[#FFF9F5] px-4 py-3 text-sm text-[#A94B2B]">
-          {successMessage}
-
-          <button onClick={() => setSuccessMessage("")}>
+        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage("")}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
       )}
 
       {/* ERROR MESSAGE */}
-
       {pageError && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {pageError}
-
-          <button onClick={() => setPageError("")}>
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <span>{pageError}</span>
+          <button
+            type="button"
+            onClick={() => setPageError("")}
+            className="text-red-700 hover:text-red-900 cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
       )}
 
-      {/* CUSTOMER TABLE */}
+      {/* METRIC OVERVIEW */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Registered Guests</p>
+          <p className="mt-1 text-2xl font-bold text-[#1C1917]">{customers.length}</p>
+        </div>
 
-      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
-        {/* SEARCH AND FILTER */}
+        <div className="rounded-xl border border-stone-200/90 bg-white p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">With Email On File</p>
+          <p className="mt-1 text-2xl font-bold text-stone-800">
+            {customers.filter((c) => Boolean(c.email)).length}
+          </p>
+        </div>
 
-        <div className="flex flex-col gap-4 border-b border-[#EEE9E2] p-4 md:flex-row md:items-center md:justify-between">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">With Address Records</p>
+          <p className="mt-1 text-2xl font-bold text-stone-800">
+            {customers.filter((c) => Boolean(c.address)).length}
+          </p>
+        </div>
+      </div>
+
+      {/* TABLE CONTAINER */}
+      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
+        {/* SEARCH AND REFRESH */}
+        <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-semibold text-[#29231F]">
-              Restaurant Customers
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">
-              {search.trim()
-                ? `Showing ${filteredCustomers.length} of ${customers.length} customers`
-                : `${customers.length} registered customers`}
+            <h2 className="font-bold text-[#1C1917]">Registered Customers</h2>
+            <p className="mt-0.5 text-xs text-stone-500">
+              {filteredCustomers.length} {filteredCustomers.length === 1 ? "record" : "records"} found
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex items-center gap-3">
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
               />
-
               <input
                 type="text"
-                placeholder="Search customers..."
+                placeholder="Search name, phone, email..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-[#E9E3DA] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#C65D35] sm:w-64"
+                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-72"
               />
             </div>
 
             <button
+              type="button"
               onClick={loadCustomers}
               disabled={loading}
               title="Refresh customers"
-              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-gray-600 hover:bg-[#F7F5F0]"
+              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white p-2 text-stone-600 hover:bg-stone-50 transition cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -357,29 +377,24 @@ export default function Customers() {
         </div>
 
         {/* TABLE */}
-
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-gray-500">
+            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
               <tr>
                 <th className="px-4 py-3">Customer</th>
-
                 <th className="px-4 py-3">Phone Number</th>
-
                 <th className="px-4 py-3">Email Address</th>
-
                 <th className="px-4 py-3">Address</th>
-
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#F0ECE6]">
+            <tbody className="divide-y divide-stone-100 text-sm">
               {loading ? (
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-12 text-center text-sm text-gray-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     Loading customer records...
                   </td>
@@ -388,7 +403,7 @@ export default function Customers() {
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-12 text-center text-sm text-gray-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     No customers found.
                   </td>
@@ -397,70 +412,67 @@ export default function Customers() {
                 filteredCustomers.map((customer) => (
                   <tr
                     key={customer.id}
-                    className="transition hover:bg-[#FAF9F6]"
+                    className="transition hover:bg-stone-50/70"
                   >
                     {/* CUSTOMER */}
-
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F5E5DC] font-semibold text-[#C65D35]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] font-bold text-[#854D0E] shadow-2xs">
                           {customer.full_name.charAt(0).toUpperCase()}
                         </div>
 
                         <div className="min-w-0">
-                          <p className="font-medium text-[#29231F]">
+                          <p className="font-semibold text-stone-900">
                             {customer.full_name}
                           </p>
-
-                          <p className="text-xs text-gray-500">
-                            Customer #{customer.id}
+                          <p className="text-xs text-stone-400">
+                            ID: #{customer.id}
                           </p>
                         </div>
                       </div>
                     </td>
 
                     {/* PHONE */}
-
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                    <td className="px-4 py-3 text-sm font-medium text-stone-700">
                       {customer.phone}
                     </td>
 
                     {/* EMAIL */}
-
-                    <td className="max-w-[200px] truncate px-4 py-3 text-sm text-gray-600">
+                    <td className="max-w-[200px] truncate px-4 py-3 text-sm text-stone-600">
                       {customer.email || "—"}
                     </td>
 
                     {/* ADDRESS */}
-
-                    <td className="max-w-[200px] truncate px-4 py-3 text-sm text-gray-600">
+                    <td className="max-w-[220px] truncate px-4 py-3 text-sm text-stone-600">
                       {customer.address || "—"}
                     </td>
 
                     {/* ACTIONS */}
-
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1">
                         <button
+                          type="button"
                           onClick={() => openViewModal(customer)}
                           title="View customer"
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
                         >
                           <Eye size={16} />
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => openEditModal(customer)}
                           title="Edit customer"
-                          className="rounded-lg p-2 text-[#29231F] hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
                         >
                           <Pencil size={16} />
                         </button>
 
                         <button
+                          type="button"
                           onClick={() => handleDelete(customer)}
                           title="Delete customer"
-                          className="rounded-lg p-2 text-[#6B625B] hover:bg-[#EEEAE4] hover:text-[#A94B2B]"
+                          className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -474,25 +486,22 @@ export default function Customers() {
         </div>
       </div>
 
-      {/* ==================================
-          ADD / EDIT CUSTOMER MODAL
-      ================================== */}
-
+      {/* ADD / EDIT CUSTOMER MODAL */}
       {showModal && (
         <ModalShell
-          title={editingCustomer ? "Edit Customer" : "Add New Customer"}
-          subtitle="Enter customer information."
+          title={editingCustomer ? "Edit Customer Record" : "Add New Customer"}
+          subtitle="Enter contact details and customer profile information."
           onClose={() => setShowModal(false)}
         >
           <form onSubmit={handleSubmit} className="space-y-4">
             {formError && <ErrorBox message={formError} />}
 
             <FormField
-              label="Customer Name"
+              label="Full Name"
               name="full_name"
               value={form.full_name}
               onChange={handleChange}
-              placeholder="Enter customer name"
+              placeholder="e.g. Rahul Sharma"
               required
               minLength={2}
               maxLength={100}
@@ -504,7 +513,7 @@ export default function Customers() {
               type="tel"
               value={form.phone}
               onChange={handleChange}
-              placeholder="Enter phone number"
+              placeholder="e.g. 9876543210"
               required
               maxLength={16}
             />
@@ -515,30 +524,30 @@ export default function Customers() {
               type="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="Enter email address (optional)"
+              placeholder="e.g. rahul@example.com"
+              required
               maxLength={150}
             />
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#29231F]">
-                Address
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+                Billing / Delivery Address (Optional)
               </label>
-
               <textarea
                 name="address"
                 value={form.address}
                 onChange={handleChange}
                 rows={3}
-                placeholder="Enter customer address (optional)"
-                className="w-full resize-none rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+                placeholder="Enter postal address or landmark..."
+                className="w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
               />
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[#EEE9E2] pt-4">
+            <div className="flex justify-end gap-3 border-t border-stone-100 pt-4">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-[#E9E3DA] px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50"
+                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -546,7 +555,7 @@ export default function Customers() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:opacity-60"
+                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-60 transition cursor-pointer shadow-xs"
               >
                 {saving
                   ? "Saving..."
@@ -559,60 +568,55 @@ export default function Customers() {
         </ModalShell>
       )}
 
-      {/* ==================================
-          VIEW CUSTOMER MODAL
-      ================================== */}
-
+      {/* VIEW CUSTOMER MODAL */}
       {showViewModal && (
         <ModalShell
-          title="Customer Details"
-          subtitle="Complete customer information."
+          title="Customer Profile"
+          subtitle="Detailed contact and account history."
           onClose={closeViewModal}
         >
           {viewLoading ? (
-            <p className="py-10 text-center text-sm text-gray-500">
+            <p className="py-10 text-center text-sm text-stone-500">
               Loading customer details...
             </p>
           ) : viewError ? (
             <ErrorBox message={viewError} />
           ) : (
             viewingCustomer && (
-              <div>
-                {/* PROFILE */}
-
-                <div className="mb-6 flex items-center gap-4 rounded-lg bg-[#F7F5F0] p-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F5E5DC] text-xl font-semibold text-[#C65D35]">
+              <div className="space-y-5">
+                <div className="flex items-center gap-4 rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] text-xl font-bold text-[#854D0E] shadow-2xs">
                     {viewingCustomer.full_name.charAt(0).toUpperCase()}
                   </div>
 
                   <div>
-                    <h3 className="font-semibold text-[#29231F]">
+                    <h3 className="font-bold text-[#1C1917]">
                       {viewingCustomer.full_name}
                     </h3>
-
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="text-xs text-stone-500">
                       Customer ID: #{viewingCustomer.id}
                     </p>
                   </div>
                 </div>
 
-                {/* INFORMATION */}
-
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                   <DetailItem
                     label="Phone Number"
                     value={viewingCustomer.phone}
+                    icon={<Phone size={14} className="text-stone-400" />}
                   />
 
                   <DetailItem
                     label="Email Address"
-                    value={viewingCustomer.email || "Not provided"}
+                    value={viewingCustomer.email}
+                    icon={<Mail size={14} className="text-stone-400" />}
                   />
 
                   <div className="sm:col-span-2">
                     <DetailItem
                       label="Address"
-                      value={viewingCustomer.address || "Not provided"}
+                      value={viewingCustomer.address}
+                      icon={<MapPin size={14} className="text-stone-400" />}
                     />
                   </div>
                 </div>
@@ -629,29 +633,27 @@ export default function Customers() {
 // REUSABLE COMPONENTS
 // ==========================================
 
-
-
 function ModalShell({ title, subtitle, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-      <div className="my-auto max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-xl">
-        <div className="sticky top-0 flex items-center justify-between border-b border-[#EEE9E2] bg-white px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs">
+      <div className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="sticky top-0 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
           <div>
-            <h2 className="font-semibold text-[#29231F]">{title}</h2>
-
-            <p className="mt-1 text-xs text-gray-500">{subtitle}</p>
+            <h2 className="text-lg font-bold text-[#1C1917]">{title}</h2>
+            <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
             aria-label="Close dialog"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="p-5">{children}</div>
+        <div className="p-6">{children}</div>
       </div>
     </div>
   );
@@ -659,7 +661,7 @@ function ModalShell({ title, subtitle, onClose, children }) {
 
 function ErrorBox({ message }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700">
       {message}
     </div>
   );
@@ -678,8 +680,8 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-[#29231F]">
-        {label}
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
 
       <input
@@ -691,21 +693,22 @@ function FormField({
         required={required}
         minLength={minLength}
         maxLength={maxLength}
-        className="w-full rounded-lg border border-[#E9E3DA] px-3 py-2.5 text-sm outline-none focus:border-[#C65D35]"
+        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
       />
     </div>
   );
 }
 
-function DetailItem({ label, value }) {
+function DetailItem({ label, value, icon }) {
   return (
-    <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
-        {label}
-      </p>
+    <div className="rounded-lg border border-stone-100 bg-stone-50/70 p-3">
+      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
+        {icon}
+        <span>{label}</span>
+      </div>
 
-      <p className="break-words text-sm font-medium text-[#29231F]">
-        {value ?? "—"}
+      <p className="break-words text-sm font-semibold text-[#1C1917]">
+        {value || "—"}
       </p>
     </div>
   );

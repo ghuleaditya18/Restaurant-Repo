@@ -78,15 +78,33 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Immediate local update for user profile changes
+  const updateUser = (updatedData) => {
+    setUser((prev) => (prev ? { ...prev, ...updatedData } : prev));
+  };
+
+  // Fetch freshest profile from backend
+  const refreshUser = async () => {
+    try {
+      const response = await api.get("/api/auth/me");
+      setUser(response.data);
+      return response.data;
+    } catch {
+      // Keep existing user if refresh fails
+      return user;
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout }}
+      value={{ user, loading, login, logout, updateUser, refreshUser }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext);
 }

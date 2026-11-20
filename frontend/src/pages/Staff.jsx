@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
 import {
   Users,
   UserCheck,
@@ -7,7 +6,6 @@ import {
   Plus,
   Search,
   Pencil,
-  Eye,
   Power,
   Trash2,
   X,
@@ -17,6 +15,7 @@ import {
   Briefcase,
   CalendarDays,
   Hash,
+  Eye,
 } from "lucide-react";
 
 import {
@@ -29,23 +28,51 @@ import {
 } from "../services/staffService";
 import { useNotification } from "../context/NotificationContext";
 
+// Initial state for add/edit form
 const EMPTY_FORM = {
   full_name: "",
   email: "",
+  password: "",
   employee_code: "",
   phone: "",
   designation: "",
   joining_date: "",
 };
 
-// ---------- Helpers ----------
+// Form validation rules
+const validateStaffForm = (form) => {
+  const errors = {};
 
-const getErrorMessage = (error) => {
-  // Request never reached the server
-  if (error && !error.response) {
-    return "Unable to connect to the server. Please try again.";
+  if (!form.full_name?.trim()) {
+    errors.full_name = "Full name is required.";
+  } else if (form.full_name.trim().length < 2) {
+    errors.full_name = "Full name must be at least 2 characters.";
   }
 
+  if (!form.email?.trim()) {
+    errors.email = "Email address is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  if (!form.employee_code?.trim()) {
+    errors.employee_code = "Employee code is required.";
+  }
+
+  if (!form.phone?.trim()) {
+    errors.phone = "Phone number is required.";
+  } else if (!/^\d{10}$/.test(form.phone.trim().replace(/\D/g, ""))) {
+    errors.phone = "Phone number must be exactly 10 digits.";
+  }
+
+  if (!form.designation?.trim()) {
+    errors.designation = "Designation is required.";
+  }
+
+  return errors;
+};
+
+const getErrorMessage = (error) => {
   const detail = error?.response?.data?.detail;
 
   if (Array.isArray(detail)) {
@@ -56,67 +83,29 @@ const getErrorMessage = (error) => {
     return detail;
   }
 
-  if (error?.response?.status === 403) {
-    return "You do not have permission to perform this action.";
-  }
-
   return "Something went wrong. Please try again.";
 };
 
-// Accepts "YYYY-MM-DD" or a full ISO datetime string
-const toDateInputValue = (date) => (date ? String(date).slice(0, 10) : "");
-
-const formatDate = (date) => {
-  if (!date) return "—";
-
-  const parsed = new Date(`${toDateInputValue(date)}T00:00:00`);
-
-  if (Number.isNaN(parsed.getTime())) return "—";
-
-  return parsed.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+const formatDate = (isoString) => {
+  if (!isoString) return "—";
+  try {
+    return new Date(isoString).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return isoString;
+  }
 };
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-// Validates the staff form and returns an object of field errors.
-const validateStaffForm = (form) => {
-  const errors = {};
-
-  const fullName = form.full_name.trim();
-  if (!fullName) errors.full_name = "Full name is required.";
-  else if (fullName.length < 2)
-    errors.full_name = "Full name must be at least 2 characters.";
-  else if (fullName.length > 100)
-    errors.full_name = "Full name must be 100 characters or less.";
-
-  const email = form.email.trim();
-  if (!email) errors.email = "Email is required.";
-  else if (!EMAIL_REGEX.test(email))
-    errors.email = "Please enter a valid email address.";
-
-  const code = form.employee_code.trim();
-  if (!code) errors.employee_code = "Employee code is required.";
-  else if (code.length < 2)
-    errors.employee_code = "Employee code must be at least 2 characters.";
-
-  const phone = form.phone.trim();
-  if (!phone) errors.phone = "Phone number is required.";
-  else if (!/^[6-9]\d{9}$/.test(phone))
-    errors.phone = "Enter a valid 10-digit mobile number starting with 6–9.";
-
-  const designation = form.designation.trim();
-  if (!designation) errors.designation = "Designation is required.";
-  else if (designation.length < 2)
-    errors.designation = "Designation must be at least 2 characters.";
-
-  if (form.joining_date && Number.isNaN(new Date(form.joining_date).getTime()))
-    errors.joining_date = "Enter a valid date.";
-
-  return errors;
+const toDateInputValue = (isoString) => {
+  if (!isoString) return "";
+  try {
+    return new Date(isoString).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
 };
 
 export default function Staff() {
@@ -147,8 +136,6 @@ export default function Staff() {
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  // Fetch staff records. "silent" refreshes data without the loading state,
-  // so the table does not flash after create / update.
   const loadStaff = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     setPageError("");
@@ -167,15 +154,21 @@ export default function Staff() {
     loadStaff();
   }, [loadStaff]);
 
-  // Auto-dismiss the success message
   useEffect(() => {
     if (!successMessage) return undefined;
-
     const timer = setTimeout(() => setSuccessMessage(""), 4000);
     return () => clearTimeout(timer);
   }, [successMessage]);
 
-  // Escape key closes modals, and background scroll is locked while open
+  const closeModal = useCallback(() => {
+    if (saving) return;
+    setShowModal(false);
+    setEditingStaff(null);
+    setForm(EMPTY_FORM);
+    setFieldErrors({});
+    setFormError("");
+  }, [saving]);
+
   const modalOpen = showModal || showViewModal;
 
   useEffect(() => {
@@ -183,29 +176,19 @@ export default function Staff() {
 
     const handleKeyDown = (event) => {
       if (event.key !== "Escape") return;
-
       if (showViewModal) closeViewModal();
       else if (!saving) closeModal();
     };
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalOpen, saving, showViewModal, closeModal]);
 
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalOpen, showViewModal, saving]);
-
-  // Staff statistics
   const { activeCount, inactiveCount } = useMemo(() => {
     const active = staff.filter((member) => member.is_active).length;
     return { activeCount: active, inactiveCount: staff.length - active };
   }, [staff]);
 
-  // Search and filter
   const filteredStaff = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
 
@@ -240,8 +223,6 @@ export default function Staff() {
     setStatusFilter("ALL");
   };
 
-  // ---------- Add / Edit modal ----------
-
   const openAddModal = () => {
     setEditingStaff(null);
     setForm(EMPTY_FORM);
@@ -270,18 +251,6 @@ export default function Staff() {
     setShowModal(true);
   };
 
-  function closeModal() {
-    if (saving) return;
-
-    setShowModal(false);
-    setEditingStaff(null);
-    setForm(EMPTY_FORM);
-    setFieldErrors({});
-    setFormError("");
-  }
-
-  // ---------- View modal ----------
-
   const openViewModal = async (member) => {
     const requestId = ++viewRequestId.current;
 
@@ -292,8 +261,6 @@ export default function Staff() {
 
     try {
       const data = await getStaffById(member.id);
-
-      // Ignore the response if the modal was closed or reopened meanwhile
       if (requestId === viewRequestId.current) setViewingStaff(data);
     } catch (error) {
       if (requestId === viewRequestId.current)
@@ -311,16 +278,12 @@ export default function Staff() {
     setViewLoading(false);
   }
 
-  // ---------- Form handling ----------
-
   const handleChange = (event) => {
     const { name, value } = event.target;
     const nextValue =
       name === "phone" ? value.replace(/\D/g, "").slice(0, 10) : value;
 
     setForm((previous) => ({ ...previous, [name]: nextValue }));
-
-    // Clear only the error of the field being edited
     setFieldErrors((previous) =>
       previous[name] ? { ...previous, [name]: "" } : previous,
     );
@@ -332,12 +295,10 @@ export default function Staff() {
     if (saving) return;
 
     setFormError("");
-
-    const errors = validateStaffForm(form, Boolean(editingStaff));
+    const errors = validateStaffForm(form);
     setFieldErrors(errors);
 
     if (Object.values(errors).some(Boolean)) {
-      // Focus the first invalid field
       const firstInvalid = Object.keys(errors).find((key) => errors[key]);
       document.getElementById(`staff-${firstInvalid}`)?.focus();
       return;
@@ -357,17 +318,13 @@ export default function Staff() {
     try {
       if (editingStaff) {
         await updateStaff(editingStaff.id, staffData);
-        setSuccessMessage("Staff details updated successfully.");
+        setSuccessMessage(`${staffData.full_name}'s details updated successfully.`);
       } else {
         await createStaff(staffData);
-        setSuccessMessage("Staff member created successfully.");
+        setSuccessMessage(`Staff member ${staffData.full_name} registered successfully.`);
       }
 
-      setShowModal(false);
-      setForm(EMPTY_FORM);
-      setEditingStaff(null);
-      setFieldErrors({});
-
+      closeModal();
       await loadStaff({ silent: true });
     } catch (error) {
       setFormError(getErrorMessage(error));
@@ -375,8 +332,6 @@ export default function Staff() {
       setSaving(false);
     }
   };
-
-  // ---------- Activate / deactivate ----------
 
   const handleStatusChange = async (member) => {
     if (statusUpdatingId) return;
@@ -426,7 +381,7 @@ export default function Staff() {
 
     const confirmed = await confirm({
       title: "Delete Staff Member",
-      message: `Delete ${member.full_name} from staff management? This cannot be undone.`,
+      message: `Delete ${member.full_name} from staff records? This action cannot be undone.`,
       confirmText: "Delete",
       cancelText: "Cancel",
       variant: "danger",
@@ -454,26 +409,26 @@ export default function Staff() {
   };
 
   return (
-    <div className="w-full bg-[#F7F5F0] p-4 md:p-6">
+    <div className="space-y-6">
       {/* Page Heading */}
-      <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-semibold text-[#29231F] md:text-2xl">
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
             Staff Management
           </h1>
 
-          <p className="mt-1 text-sm text-[#8A817B]">
-            Manage restaurant employees and their account status.
+          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
+            Manage restaurant personnel, role designations, and active credentials.
           </p>
         </div>
 
         <button
           type="button"
           onClick={openAddModal}
-          className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#A94B2B]"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
         >
           <Plus size={17} />
-          Add New Staff
+          <span>Add New Staff</span>
         </button>
       </div>
 
@@ -481,7 +436,7 @@ export default function Staff() {
       {successMessage && (
         <div
           role="status"
-          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-[#E9E3DA] border-l-4 border-l-[#C65D35] bg-white px-4 py-2.5 text-sm text-[#29231F]"
+          className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
         >
           <span>{successMessage}</span>
 
@@ -489,7 +444,7 @@ export default function Staff() {
             type="button"
             onClick={() => setSuccessMessage("")}
             aria-label="Dismiss message"
-            className="text-[#8A817B] hover:text-[#29231F]"
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -500,7 +455,7 @@ export default function Staff() {
       {pageError && (
         <div
           role="alert"
-          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
+          className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
         >
           <span>{pageError}</span>
 
@@ -508,92 +463,67 @@ export default function Staff() {
             type="button"
             onClick={() => setPageError("")}
             aria-label="Dismiss error"
+            className="text-red-700 hover:text-red-900 cursor-pointer"
           >
             <X size={16} />
           </button>
         </div>
       )}
 
-      {/* Statistics Cards (compact, also act as filters) */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           title="Total Staff"
           value={staff.length}
-          icon={<Users size={16} />}
+          icon={<Users size={18} />}
           active={statusFilter === "ALL"}
           onClick={() => setStatusFilter("ALL")}
         />
 
         <StatCard
-          title="Active Staff"
+          title="Active Personnel"
           value={activeCount}
-          icon={<UserCheck size={16} />}
+          icon={<UserCheck size={18} />}
+          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={statusFilter === "ACTIVE"}
           onClick={() => setStatusFilter("ACTIVE")}
         />
 
         <StatCard
-          title="Inactive Staff"
+          title="Inactive Accounts"
           value={inactiveCount}
-          icon={<UserX size={16} />}
+          icon={<UserX size={18} />}
+          badgeColor="bg-stone-100 text-stone-600 border-stone-200"
           active={statusFilter === "INACTIVE"}
           onClick={() => setStatusFilter("INACTIVE")}
         />
       </div>
 
-      {/* Staff Table Section */}
-      <div className="overflow-hidden rounded-xl border border-[#E9E3DA] bg-white">
-        {/* Search and Filter */}
-        <div className="flex flex-col gap-3 border-b border-[#EEE9E2] px-4 py-4 md:flex-row md:items-center md:justify-between">
+      {/* Staff Table Container */}
+      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
+        <div className="flex flex-col gap-3 border-b border-stone-200/80 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-[#29231F]">
-              Restaurant Staff
-            </h2>
-
-            <p className="mt-0.5 text-xs text-[#8A817B]">
-              {filteredStaff.length} staff{" "}
-              {filteredStaff.length === 1 ? "member" : "members"} found
+            <h2 className="font-bold text-[#1C1917]">Staff Directory</h2>
+            <p className="mt-0.5 text-xs text-stone-500">
+              {filteredStaff.length} {filteredStaff.length === 1 ? "employee" : "employees"} listed
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex items-center gap-2.5">
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A817B]"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
               />
-
               <input
                 type="text"
-                placeholder="Search staff..."
-                aria-label="Search staff"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-[#E9E3DA] bg-white py-2 pl-9 pr-8 text-sm text-[#29231F] outline-none focus:border-[#C65D35] sm:w-60"
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, code, designation..."
+                aria-label="Search staff"
+                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-64"
               />
-
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A817B] hover:text-[#29231F]"
-                >
-                  <X size={15} />
-                </button>
-              )}
             </div>
-
-            <select
-              value={statusFilter}
-              aria-label="Filter by status"
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-[#E9E3DA] bg-white px-3 py-2 text-sm text-[#29231F] outline-none focus:border-[#C65D35]"
-            >
-              <option value="ALL">All Staff</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
 
             <button
               type="button"
@@ -601,7 +531,7 @@ export default function Staff() {
               disabled={loading}
               title="Refresh staff list"
               aria-label="Refresh staff list"
-              className="flex items-center justify-center rounded-lg border border-[#E9E3DA] px-3 py-2 text-[#29231F] transition hover:bg-[#F7F5F0] disabled:opacity-60"
+              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white p-2 text-stone-600 transition hover:bg-stone-50 disabled:opacity-60 cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -611,29 +541,23 @@ export default function Staff() {
         {/* Staff Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-[#8A817B]">
+            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
               <tr>
-                <th className="px-4 py-3 font-medium">Employee</th>
-                <th className="hidden whitespace-nowrap px-4 py-3 font-medium md:table-cell">
-                  Code
-                </th>
-                <th className="hidden whitespace-nowrap px-4 py-3 font-medium md:table-cell">
-                  Designation
-                </th>
-                <th className="hidden whitespace-nowrap px-4 py-3 font-medium lg:table-cell">
-                  Joining Date
-                </th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-center font-medium">Actions</th>
+                <th className="px-4 py-3">Employee</th>
+                <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Code</th>
+                <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Designation</th>
+                <th className="hidden whitespace-nowrap px-4 py-3 lg:table-cell">Joining Date</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#F0ECE6]">
+            <tbody className="divide-y divide-stone-100 text-sm">
               {loading ? (
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-10 text-center text-sm text-[#8A817B]"
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     Loading staff records...
                   </td>
@@ -642,15 +566,14 @@ export default function Staff() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-10 text-center text-sm text-[#8A817B]"
+                    className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     <p>No staff members found.</p>
-
                     {hasActiveFilters && (
                       <button
                         type="button"
                         onClick={clearFilters}
-                        className="mt-2 font-medium text-[#C65D35] hover:underline"
+                        className="mt-2 font-semibold text-amber-800 hover:underline cursor-pointer"
                       >
                         Clear search and filters
                       </button>
@@ -659,58 +582,56 @@ export default function Staff() {
                 </tr>
               ) : (
                 filteredStaff.map((member) => (
-                  <tr key={member.id} className="transition hover:bg-[#FAF9F6]">
+                  <tr key={member.id} className="transition hover:bg-stone-50/70">
                     {/* Employee Details */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F5E5DC] text-sm font-semibold text-[#C65D35]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] text-sm font-bold text-[#854D0E] shadow-2xs">
                           {(member.full_name || "?").charAt(0).toUpperCase()}
                         </div>
 
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-[#29231F]">
+                          <p className="truncate font-semibold text-stone-900">
                             {member.full_name}
                           </p>
-
-                          <p className="truncate text-xs text-[#8A817B]">
+                          <p className="truncate text-xs text-stone-500">
                             {member.email}
                           </p>
-
-                          {/* Shown only when the Code / Designation columns are hidden */}
-                          <p className="truncate text-xs text-[#8A817B] md:hidden">
+                          <p className="truncate text-xs text-stone-400 md:hidden">
                             {[member.employee_code, member.designation]
                               .filter(Boolean)
-                              .join(" · ")}
+                              .join(" • ")}
                           </p>
                         </div>
                       </div>
                     </td>
 
                     {/* Employee Code */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-[#29231F] md:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 font-mono text-xs text-stone-700 md:table-cell">
                       {member.employee_code || "—"}
                     </td>
 
                     {/* Designation */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-[#29231F] md:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm font-medium text-stone-700 md:table-cell">
                       {member.designation || "—"}
                     </td>
 
                     {/* Joining Date */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-[#29231F] lg:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-stone-500 lg:table-cell">
                       {formatDate(member.joining_date)}
                     </td>
 
                     {/* Status */}
                     <td className="px-4 py-3">
                       <span
-                        className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           member.is_active
-                            ? "bg-[#F5E5DC] text-[#A94B2B]"
-                            : "bg-[#EEEAE4] text-[#6B625B]"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : "bg-stone-100 text-stone-500 border border-stone-200"
                         }`}
                       >
-                        {member.is_active ? "Active" : "Inactive"}
+                        <span className={`h-1.5 w-1.5 rounded-full ${member.is_active ? "bg-emerald-600" : "bg-stone-400"}`} />
+                        <span>{member.is_active ? "Active" : "Inactive"}</span>
                       </span>
                     </td>
 
@@ -722,7 +643,7 @@ export default function Staff() {
                           onClick={() => openViewModal(member)}
                           title="View staff details"
                           aria-label={`View ${member.full_name}`}
-                          className="rounded-lg p-2 text-[#29231F] transition hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
                         >
                           <Eye size={16} />
                         </button>
@@ -732,7 +653,7 @@ export default function Staff() {
                           onClick={() => openEditModal(member)}
                           title="Edit staff"
                           aria-label={`Edit ${member.full_name}`}
-                          className="rounded-lg p-2 text-[#29231F] transition hover:bg-[#F5E5DC] hover:text-[#C65D35]"
+                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
                         >
                           <Pencil size={16} />
                         </button>
@@ -741,42 +662,24 @@ export default function Staff() {
                           type="button"
                           onClick={() => handleStatusChange(member)}
                           disabled={statusUpdatingId === member.id}
-                          title={
+                          title={member.is_active ? "Deactivate staff" : "Activate staff"}
+                          className={`rounded-lg p-2 transition cursor-pointer ${
                             member.is_active
-                              ? "Deactivate staff"
-                              : "Activate staff"
-                          }
-                          aria-label={`${
-                            member.is_active ? "Deactivate" : "Activate"
-                          } ${member.full_name}`}
-                          className={`rounded-lg p-2 transition hover:bg-[#F5E5DC] hover:text-[#C65D35] disabled:cursor-not-allowed disabled:opacity-50 ${
-                            member.is_active
-                              ? "text-[#29231F]"
-                              : "text-[#8A817B]"
+                              ? "text-amber-700 hover:bg-amber-50"
+                              : "text-emerald-700 hover:bg-emerald-50"
                           }`}
                         >
-                          <Power
-                            size={16}
-                            className={
-                              statusUpdatingId === member.id
-                                ? "animate-pulse"
-                                : ""
-                            }
-                          />
+                          <Power size={16} />
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleDeleteStaff(member)}
-                          disabled={deletingId === member.id || statusUpdatingId === member.id}
+                          disabled={deletingId === member.id}
                           title="Delete staff"
-                          aria-label={`Delete ${member.full_name}`}
-                          className="rounded-lg p-2 text-red-600 transition hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
                         >
-                          <Trash2
-                            size={16}
-                            className={deletingId === member.id ? "animate-pulse" : ""}
-                          />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </td>
@@ -791,31 +694,31 @@ export default function Staff() {
       {/* Add / Edit Staff Modal */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#29231F]/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeModal();
+            if (event.target === event.currentTarget && !saving) closeModal();
           }}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="staff-modal-title"
-            className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white shadow-xl"
+            className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150"
           >
             {/* Modal Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#EEE9E2] bg-white px-6 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
               <div>
                 <h2
                   id="staff-modal-title"
-                  className="text-lg font-semibold text-[#29231F]"
+                  className="text-lg font-bold text-[#1C1917]"
                 >
                   {editingStaff ? "Edit Staff Details" : "Add New Staff"}
                 </h2>
 
-                <p className="mt-0.5 text-xs text-[#8A817B]">
+                <p className="mt-0.5 text-xs text-stone-500">
                   {editingStaff
                     ? "Update employee information."
-                    : "Create a new restaurant staff account."}
+                    : "Register a new restaurant staff account."}
                 </p>
               </div>
 
@@ -824,18 +727,18 @@ export default function Staff() {
                 onClick={closeModal}
                 disabled={saving}
                 aria-label="Close"
-                className="rounded-lg p-2 text-[#8A817B] hover:bg-[#F7F5F0] disabled:opacity-50"
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
               >
-                <X size={19} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} noValidate className="space-y-5 p-6">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4 p-6">
               {formError && (
                 <div
                   role="alert"
-                  className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700"
                 >
                   {formError}
                 </div>
@@ -848,7 +751,7 @@ export default function Staff() {
                   name="full_name"
                   value={form.full_name}
                   onChange={handleChange}
-                  placeholder="Enter full name"
+                  placeholder="e.g. Amit Kumar"
                   error={fieldErrors.full_name}
                   maxLength={100}
                   autoComplete="name"
@@ -861,7 +764,7 @@ export default function Staff() {
                   type="email"
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="employee@example.com"
+                  placeholder="employee@dineflow.com"
                   error={fieldErrors.email}
                   autoComplete="off"
                 />
@@ -872,7 +775,7 @@ export default function Staff() {
                   name="employee_code"
                   value={form.employee_code}
                   onChange={handleChange}
-                  placeholder="Enter employee code"
+                  placeholder="e.g. EMP-101"
                   error={fieldErrors.employee_code}
                   autoComplete="off"
                 />
@@ -884,7 +787,7 @@ export default function Staff() {
                   type="tel"
                   value={form.phone}
                   onChange={handleChange}
-                  placeholder="Enter phone number"
+                  placeholder="e.g. 9876543210"
                   error={fieldErrors.phone}
                   autoComplete="tel"
                   maxLength={10}
@@ -897,7 +800,7 @@ export default function Staff() {
                   name="designation"
                   value={form.designation}
                   onChange={handleChange}
-                  placeholder="e.g. Waiter, Chef"
+                  placeholder="e.g. Server, Chef, Bartender"
                   error={fieldErrors.designation}
                   autoComplete="off"
                 />
@@ -914,12 +817,12 @@ export default function Staff() {
                 />
               </div>
 
-              <div className="flex flex-col-reverse justify-end gap-3 border-t border-[#EEE9E2] pt-4 sm:flex-row">
+              <div className="flex flex-col-reverse justify-end gap-3 border-t border-stone-100 pt-4 sm:flex-row">
                 <button
                   type="button"
                   onClick={closeModal}
                   disabled={saving}
-                  className="rounded-lg border border-[#E9E3DA] px-5 py-2.5 text-sm font-medium text-[#29231F] hover:bg-[#F7F5F0] disabled:opacity-60"
+                  className="rounded-lg border border-stone-300 bg-white px-5 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -927,7 +830,7 @@ export default function Staff() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#A94B2B] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-60 transition cursor-pointer shadow-xs"
                 >
                   {saving
                     ? "Saving..."
@@ -944,7 +847,7 @@ export default function Staff() {
       {/* View Staff Modal */}
       {showViewModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#29231F]/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeViewModal();
           }}
@@ -953,107 +856,93 @@ export default function Staff() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="view-modal-title"
-            className="my-auto w-full max-w-xl rounded-xl bg-white shadow-xl"
+            className="my-auto w-full max-w-lg rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150"
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-[#EEE9E2] px-6 py-4">
+            <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
               <div>
                 <h2
                   id="view-modal-title"
-                  className="text-lg font-semibold text-[#29231F]"
+                  className="text-lg font-bold text-[#1C1917]"
                 >
-                  Staff Details
+                  Staff Member Details
                 </h2>
-                <p className="mt-0.5 text-xs text-[#8A817B]">
-                  Complete employee information
+                <p className="mt-0.5 text-xs text-stone-500">
+                  Profile information and employment credentials
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={closeViewModal}
-                className="rounded-lg p-2 text-[#8A817B] hover:bg-[#F7F5F0]"
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
                 aria-label="Close staff details"
               >
-                <X size={19} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Content */}
             <div className="p-6">
               {viewLoading ? (
-                <p className="py-10 text-center text-sm text-[#8A817B]">
+                <p className="py-10 text-center text-sm text-stone-500">
                   Loading staff details...
                 </p>
               ) : viewError ? (
                 <p
                   role="alert"
-                  className="rounded-lg bg-red-50 p-4 text-sm text-red-600"
+                  className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700"
                 >
                   {viewError}
                 </p>
               ) : viewingStaff ? (
-                <div>
-                  {/* Employee Profile */}
-                  <div className="mb-5 flex items-center gap-4 rounded-lg bg-[#F7F5F0] p-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#F5E5DC] text-lg font-semibold text-[#C65D35]">
+                <div className="space-y-5">
+                  {/* Employee Profile Header */}
+                  <div className="flex items-center gap-4 rounded-xl border border-stone-200 bg-stone-50/70 p-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] text-lg font-bold text-[#854D0E] shadow-2xs">
                       {viewingStaff.full_name?.charAt(0)?.toUpperCase() || "—"}
                     </div>
 
                     <div>
-                      <h3 className="font-semibold text-[#29231F]">
+                      <h3 className="font-bold text-[#1C1917]">
                         {viewingStaff.full_name}
                       </h3>
-                      <p className="mt-0.5 text-sm text-[#8A817B]">
-                        {viewingStaff.designation || "—"}
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        {viewingStaff.designation || "Staff"}
                       </p>
 
                       <span
-                        className={`mt-2 inline-block rounded-full px-2.5 py-1 text-xs font-medium ${
+                        className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                           viewingStaff.is_active
-                            ? "bg-[#F5E5DC] text-[#A94B2B]"
-                            : "bg-[#EEEAE4] text-[#6B625B]"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                            : "bg-stone-100 text-stone-600 border border-stone-200"
                         }`}
                       >
-                        {viewingStaff.is_active ? "Active" : "Inactive"}
+                        <span className={`h-1.5 w-1.5 rounded-full ${viewingStaff.is_active ? "bg-emerald-600" : "bg-stone-400"}`} />
+                        <span>{viewingStaff.is_active ? "Active" : "Inactive"}</span>
                       </span>
                     </div>
                   </div>
 
                   {/* Employee Information */}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <DetailItem label="Employee ID" value={viewingStaff.id} />
-                    <DetailItem
-                      label="Employee Code"
-                      value={viewingStaff.employee_code}
-                    />
-                    <DetailItem
-                      label="Email Address"
-                      value={viewingStaff.email}
-                    />
-                    <DetailItem
-                      label="Phone Number"
-                      value={viewingStaff.phone}
-                    />
-                    <DetailItem
-                      label="Designation"
-                      value={viewingStaff.designation}
-                    />
-                    <DetailItem
-                      label="Joining Date"
-                      value={formatDate(viewingStaff.joining_date)}
-                    />
+                    <DetailItem label="Employee Code" value={viewingStaff.employee_code} />
+                    <DetailItem label="Email Address" value={viewingStaff.email} />
+                    <DetailItem label="Phone Number" value={viewingStaff.phone} />
+                    <DetailItem label="Designation" value={viewingStaff.designation} />
+                    <DetailItem label="Joining Date" value={formatDate(viewingStaff.joining_date)} />
                   </div>
                 </div>
               ) : null}
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end border-t border-[#EEE9E2] px-6 py-3">
+            <div className="flex justify-end border-t border-stone-100 px-6 py-3">
               <button
                 type="button"
                 onClick={closeViewModal}
-                className="rounded-lg bg-[#C65D35] px-5 py-2 text-sm font-medium text-white hover:bg-[#A94B2B]"
+                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
               >
                 Close
               </button>
@@ -1066,27 +955,27 @@ export default function Staff() {
 }
 
 // Compact statistics card, also used as a status filter
-function StatCard({ title, value, icon, active, onClick }) {
+function StatCard({ title, value, icon, active, onClick, badgeColor }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       title={`Show ${title.toLowerCase()}`}
-      className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+      className={`flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer shadow-xs ${
         active
-          ? "border-[#C65D35] bg-[#FFF9F5]"
-          : "border-[#E9E3DA] bg-white hover:border-[#C65D35]/50 hover:bg-[#FAF9F6]"
+          ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
+          : "border-stone-200/90 bg-white hover:border-stone-300"
       }`}
     >
       <div>
-        <p className="text-xs font-medium text-[#8A817B]">{title}</p>
-        <p className="mt-0.5 text-xl font-semibold leading-tight text-[#29231F]">
-          {value}
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">{title}</p>
+        <p className="mt-1 text-2xl font-bold text-[#1C1917]">{value}</p>
       </div>
 
-      <div className="rounded-lg bg-[#F5E5DC] p-2 text-[#C65D35]">{icon}</div>
+      <div className={`rounded-xl p-2.5 ${badgeColor || "bg-[#FEF9C3] text-amber-900 border border-yellow-200"}`}>
+        {icon}
+      </div>
     </button>
   );
 }
@@ -1113,18 +1002,20 @@ function FormField({
     <div>
       <label
         htmlFor={inputId}
-        className="mb-1.5 block text-sm font-medium text-[#29231F]"
+        className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700"
       >
         {label}
-        {optional && (
-          <span className="ml-1 text-xs font-normal text-[#8A817B]">
+        {optional ? (
+          <span className="ml-1 text-[11px] font-normal text-stone-400">
             (optional)
           </span>
+        ) : (
+          <span className="text-red-500 ml-0.5">*</span>
         )}
       </label>
 
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8A817B]">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400">
           {icon}
         </span>
 
@@ -1140,16 +1031,16 @@ function FormField({
           inputMode={inputMode}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
-          className={`w-full rounded-lg border bg-white py-2.5 pl-10 pr-3 text-sm text-[#29231F] outline-none transition focus:ring-2 ${
+          className={`w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:ring-2 ${
             error
               ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-              : "border-[#E9E3DA] focus:border-[#C65D35] focus:ring-[#C65D35]/10"
+              : "border-stone-300 focus:border-[#F5B716] focus:ring-[#F5B716]/30"
           }`}
         />
       </div>
 
       {error && (
-        <p id={errorId} role="alert" className="mt-1.5 text-xs text-red-600">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-red-600">
           {error}
         </p>
       )}
@@ -1160,11 +1051,11 @@ function FormField({
 // Reusable staff detail item
 function DetailItem({ label, value }) {
   return (
-    <div>
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-[#8A817B]">
+    <div className="rounded-lg border border-stone-100 bg-stone-50/70 p-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">
         {label}
       </p>
-      <p className="break-words text-sm font-medium text-[#29231F]">
+      <p className="break-words text-sm font-semibold text-[#1C1917]">
         {value || "—"}
       </p>
     </div>

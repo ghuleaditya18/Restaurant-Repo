@@ -1,10 +1,10 @@
-from datetime import date, datetime, timezone
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError
 
-from app.core.date_utils import get_date_range
+from app.core.date_utils import get_date_range, get_kolkata_now
 from app.db.session import get_db
 from app.api.deps import require_roles
 
@@ -173,7 +173,7 @@ def update_payment_status(
 
     payment.status = PaymentStatus.PAID
 
-    payment.paid_at = datetime.now(timezone.utc)
+    payment.paid_at = get_kolkata_now()
 
     payment.invoice.payment_status = PaymentStatus.PAID
 

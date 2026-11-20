@@ -1,15 +1,6 @@
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-
-const statusStyles = {
-  Pending: "bg-amber-50 text-amber-700 border border-amber-200/60",
-  Confirmed: "bg-orange-50 text-[#C65D35] border border-orange-200/60",
-  Preparing: "bg-blue-50 text-blue-700 border border-blue-200/60",
-  Ready: "bg-teal-50 text-teal-700 border border-teal-200/60",
-  Served: "bg-emerald-50 text-emerald-700 border border-emerald-200/60",
-  Completed: "bg-green-50 text-green-700 border border-green-200/60",
-  Cancelled: "bg-red-50 text-red-700 border border-red-200/60",
-};
+import { getOrderStatusBadgeStyle, getWorkflowStageLabel } from "../utils/orderWorkflow";
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat("en-IN", {
@@ -21,43 +12,43 @@ const formatCurrency = (amount) =>
 
 function RecentOrders({ orders = [], loading = false }) {
   return (
-    <div className="rounded-xl border border-[#E9E3DA] bg-white p-5">
+    <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-base font-bold text-[#29231F]">Recent Orders</h3>
-          <p className="mt-0.5 text-xs text-[#8A817B]">
-            Latest restaurant orders
+          <h3 className="text-base font-bold text-[#1C1917] dark:text-stone-100">Recent Orders</h3>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+            Latest live restaurant orders and status updates
           </p>
         </div>
 
         <Link
           to="/orders"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-[#C65D35] transition hover:text-[#A94B2B]"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition"
         >
-          <span>View All</span>
+          <span>View All Orders</span>
           <ArrowRight size={14} />
         </Link>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-[#EEE9E2]">
-        <table className="w-full min-w-[540px] text-left">
-          <thead className="bg-[#FAF9F6] text-[11px] font-semibold uppercase tracking-wider text-[#8A817B]">
+      <div className="overflow-x-auto rounded-lg border border-stone-200/80 dark:border-stone-800">
+        <table className="w-full min-w-[560px] text-left">
+          <thead className="bg-stone-50/80 dark:bg-stone-900/70 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
             <tr>
               <th className="px-3.5 py-2.5">Order ID</th>
               <th className="px-3.5 py-2.5">Customer</th>
               <th className="px-3.5 py-2.5">Table</th>
               <th className="px-3.5 py-2.5">Items</th>
               <th className="px-3.5 py-2.5">Amount</th>
-              <th className="px-3.5 py-2.5">Status</th>
+              <th className="px-3.5 py-2.5">Workflow Status</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-[#F5F2ED]">
+          <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
             {loading ? (
               <tr>
                 <td
                   colSpan="6"
-                  className="py-10 text-center text-xs text-[#8A817B]"
+                  className="py-10 text-center text-xs text-stone-500 dark:text-stone-400"
                 >
                   Loading recent orders...
                 </td>
@@ -66,52 +57,57 @@ function RecentOrders({ orders = [], loading = false }) {
               <tr>
                 <td
                   colSpan="6"
-                  className="py-10 text-center text-xs text-[#8A817B]"
+                  className="py-10 text-center text-xs text-stone-500 dark:text-stone-400"
                 >
                   No recent orders found.
                 </td>
               </tr>
             ) : (
-              orders.map((order) => (
-                <tr
-                  key={order.id || order.order_number}
-                  className="transition-colors hover:bg-[#FAF9F6]/60"
-                >
-                  <td className="whitespace-nowrap px-3.5 py-2.5 text-xs font-semibold text-[#29231F]">
-                    {order.order_number || order.id}
-                  </td>
+              orders.map((order) => {
+                const badgeInfo = getOrderStatusBadgeStyle(order.status);
+                const workflowLabel = getWorkflowStageLabel(order.status);
 
-                  <td className="whitespace-nowrap px-3.5 py-2.5 text-xs text-[#29231F]">
-                    {order.customer_name || "—"}
-                  </td>
+                return (
+                  <tr
+                    key={order.id || order.order_number}
+                    className="transition-colors hover:bg-stone-50/70 dark:hover:bg-stone-800/40"
+                  >
+                    <td className="whitespace-nowrap px-3.5 py-2.5 font-semibold text-[#1C1917] dark:text-stone-100">
+                      {order.order_number || order.id}
+                    </td>
 
-                  <td className="whitespace-nowrap px-3.5 py-2.5 text-xs text-[#78716C]">
-                    {order.table_number
-                      ? String(order.table_number).startsWith("Table")
-                        ? order.table_number
-                        : `Table ${order.table_number}`
-                      : "—"}
-                  </td>
+                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-800 dark:text-stone-200">
+                      {order.customer_name || "—"}
+                    </td>
 
-                  <td className="whitespace-nowrap px-3.5 py-2.5 text-xs text-[#78716C]">
-                    {order.items_count ?? "—"}
-                  </td>
+                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-600 dark:text-stone-400">
+                      {order.table_number
+                        ? String(order.table_number).startsWith("Table")
+                          ? order.table_number
+                          : `Table ${order.table_number}`
+                        : "—"}
+                    </td>
 
-                  <td className="whitespace-nowrap px-3.5 py-2.5 text-xs font-semibold text-[#29231F]">
-                    {formatCurrency(order.subtotal)}
-                  </td>
+                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-600 dark:text-stone-400">
+                      {order.items_count ?? "—"}
+                    </td>
 
-                  <td className="whitespace-nowrap px-3.5 py-2.5">
-                    <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
-                        statusStyles[order.status] || "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
+                    <td className="whitespace-nowrap px-3.5 py-2.5 font-semibold text-[#1C1917] dark:text-stone-100">
+                      {formatCurrency(order.subtotal)}
+                    </td>
+
+                    <td className="whitespace-nowrap px-3.5 py-2.5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] ${badgeInfo.badge}`}
+                        title={`Backend status: ${order.status}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${badgeInfo.dot}`} />
+                        <span>{workflowLabel}</span>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

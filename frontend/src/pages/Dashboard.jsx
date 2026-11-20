@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   ShoppingBag,
+  IndianRupee,
+  Clock,
+  AlertCircle,
+  AlertTriangle,
   Users,
   UserCheck,
   UtensilsCrossed,
@@ -8,43 +13,30 @@ import {
   Plus,
   RefreshCw,
   ArrowRight,
-  IndianRupee,
-  Clock,
-  AlertCircle,
+  RotateCcw,
+  ShieldAlert,
+  ServerCrash,
+  WifiOff,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import StatCard from "../components/StatCard";
 import RecentOrders from "../components/RecentOrders";
 import DateFilter from "../components/DateFilter";
 import { getDashboardSummary } from "../services/dashboardService";
 
-const INITIAL_STATISTICS = {
-  total_orders: 0,
-  total_customers: 0,
-  total_staff: 0,
-  total_menu_items: 0,
-  pending_orders: 0,
-  preparing_orders: 0,
-  completed_orders: 0,
-  total_tables: 0,
-  available_tables: 0,
-  occupied_tables: 0,
-  today_orders: 0,
-  active_orders: 0,
-  pending_payments: 0,
-  total_revenue: "0.00",
-  date_filter_label: "Today",
-};
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount || 0));
 
 function Dashboard() {
-  const [data, setData] = useState({
-    statistics: INITIAL_STATISTICS,
-    recent_orders: [],
-    tables: [],
-  });
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [errorInfo, setErrorInfo] = useState(null);
+
   const [dateFilter, setDateFilter] = useState({
     preset: "today",
     startDate: "",
@@ -53,32 +45,42 @@ function Dashboard() {
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
-    setError("");
+    setErrorInfo(null);
 
     try {
-      const params = {
+      const summary = await getDashboardSummary({
         preset: dateFilter.preset,
-      };
-      if (dateFilter.preset === "custom") {
-        if (dateFilter.startDate) params.start_date = dateFilter.startDate;
-        if (dateFilter.endDate) params.end_date = dateFilter.endDate;
+        start_date: dateFilter.startDate || undefined,
+        end_date: dateFilter.endDate || undefined,
+      });
+      setData(summary);
+      setErrorInfo(null);
+    } catch (err) {
+      console.error("Dashboard metrics request failed:", err);
+      let message = "Failed to load dashboard metrics. Please refresh.";
+      let category = "api";
+
+      const status = err?.response?.status;
+      if (status === 401) {
+        message = "Your authentication session has expired. Please sign in again.";
+        category = "auth";
+      } else if (status === 403) {
+        message = "Access restricted: Receptionist or Manager privileges required.";
+        category = "auth";
+      } else if (status >= 500) {
+        message = "Database or server error encountered while computing dashboard statistics.";
+        category = "database";
+      } else if (err?.code === "ERR_NETWORK" || err?.message?.includes("Network Error")) {
+        message = "Unable to connect to the backend server. Please verify the API service is running.";
+        category = "network";
+      } else if (err?.response?.data?.detail) {
+        message =
+          typeof err.response.data.detail === "string"
+            ? err.response.data.detail
+            : "API validation error loading metrics.";
       }
 
-      const result = await getDashboardSummary(params);
-      setData({
-        statistics: result?.statistics || INITIAL_STATISTICS,
-        recent_orders: Array.isArray(result?.recent_orders)
-          ? result.recent_orders
-          : [],
-        tables: Array.isArray(result?.tables) ? result.tables : [],
-      });
-    } catch (err) {
-      const detail = err?.response?.data?.detail;
-      const message =
-        typeof detail === "string"
-          ? detail
-          : err?.message || "Failed to load dashboard data. Please try again.";
-      setError(message);
+      setErrorInfo({ message, category });
     } finally {
       setLoading(false);
     }
@@ -88,20 +90,27 @@ function Dashboard() {
     loadDashboard();
   }, [loadDashboard]);
 
-  const stats = data.statistics;
-  const periodLabel = stats.date_filter_label || "Selected Period";
+  const stats = data?.statistics;
+
+  const formattedRevenue = useMemo(() => {
+    if (!stats) return "₹0.00";
+    return formatCurrency(stats.total_revenue);
+  }, [stats]);
+
+  const periodLabel = stats?.date_filter_label || "Today";
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Welcome & Filter Section */}
-      <section className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+      <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <div>
-          <h1 className="text-2xl font-bold leading-tight text-[#29231F] md:text-[26px]">
+          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] dark:text-stone-100 sm:text-3xl">
             Operational Overview
           </h1>
 
-          <p className="mt-1 text-xs text-[#8A817B] sm:text-sm">
-            Real-time daily operations and metrics for <span className="font-semibold text-stone-700">{periodLabel}</span>.
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 sm:text-sm">
+            Live operations, metrics, and dining activity for{" "}
+            <span className="font-semibold text-stone-800 dark:text-stone-200">{periodLabel}</span>.
           </p>
         </div>
 
@@ -115,16 +124,17 @@ function Dashboard() {
 
           <Link
             to="/orders"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#C65D35] px-3.5 text-xs font-semibold text-white shadow-xs transition hover:bg-[#A94B2B]"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 text-xs font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
           >
             <Plus size={16} />
             <span>Create Order</span>
           </Link>
 
           <button
+            type="button"
             onClick={loadDashboard}
             disabled={loading}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#E9E3DA] bg-white text-[#29231F] shadow-xs transition hover:bg-[#FAF9F6] disabled:opacity-60"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 shadow-xs transition hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-60 cursor-pointer"
             title="Refresh Dashboard Data"
             aria-label="Refresh Dashboard Data"
           >
@@ -133,202 +143,282 @@ function Dashboard() {
         </div>
       </section>
 
-      {/* Error alert */}
-      {error && (
-        <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3.5 text-xs text-red-700">
-          {error}
+      {/* ERROR BANNER WHEN EXISTING DATA IS PRESENT */}
+      {errorInfo && data && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-4 text-xs font-medium text-red-700 dark:text-red-300">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} className="shrink-0 text-red-600 dark:text-red-400" />
+            <span>{errorInfo.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={loadDashboard}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-red-700 transition cursor-pointer"
+          >
+            <RotateCcw size={13} />
+            <span>Retry</span>
+          </button>
         </div>
       )}
 
-      {/* PERIOD-SPECIFIC METRICS */}
-      <div className="mb-2">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-          Period Statistics ({periodLabel})
-        </h2>
-      </div>
-
-      <section className="mb-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title={`Orders (${periodLabel})`}
-          value={loading ? "..." : String(stats.total_orders).padStart(2, "0")}
-          description={
-            loading
-              ? "Fetching orders..."
-              : `${stats.pending_orders} Pending • ${stats.preparing_orders} In Kitchen • ${stats.completed_orders} Completed`
-          }
-          icon={ShoppingBag}
-          color="bg-[#F8EAE1] text-[#C65D35]"
-        />
-
-        <StatCard
-          title={`Revenue (${periodLabel})`}
-          value={loading ? "..." : `₹${Number(stats.total_revenue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
-          description="Collected from completed payments"
-          icon={IndianRupee}
-          color="bg-[#EEF3EA] text-[#4F6D49]"
-        />
-
-        <StatCard
-          title="Active Operational Orders"
-          value={loading ? "..." : String(stats.active_orders).padStart(2, "0")}
-          description="Orders requiring kitchen / table attention"
-          icon={Clock}
-          color="bg-[#FFF4E5] text-[#D97706]"
-        />
-
-        <StatCard
-          title="Pending Payments"
-          value={loading ? "..." : String(stats.pending_payments).padStart(2, "0")}
-          description="Served orders / pending settlement"
-          icon={AlertCircle}
-          color="bg-[#FEE2E2] text-[#DC2626]"
-        />
-      </section>
-
-      {/* RESTAURANT OVERVIEW */}
-      <div className="mb-2">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-stone-500">
-          Restaurant Overview
-        </h2>
-      </div>
-
-      <section className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#E9E3DA] bg-white p-3.5 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F4ECE6] text-[#6E584B]">
-            <Users size={18} />
+      {/* DEDICATED FULL ERROR STATE (WHEN NO DATA COULD BE LOADED) */}
+      {errorInfo && !data && (
+        <div className="rounded-2xl border border-red-200 dark:border-red-900/80 bg-red-50/50 dark:bg-red-950/20 p-8 sm:p-12 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 mb-4">
+            {errorInfo.category === "auth" ? (
+              <ShieldAlert size={28} />
+            ) : errorInfo.category === "database" ? (
+              <ServerCrash size={28} />
+            ) : errorInfo.category === "network" ? (
+              <WifiOff size={28} />
+            ) : (
+              <AlertTriangle size={28} />
+            )}
           </div>
+
+          <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+            Failed to Load Dashboard Metrics
+          </h2>
+
+          <p className="mx-auto mt-2 max-w-md text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
+            {errorInfo.message}
+          </p>
+
+          <div className="mt-6 flex justify-center gap-3">
+            <button
+              type="button"
+              onClick={loadDashboard}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#F5B716] px-5 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] transition cursor-pointer"
+            >
+              <RotateCcw size={16} />
+              <span>Retry Request</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SKELETON LOADING STATE (FIRST LOAD) */}
+      {loading && !data && !errorInfo && (
+        <div className="space-y-6">
+          <div className="h-6 w-48 rounded-md bg-stone-200 dark:bg-stone-800 animate-pulse" />
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-28 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs animate-pulse"
+              />
+            ))}
+          </div>
+          <div className="h-44 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs animate-pulse" />
+        </div>
+      )}
+
+      {/* POPULATED DATA VIEW */}
+      {data && stats && (
+        <>
+          {/* PERIOD-SPECIFIC METRICS */}
           <div>
-            <p className="text-xs text-stone-500">Total Customers</p>
-            <p className="text-lg font-bold text-stone-900">{stats.total_customers}</p>
-          </div>
-        </div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                Period Performance ({periodLabel})
+              </h2>
+              <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                Live Aggregation
+              </span>
+            </div>
 
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#E9E3DA] bg-white p-3.5 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F6EFE5] text-[#8C6438]">
-            <UserCheck size={18} />
+            <section className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+              <StatCard
+                title={`Orders (${periodLabel})`}
+                value={String(stats.total_orders).padStart(2, "0")}
+                description={
+                  stats.completed_orders > 0
+                    ? `${stats.completed_orders} completed in this period`
+                    : "Total orders recorded"
+                }
+                icon={ShoppingBag}
+                color="bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800"
+              />
+
+              <StatCard
+                title={`Revenue (${periodLabel})`}
+                value={formattedRevenue}
+                description="Net invoiced period revenue"
+                icon={IndianRupee}
+                color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
+              />
+
+              <StatCard
+                title="Active Dining Orders"
+                value={String(stats.active_orders).padStart(2, "0")}
+                description={
+                  stats.preparing_orders > 0
+                    ? `${stats.preparing_orders} in kitchen preparation`
+                    : "Live orders in service"
+                }
+                icon={Clock}
+                color="bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800"
+              />
+
+              <StatCard
+                title="Pending Payments"
+                value={String(stats.pending_payments).padStart(2, "0")}
+                description="Unsettled customer invoices"
+                icon={AlertCircle}
+                color="bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-800"
+              />
+            </section>
           </div>
+
+          {/* RESTAURANT CAPACITY & RESOURCES */}
           <div>
-            <p className="text-xs text-stone-500">Total Staff</p>
-            <p className="text-lg font-bold text-stone-900">{stats.total_staff}</p>
-          </div>
-        </div>
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+              Restaurant Capacity & Resources
+            </h2>
 
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#E9E3DA] bg-white p-3.5 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EEF3EA] text-[#4F6D49]">
-            <UtensilsCrossed size={18} />
-          </div>
-          <div>
-            <p className="text-xs text-stone-500">Menu Items</p>
-            <p className="text-lg font-bold text-stone-900">{stats.total_menu_items}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3.5 rounded-xl border border-[#E9E3DA] bg-white p-3.5 shadow-xs">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F8EAE1] text-[#C65D35]">
-            <Grid3X3 size={18} />
-          </div>
-          <div>
-            <p className="text-xs text-stone-500">Dining Tables</p>
-            <p className="text-lg font-bold text-stone-900">{stats.total_tables}</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Main Content: Recent Orders and Live Table Status */}
-      <section className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-3">
-        <div className="2xl:col-span-2">
-          <RecentOrders orders={data.recent_orders} loading={loading} />
-        </div>
-
-        {/* Live Table Status */}
-        <div className="rounded-xl border border-[#E9E3DA] bg-white p-5 shadow-xs">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-[#29231F]">Live Table Status</h2>
-                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                  Live
-                </span>
+            <section className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800">
+                  <Users size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Customers</p>
+                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_customers}</p>
+                </div>
               </div>
-              <p className="mt-0.5 text-xs text-[#8A817B]">
-                Real-time table occupancy & active orders
-              </p>
-            </div>
 
-            <div className="rounded-lg border border-[#EEE9E2] bg-[#FAF9F6] px-2.5 py-1 text-[11px]">
-              <span className="font-semibold text-[#4F6D49]">
-                {stats.available_tables} Available
-              </span>
-              <span className="mx-1 text-[#8A817B]">•</span>
-              <span className="font-semibold text-[#C65D35]">
-                {stats.occupied_tables} Occupied
-              </span>
-            </div>
+              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                  <UserCheck size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Staff Members</p>
+                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_staff}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
+                  <UtensilsCrossed size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Menu Items</p>
+                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_menu_items}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
+                  <Grid3X3 size={18} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Dining Tables</p>
+                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_tables}</p>
+                </div>
+              </div>
+            </section>
           </div>
 
-          {loading ? (
-            <div className="py-10 text-center text-xs text-[#8A817B]">
-              Loading table status...
+          {/* Main Content: Recent Orders and Live Table Status */}
+          <section className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <RecentOrders orders={data.recent_orders} loading={loading} />
             </div>
-          ) : data.tables.length === 0 ? (
-            <div className="py-10 text-center text-xs text-[#8A817B]">
-              No active tables found.
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 2xl:grid-cols-2">
-              {data.tables.map((table) => (
-                <div
-                  key={table.id || table.number}
-                  className={`rounded-lg border p-3 transition ${
-                    table.status === "Occupied"
-                      ? "border-[#EAC6B2] bg-[#FCF4EF]"
-                      : "border-[#D1E0CD] bg-[#F4F8F2]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <Grid3X3
-                      size={16}
-                      className={
-                        table.status === "Occupied"
-                          ? "text-[#C65D35]"
-                          : "text-[#4F6D49]"
-                      }
-                    />
 
-                    <span
-                      className={`h-2 w-2 rounded-full ${
-                        table.status === "Occupied"
-                          ? "bg-[#C65D35]"
-                          : "bg-[#4F6D49]"
-                      }`}
-                    />
+            {/* Live Table Status */}
+            <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-[#1C1917] dark:text-stone-100">Live Table Status</h2>
+                    <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      Live
+                    </span>
                   </div>
-
-                  <h3 className="mt-2.5 text-sm font-bold text-[#29231F]">
-                    {table.number}
-                  </h3>
-
-                  <p className="mt-0.5 text-[11px] font-medium text-[#78716C]">
-                    {table.status}
-                  </p>
-
-                  <p className="mt-0.5 text-[11px] text-[#8A817B]">
-                    {table.orders} Active {table.orders === 1 ? "Order" : "Orders"}
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                    Seating occupancy & active orders
                   </p>
                 </div>
-              ))}
-            </div>
-          )}
 
-          <Link
-            to="/tables"
-            className="mt-4 inline-flex w-full items-center justify-center gap-1 text-center text-xs font-semibold text-[#C65D35] transition hover:text-[#A94B2B]"
-          >
-            <span>Manage All Tables</span>
-            <ArrowRight size={14} />
-          </Link>
-        </div>
-      </section>
+                <div className="rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-850 px-2.5 py-1 text-[11px]">
+                  <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                    {stats.available_tables} Available
+                  </span>
+                  <span className="mx-1 text-stone-300 dark:text-stone-600">•</span>
+                  <span className="font-semibold text-amber-700 dark:text-amber-400">
+                    {stats.occupied_tables} Occupied
+                  </span>
+                </div>
+              </div>
+
+              {data.tables.length === 0 ? (
+                <div className="py-10 text-center text-xs text-stone-500 dark:text-stone-400">
+                  No active tables found.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-2">
+                  {data.tables.map((table) => {
+                    const isOccupied = table.status === "Occupied";
+                    return (
+                      <div
+                        key={table.id || table.number}
+                        className={`rounded-lg border p-3 transition ${
+                          isOccupied
+                            ? "border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/40"
+                            : "border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <Grid3X3
+                            size={16}
+                            className={
+                              isOccupied
+                                ? "text-amber-700 dark:text-amber-400"
+                                : "text-emerald-600 dark:text-emerald-400"
+                            }
+                          />
+
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              isOccupied ? "bg-amber-500" : "bg-emerald-500"
+                            }`}
+                          />
+                        </div>
+
+                        <h3 className="mt-2.5 text-sm font-bold text-[#1C1917] dark:text-stone-100">
+                          {table.number}
+                        </h3>
+
+                        <p
+                          className={`mt-0.5 text-[11px] font-semibold ${
+                            isOccupied
+                              ? "text-amber-800 dark:text-amber-300"
+                              : "text-emerald-700 dark:text-emerald-300"
+                          }`}
+                        >
+                          {table.status}
+                        </p>
+
+                        <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+                          {table.orders} Active {table.orders === 1 ? "Order" : "Orders"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <Link
+                to="/tables"
+                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-850 py-2 text-center text-xs font-semibold text-stone-700 dark:text-stone-300 transition hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100"
+              >
+                <span>Manage All Dining Tables</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

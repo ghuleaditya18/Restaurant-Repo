@@ -6,7 +6,7 @@ function ProtectedRoute({ children, allowedRoles = ["MANAGER", "RECEPTIONIST"] }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-[#C65D35]">
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAF9] text-[#1C1917] font-semibold text-sm">
         Verifying your session...
       </div>
     );

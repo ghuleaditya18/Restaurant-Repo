@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+from app.core.date_utils import get_date_range
 from app.db.session import get_db
 from app.models.entities import (
     RestaurantTable,
@@ -41,9 +42,13 @@ def get_table_record(db: Session, table_id: int):
     return table
 
 
-def has_active_orders(db: Session, table_id: int):
-
-    active_order = (
+def has_active_orders(db: Session, table_id: int, business_date_only: bool = True):
+    """
+    Check if a table has active orders. By default, restricts checks to orders
+    created on the current restaurant business date in Asia/Kolkata so historical
+    orders from previous days do not keep tables occupied.
+    """
+    query = (
         db.query(Order.id)
         .filter(
             Order.table_id == table_id,
@@ -54,8 +59,17 @@ def has_active_orders(db: Session, table_id: int):
                 ]
             ),
         )
-        .first()
     )
+
+    if business_date_only:
+        today_start, today_end = get_date_range("today")
+        if today_start is not None and today_end is not None:
+            query = query.filter(
+                Order.created_at >= today_start,
+                Order.created_at <= today_end,
+            )
+
+    active_order = query.first()
 
     return active_order is not None
 
@@ -116,9 +130,10 @@ def get_all_tables(
     updated = False
 
     for table in tables:
-        has_active = has_active_orders(db, table.id)
-        if has_active and table.status != TableStatus.OCCUPIED:
-            table.status = TableStatus.OCCUPIED
+        has_active = has_active_orders(db, table.id, business_date_only=True)
+        expected_status = TableStatus.OCCUPIED if has_active else TableStatus.AVAILABLE
+        if table.status != expected_status:
+            table.status = expected_status
             updated = True
 
     if updated:
@@ -139,10 +154,11 @@ def get_table(
 ):
 
     table = get_table_record(db, table_id)
-    has_active = has_active_orders(db, table.id)
+    has_active = has_active_orders(db, table.id, business_date_only=True)
+    expected_status = TableStatus.OCCUPIED if has_active else TableStatus.AVAILABLE
 
-    if has_active and table.status != TableStatus.OCCUPIED:
-        table.status = TableStatus.OCCUPIED
+    if table.status != expected_status:
+        table.status = expected_status
         db.commit()
         db.refresh(table)
 

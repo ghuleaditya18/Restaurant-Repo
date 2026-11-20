@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import User
+from app.models import User, Staff
 
 from app.core.security import (
     verify_password,
@@ -12,7 +12,8 @@ from app.core.security import (
 from app.schemas.auth import (
     LoginRequest,
     TokenResponse,
-    UserResponse
+    UserResponse,
+    ProfileUpdateRequest,
 )
 
 from app.api.deps import get_current_user
@@ -70,7 +71,7 @@ def login(
     }
 
 
-# CURRENT USER
+# CURRENT USER PROFILE
 @router.get("/me", response_model=UserResponse)
 def get_me(
     current_user: User = Depends(get_current_user)
@@ -81,11 +82,72 @@ def get_me(
         "value",
         current_user.role
     )
+    phone = current_user.staff_profile.phone if current_user.staff_profile else None
 
     return UserResponse(
         id=current_user.id,
         full_name=current_user.full_name,
         email=current_user.email,
         role=str(role),
-        is_active=current_user.is_active
+        is_active=current_user.is_active,
+        phone=phone,
+    )
+
+
+# UPDATE PROFILE
+@router.patch("/profile", response_model=UserResponse)
+def update_profile(
+    data: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Enforce email uniqueness across users
+    existing_user = db.query(User).filter(
+        User.email == data.email,
+        User.id != current_user.id
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This email address is already registered to another account."
+        )
+
+    current_user.full_name = data.full_name
+    current_user.email = data.email
+
+    phone = data.phone
+    if current_user.staff_profile:
+        if phone:
+            current_user.staff_profile.phone = phone
+    elif phone:
+        new_staff = Staff(
+            user_id=current_user.id,
+            employee_code=f"REC-{current_user.id:03d}",
+            phone=phone,
+            designation="Receptionist",
+            joining_date=current_user.created_at.date() if current_user.created_at else None,
+        )
+        db.add(new_staff)
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Profile could not be updated."
+        ) from exc
+
+    role = getattr(current_user.role, "value", current_user.role)
+    contact_phone = current_user.staff_profile.phone if current_user.staff_profile else phone
+
+    return UserResponse(
+        id=current_user.id,
+        full_name=current_user.full_name,
+        email=current_user.email,
+        role=str(role),
+        is_active=current_user.is_active,
+        phone=contact_phone,
     )

@@ -63,9 +63,48 @@ body {
   background-color: var(--bg-page);
   color: var(--text-main);
   transition: background-color 0.2s ease, color 0.2s ease;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* =========================================================================
+   GLOBAL TYPOGRAPHY SCALE & NUMERIC FORMATTING (A3 STANDARDS)
+   ========================================================================= */
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.font-page-title {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
+.font-section-title {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.font-body {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.font-caption {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+.font-kpi {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 button,

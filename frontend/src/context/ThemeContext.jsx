@@ -1,25 +1,64 @@
-import { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 
 const ThemeContext = createContext(null);
 
-const STORAGE_KEY = "dineflow_theme";
+const GLOBAL_STORAGE_KEY = "dineflow_theme_mode";
+
+function getSystemTheme() {
+  if (typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "light";
+}
+
+function getStoredTheme(userId = null) {
+  try {
+    if (userId) {
+      const userKey = `dineflow_theme_${userId}`;
+      const userTheme = localStorage.getItem(userKey);
+      if (userTheme === "dark" || userTheme === "light" || userTheme === "system") {
+        return userTheme;
+      }
+    }
+    const globalTheme = localStorage.getItem(GLOBAL_STORAGE_KEY);
+    if (globalTheme === "dark" || globalTheme === "light" || globalTheme === "system") {
+      return globalTheme;
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+  return "system";
+}
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "dark" || saved === "light") {
-        return saved;
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-    return "light";
-  });
+  const [themeMode, setThemeModeState] = useState(() => getStoredTheme());
+  const [systemIsDark, setSystemIsDark] = useState(() => getSystemTheme() === "dark");
+  const [activeUserId, setActiveUserId] = useState(null);
 
+  // Listen to OS system theme changes
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+    const handleChange = (e) => {
+      setSystemIsDark(e.matches);
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, []);
+
+  // Compute resolved active theme: 'light' or 'dark'
+  const resolvedTheme = useMemo(() => {
+    if (themeMode === "dark") return "dark";
+    if (themeMode === "light") return "light";
+    return systemIsDark ? "dark" : "light";
+  }, [themeMode, systemIsDark]);
+
+  // Apply to HTML element and localStorage
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "dark") {
+    if (resolvedTheme === "dark") {
       root.classList.add("dark");
       root.setAttribute("data-theme", "dark");
     } else {
@@ -28,30 +67,48 @@ export function ThemeProvider({ children }) {
     }
 
     try {
-      localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.setItem(GLOBAL_STORAGE_KEY, themeMode);
+      if (activeUserId) {
+        localStorage.setItem(`dineflow_theme_${activeUserId}`, themeMode);
+      }
     } catch {
       // Ignore localStorage errors
     }
-  }, [theme]);
+  }, [resolvedTheme, themeMode, activeUserId]);
 
-  const setTheme = (newTheme) => {
-    if (newTheme === "dark" || newTheme === "light") {
-      setThemeState(newTheme);
+  const setThemeMode = useCallback((mode, userId = null) => {
+    if (mode === "dark" || mode === "light" || mode === "system") {
+      setThemeModeState(mode);
+      const uid = userId || activeUserId;
+      try {
+        localStorage.setItem(GLOBAL_STORAGE_KEY, mode);
+        if (uid) {
+          localStorage.setItem(`dineflow_theme_${uid}`, mode);
+        }
+      } catch {
+        // Ignore localStorage errors
+      }
     }
-  };
+  }, [activeUserId]);
 
-  const toggleTheme = () => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
-  };
+  const syncUserTheme = useCallback((userId) => {
+    if (!userId) return;
+    setActiveUserId(userId);
+    const userTheme = getStoredTheme(userId);
+    setThemeModeState(userTheme);
+  }, []);
 
   const value = useMemo(
     () => ({
-      theme,
-      isDark: theme === "dark",
-      setTheme,
-      toggleTheme,
+      theme: resolvedTheme,
+      themeMode,
+      isDark: resolvedTheme === "dark",
+      setThemeMode,
+      syncUserTheme,
+      // Backward compatibility
+      setTheme: (t) => setThemeMode(t),
     }),
-    [theme]
+    [resolvedTheme, themeMode, setThemeMode, syncUserTheme]
   );
 
   return (

@@ -21,6 +21,7 @@ from app.models.entities import (
     Staff,
     TableStatus,
 )
+from app.models.inventory import InventoryItem
 from app.schemas.dashboard import (
     DashboardStatistics,
     DashboardSummaryResponse,
@@ -164,6 +165,37 @@ def get_dashboard_summary(
         1 for t in active_tables if t.status == TableStatus.OCCUPIED
     )
 
+    # Inventory Overview Metrics
+    total_inventory_items = db.query(func.count(InventoryItem.id)).filter(InventoryItem.is_active.is_(True)).scalar() or 0
+    low_stock_items_count = (
+        db.query(func.count(InventoryItem.id))
+        .filter(
+            InventoryItem.is_active.is_(True),
+            InventoryItem.current_stock <= InventoryItem.reorder_level,
+            InventoryItem.current_stock > Decimal("0.0000"),
+        )
+        .scalar()
+        or 0
+    )
+    out_of_stock_items_count = (
+        db.query(func.count(InventoryItem.id))
+        .filter(
+            InventoryItem.is_active.is_(True),
+            InventoryItem.current_stock <= Decimal("0.0000"),
+        )
+        .scalar()
+        or 0
+    )
+    total_inventory_valuation = (
+        db.query(func.coalesce(func.sum(InventoryItem.current_stock * InventoryItem.average_cost), Decimal("0.00")))
+        .filter(
+            InventoryItem.is_active.is_(True),
+            InventoryItem.current_stock > Decimal("0.0000"),
+        )
+        .scalar()
+        or Decimal("0.00")
+    )
+
     preset_label = preset.capitalize() if preset else "Today"
     if preset == "last_7_days":
         preset_label = "Last 7 Days"
@@ -189,6 +221,10 @@ def get_dashboard_summary(
         active_orders=active_orders,
         pending_payments=pending_payments,
         total_revenue=total_revenue,
+        total_inventory_items=total_inventory_items,
+        low_stock_items_count=low_stock_items_count,
+        out_of_stock_items_count=out_of_stock_items_count,
+        total_inventory_valuation=total_inventory_valuation,
         date_filter_label=preset_label,
     )
 

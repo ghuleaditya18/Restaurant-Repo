@@ -174,3 +174,32 @@ def get_customer_booking_history(
         )
         results.append(resp)
     return results
+
+
+@router.delete("/customers/{customer_id}")
+def delete_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    customer = db.get(SpaCustomer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    has_bookings = (
+        db.query(SpaBooking.id)
+        .filter(SpaBooking.customer_id == customer_id)
+        .first()
+        is not None
+    )
+
+    if has_bookings:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Customer cannot be deleted because existing bookings are associated with this customer. Deactivate the customer instead.",
+        )
+
+    db.delete(customer)
+    db.commit()
+
+    return {"message": f"Customer '{customer.full_name}' deleted successfully."}

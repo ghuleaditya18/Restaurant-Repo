@@ -6,7 +6,6 @@ import {
   Plus,
   Search,
   XCircle,
-  AlertCircle,
   FileText,
   RotateCcw,
   Sparkles,
@@ -17,6 +16,8 @@ import spaApi from "../services/spaApi";
 import { BookingStatusBadge } from "../components/StatusBadges";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTime12Hour, formatTimeRange12Hour } from "../utils/timeFormat";
+import PageHeader from "../../../components/PageHeader";
+import AlertBanner from "../../../components/AlertBanner";
 
 function formatCurrency(val) {
   const num = Number(val || 0);
@@ -423,49 +424,40 @@ export default function SpaBookings() {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-[#F5B716]/10 text-[#F5B716] dark:bg-[#F5B716]/20">
-              <Calendar size={20} />
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100">
-              Booking Management
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Appointment scheduling, treatment status transitions, therapist assignment, and billing.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setBookingForm({
-              customer_mode: "existing",
-              customer_id: customers[0]?.id || "",
-              new_customer: { full_name: "", phone: "", email: "", notes: "" },
-              staff_id: therapists[0]?.id || "",
-              booking_date: todayStr,
-              start_time: "",
-              selected_services: availableServices[0] ? [{ service_id: availableServices[0].id, quantity: 1 }] : [],
-              notes: "",
-            });
-            setCreateModalOpen(true);
-          }}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
-        >
-          <Plus size={16} />
-          <span>New Appointment</span>
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Spa Bookings"
+        description="Appointment scheduling, treatment status transitions, therapist assignment, and billing."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              setBookingForm({
+                customer_mode: "existing",
+                customer_id: customers[0]?.id || "",
+                new_customer: { full_name: "", phone: "", email: "", notes: "" },
+                staff_id: therapists[0]?.id || "",
+                booking_date: todayStr,
+                start_time: "",
+                selected_services: availableServices[0] ? [{ service_id: availableServices[0].id, quantity: 1 }] : [],
+                notes: "",
+              });
+              setCreateModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>New Appointment</span>
+          </button>
+        }
+      />
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm flex items-center gap-2">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
+        <AlertBanner
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+        />
       )}
 
       {/* Tabs and Filters */}

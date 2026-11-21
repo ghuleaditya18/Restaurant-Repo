@@ -14,6 +14,7 @@ from app.models.entities import (
     RestaurantTable,
     TableStatus,
 )
+from app.services.inventory_service import reverse_order_inventory_deduction
 
 logger = logging.getLogger("dineflow.order_service")
 
@@ -113,6 +114,15 @@ def cancel_stale_orders(db: Session, timeout_hours: int | None = None) -> list[i
             continue
 
         previous_status = order.status
+
+        # If order had already reached Preparing or beyond, reverse the deducted stock
+        if previous_status in {OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.SERVED}:
+            reverse_order_inventory_deduction(
+                db=db,
+                order=order,
+                user_id=order.created_by_user_id,
+            )
+
         order.status = OrderStatus.CANCELLED
         order.updated_at = now
 

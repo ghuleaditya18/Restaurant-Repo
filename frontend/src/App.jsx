@@ -14,6 +14,7 @@ import Tables from "./pages/Tables";
 import Orders from "./pages/Orders";
 import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
+import Inventory from "./pages/Inventory";
 
 // Spa Module Pages
 import SpaDashboard from "./modules/spa/pages/SpaDashboard";
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="customers" element={<Customers />} />
         <Route path="staff" element={<Staff />} />
         <Route path="invoices" element={<Invoices />} />
+        <Route path="inventory" element={<Inventory />} />
       </Route>
 
       {/* Spa Protected Routes */}

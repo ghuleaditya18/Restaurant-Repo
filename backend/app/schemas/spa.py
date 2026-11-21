@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date, datetime, time
 from decimal import Decimal
+from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -162,6 +163,39 @@ class SpaCustomerUpdate(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
     is_active: bool | None = None
 
+    @field_validator("full_name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        if len(trimmed) < 2:
+            raise ValueError("Customer name must contain at least 2 characters.")
+        return trimmed
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        digits = re.sub(r"\D", "", trimmed)
+        if len(digits) < 7:
+            raise ValueError("Phone number must contain at least 7 digits.")
+        return trimmed
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        trimmed = v.strip().lower()
+        if not trimmed:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", trimmed):
+            raise ValueError("Enter a valid email address.")
+        return trimmed
+
 
 class SpaCustomerResponse(SpaCustomerBase):
     model_config = ConfigDict(from_attributes=True)
@@ -211,6 +245,43 @@ class SpaStaffBase(BaseModel):
     is_therapist: bool = True
     is_active: bool = True
 
+    @field_validator("employee_code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        trimmed = v.strip().upper()
+        if len(trimmed) < 2:
+            raise ValueError("Employee code must contain at least 2 characters.")
+        return trimmed
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        trimmed = v.strip()
+        if len(trimmed) < 2:
+            raise ValueError("Staff name must contain at least 2 characters.")
+        return trimmed
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        trimmed = v.strip()
+        digits = re.sub(r"\D", "", trimmed)
+        if len(digits) < 7:
+            raise ValueError("Phone number must contain at least 7 digits.")
+        return trimmed
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        trimmed = v.strip().lower()
+        if not trimmed:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", trimmed):
+            raise ValueError("Enter a valid email address.")
+        return trimmed
+
 
 class SpaStaffCreate(SpaStaffBase):
     availabilities: list[SpaStaffAvailabilityCreate] = []
@@ -226,6 +297,50 @@ class SpaStaffUpdate(BaseModel):
     is_therapist: bool | None = None
     is_active: bool | None = None
     availabilities: list[SpaStaffAvailabilityCreate] | None = None
+
+    @field_validator("employee_code")
+    @classmethod
+    def validate_code(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        trimmed = v.strip().upper()
+        if len(trimmed) < 2:
+            raise ValueError("Employee code must contain at least 2 characters.")
+        return trimmed
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        if len(trimmed) < 2:
+            raise ValueError("Staff name must contain at least 2 characters.")
+        return trimmed
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        trimmed = v.strip()
+        digits = re.sub(r"\D", "", trimmed)
+        if len(digits) < 7:
+            raise ValueError("Phone number must contain at least 7 digits.")
+        return trimmed
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        trimmed = v.strip().lower()
+        if not trimmed:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", trimmed):
+            raise ValueError("Enter a valid email address.")
+        return trimmed
+
 
 
 class SpaStaffResponse(SpaStaffBase):

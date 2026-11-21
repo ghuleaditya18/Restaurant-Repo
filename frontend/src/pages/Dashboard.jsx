@@ -17,11 +17,14 @@ import {
   ShieldAlert,
   ServerCrash,
   WifiOff,
+  Package,
 } from "lucide-react";
 
 import StatCard from "../components/StatCard";
 import RecentOrders from "../components/RecentOrders";
 import DateFilter from "../components/DateFilter";
+import PageHeader from "../components/PageHeader";
+import AlertBanner from "../components/AlertBanner";
 import { getDashboardSummary } from "../services/dashboardService";
 
 const formatCurrency = (amount) =>
@@ -101,64 +104,57 @@ function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome & Filter Section */}
-      <section className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] dark:text-stone-100 sm:text-3xl">
-            Operational Overview
-          </h1>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Dashboard"
+        description={`Live operations, metrics, and dining activity for ${periodLabel}.`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2.5">
+            <DateFilter
+              selectedPreset={dateFilter.preset}
+              startDate={dateFilter.startDate}
+              endDate={dateFilter.endDate}
+              onChange={(newFilter) => setDateFilter(newFilter)}
+            />
 
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 sm:text-sm">
-            Live operations, metrics, and dining activity for{" "}
-            <span className="font-semibold text-stone-800 dark:text-stone-200">{periodLabel}</span>.
-          </p>
-        </div>
+            <Link
+              to="/orders"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 text-xs font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>Create Order</span>
+            </Link>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <DateFilter
-            selectedPreset={dateFilter.preset}
-            startDate={dateFilter.startDate}
-            endDate={dateFilter.endDate}
-            onChange={(newFilter) => setDateFilter(newFilter)}
-          />
-
-          <Link
-            to="/orders"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 text-xs font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
-          >
-            <Plus size={16} />
-            <span>Create Order</span>
-          </Link>
-
-          <button
-            type="button"
-            onClick={loadDashboard}
-            disabled={loading}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 shadow-xs transition hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-60 cursor-pointer"
-            title="Refresh Dashboard Data"
-            aria-label="Refresh Dashboard Data"
-          >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-          </button>
-        </div>
-      </section>
+            <button
+              type="button"
+              onClick={loadDashboard}
+              disabled={loading}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 shadow-xs transition hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-60 cursor-pointer"
+              title="Refresh Dashboard Data"
+              aria-label="Refresh Dashboard Data"
+            >
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+            </button>
+          </div>
+        }
+      />
 
       {/* ERROR BANNER WHEN EXISTING DATA IS PRESENT */}
       {errorInfo && data && (
-        <div className="flex items-center justify-between rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-4 text-xs font-medium text-red-700 dark:text-red-300">
-          <div className="flex items-center gap-2">
-            <AlertCircle size={18} className="shrink-0 text-red-600 dark:text-red-400" />
-            <span>{errorInfo.message}</span>
-          </div>
-          <button
-            type="button"
-            onClick={loadDashboard}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-red-700 transition cursor-pointer"
-          >
-            <RotateCcw size={13} />
-            <span>Retry</span>
-          </button>
-        </div>
+        <AlertBanner
+          type="error"
+          message={errorInfo.message}
+          action={
+            <button
+              type="button"
+              onClick={loadDashboard}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-red-700 transition cursor-pointer"
+            >
+              <RotateCcw size={13} />
+              <span>Retry</span>
+            </button>
+          }
+        />
       )}
 
       {/* DEDICATED FULL ERROR STATE (WHEN NO DATA COULD BE LOADED) */}
@@ -227,7 +223,7 @@ function Dashboard() {
               </span>
             </div>
 
-            <section className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
                 title={`Orders (${periodLabel})`}
                 value={String(stats.total_orders).padStart(2, "0")}
@@ -249,7 +245,7 @@ function Dashboard() {
               />
 
               <StatCard
-                title="Active Dining Orders"
+                title="Active Orders"
                 value={String(stats.active_orders).padStart(2, "0")}
                 description={
                   stats.preparing_orders > 0
@@ -261,7 +257,7 @@ function Dashboard() {
               />
 
               <StatCard
-                title="Pending Payments"
+                title="Pending Bills"
                 value={String(stats.pending_payments).padStart(2, "0")}
                 description="Unsettled customer invoices"
                 icon={AlertCircle}
@@ -272,48 +268,112 @@ function Dashboard() {
 
           {/* RESTAURANT CAPACITY & RESOURCES */}
           <div>
-            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+            <h2 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               Restaurant Capacity & Resources
             </h2>
 
-            <section className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800">
-                  <Users size={18} />
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800">
+                  <Users size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Customers</p>
-                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_customers}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
-                  <UserCheck size={18} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Staff Members</p>
-                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_staff}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Customers</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_customers}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
-                  <UtensilsCrossed size={18} />
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                  <UserCheck size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Menu Items</p>
-                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_menu_items}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Staff Members</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_staff}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
-                  <Grid3X3 size={18} />
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
+                  <UtensilsCrossed size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">Dining Tables</p>
-                  <p className="text-lg font-bold text-stone-900 dark:text-stone-100">{stats.total_tables}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Menu Items</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_menu_items}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
+                  <Grid3X3 size={16} className="sm:w-[18px] sm:h-[18px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Dining Tables</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_tables}</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* INVENTORY HEALTH & STOCK OVERVIEW */}
+          <div>
+            <div className="mb-2.5 flex items-center justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                Inventory Health & Stock
+              </h2>
+              <Link
+                to="/inventory"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition"
+              >
+                <span>Manage Inventory</span>
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  <Package size={16} className="sm:w-[18px] sm:h-[18px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Stock Items</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_inventory_items || 0}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle size={16} className="sm:w-[18px] sm:h-[18px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Low Stock</p>
+                  <p className={`text-lg sm:text-xl md:text-2xl font-semibold tabular-nums truncate ${stats.low_stock_items_count > 0 ? "text-amber-600 dark:text-amber-400" : "text-stone-900 dark:text-stone-100"}`}>
+                    {stats.low_stock_items_count || 0}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                  <AlertCircle size={16} className="sm:w-[18px] sm:h-[18px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Out of Stock</p>
+                  <p className={`text-lg sm:text-xl md:text-2xl font-semibold tabular-nums truncate ${stats.out_of_stock_items_count > 0 ? "text-rose-600 dark:text-rose-400" : "text-stone-900 dark:text-stone-100"}`}>
+                    {stats.out_of_stock_items_count || 0}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
+                  <IndianRupee size={16} className="sm:w-[18px] sm:h-[18px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Valuation</p>
+                  <p className="text-sm sm:text-base md:text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">
+                    {formatCurrency(stats.total_inventory_valuation || 0)}
+                  </p>
                 </div>
               </div>
             </section>

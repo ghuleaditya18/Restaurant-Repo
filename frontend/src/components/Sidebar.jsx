@@ -14,6 +14,7 @@ import {
   Menu,
   ChefHat,
   Sparkles,
+  Package,
 } from "lucide-react";
 
 const restaurantMenuItems = [
@@ -21,6 +22,7 @@ const restaurantMenuItems = [
   { name: "Orders", path: "/orders", icon: ClipboardList },
   { name: "Tables", path: "/tables", icon: Grid3X3 },
   { name: "Menu Management", path: "/menu", icon: Utensils },
+  { name: "Inventory", path: "/inventory", icon: Package },
   { name: "Customers", path: "/customers", icon: Users },
   { name: "Staff Management", path: "/staff", icon: UserCog },
   { name: "Invoices", path: "/invoices", icon: FileText },
@@ -130,7 +132,7 @@ function Sidebar({
               <BrandIcon size={19} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-bold tracking-wide text-white truncate">{brandTitle}</h1>
+              <span className="block text-base font-bold tracking-wide text-white truncate">{brandTitle}</span>
             </div>
           </Link>
 
@@ -206,7 +208,7 @@ function Sidebar({
                 <BrandIcon size={20} />
               </div>
               <div className="min-w-0 overflow-hidden">
-                <h1 className="text-base font-bold tracking-wide text-white truncate">{brandTitle}</h1>
+                <span className="block text-base font-bold tracking-wide text-white truncate">{brandTitle}</span>
               </div>
             </Link>
 

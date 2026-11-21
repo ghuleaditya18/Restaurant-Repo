@@ -259,3 +259,42 @@ def update_staff_availability(
         )
         for av in created
     ]
+
+
+@router.delete("/staff/{staff_id}")
+def delete_staff(
+    staff_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    staff = db.get(SpaStaff, staff_id)
+    if not staff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff member not found."
+        )
+
+    has_bookings = (
+        db.query(SpaBooking.id)
+        .filter(SpaBooking.staff_id == staff_id)
+        .first()
+        is not None
+    )
+
+    if has_bookings:
+        # Soft delete / deactivate to preserve historical booking relationships
+        staff.is_active = False
+        db.commit()
+        return {
+            "message": f"Staff member '{staff.full_name}' has booking records. Account was deactivated to preserve historical records.",
+            "deactivated": True,
+        }
+
+    # Delete unreferenced staff member and cascade availability
+    db.delete(staff)
+    db.commit()
+
+    return {
+        "message": f"Staff member '{staff.full_name}' deleted successfully.",
+        "deactivated": False,
+    }

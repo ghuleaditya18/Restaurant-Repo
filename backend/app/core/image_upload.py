@@ -1,4 +1,4 @@
-"""Helpers for saving and removing menu item images.
+"""Helpers for saving and removing menu item and supplier bill images.
 
 Place this file at: app/core/image_upload.py
 """
@@ -8,14 +8,16 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 
-# <project root>/uploads/menu  (independent of where the server is started from)
+# <project root>/uploads/menu and /uploads/bills
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 UPLOAD_ROOT = PROJECT_ROOT / "uploads"
 MENU_UPLOAD_DIR = UPLOAD_ROOT / "menu"
+BILL_UPLOAD_DIR = UPLOAD_ROOT / "bills"
 
 MENU_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+BILL_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB (same limit as the frontend)
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 def detect_extension(data: bytes) -> str | None:
@@ -26,6 +28,8 @@ def detect_extension(data: bytes) -> str | None:
         return ".png"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return ".webp"
+    if data.startswith(b"%PDF"):
+        return ".pdf"
     return None
 
 
@@ -40,12 +44,11 @@ async def save_menu_image(file: UploadFile) -> str:
         raise HTTPException(status_code=413, detail="Image must be 5 MB or smaller.")
 
     extension = detect_extension(data)
-    if not extension:
+    if not extension or extension == ".pdf":
         raise HTTPException(
             status_code=400, detail="Only JPG, PNG or WebP images are allowed."
         )
 
-    # Random file name: no collisions and no path tricks from user input
     filename = f"{uuid.uuid4().hex}{extension}"
     (MENU_UPLOAD_DIR / filename).write_bytes(data)
 
@@ -57,5 +60,34 @@ def remove_menu_image(image_url: str | None) -> None:
     if not image_url:
         return
 
-    # .name keeps only the file name, so the path can never leave the folder
     (MENU_UPLOAD_DIR / Path(image_url).name).unlink(missing_ok=True)
+
+
+async def save_bill_image(file: UploadFile) -> str:
+    """Validate and save an uploaded supplier bill (JPG, PNG, WebP or PDF)."""
+    data = await file.read(MAX_IMAGE_SIZE + 1)
+
+    if not data:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+
+    if len(data) > MAX_IMAGE_SIZE:
+        raise HTTPException(status_code=413, detail="Bill file must be 5 MB or smaller.")
+
+    extension = detect_extension(data)
+    if not extension:
+        raise HTTPException(
+            status_code=400, detail="Only JPG, PNG, WebP or PDF files are allowed."
+        )
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    (BILL_UPLOAD_DIR / filename).write_bytes(data)
+
+    return f"/uploads/bills/{filename}"
+
+
+def remove_bill_image(bill_url: str | None) -> None:
+    """Delete a stored bill file."""
+    if not bill_url:
+        return
+
+    (BILL_UPLOAD_DIR / Path(bill_url).name).unlink(missing_ok=True)

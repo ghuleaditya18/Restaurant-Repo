@@ -15,10 +15,12 @@ import {
   Award,
   AlertCircle,
   Save,
+  Trash2,
 } from "lucide-react";
 import spaApi from "../services/spaApi";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
+import PageHeader from "../../../components/PageHeader";
 
 const DAYS_OF_WEEK = [
   "Monday",
@@ -31,7 +33,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function SpaStaff() {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, confirm } = useNotification();
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -212,6 +214,27 @@ export default function SpaStaff() {
     }
   };
 
+  const handleDeleteStaff = async (staff) => {
+    const displayName = staff.full_name || staff.name || "Staff Member";
+    const confirmed = await confirm({
+      title: "Delete Staff Member",
+      message: `Are you sure you want to delete ${displayName}? If they have booking history, their account will be deactivated to preserve historical records.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const res = await spaApi.deleteStaff(staff.id);
+      showSuccess(res.data?.message || `${displayName} deleted successfully.`, "Staff Member Deleted");
+      fetchStaff();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to delete staff member.", "Delete Failed");
+    }
+  };
+
   const safeList = Array.isArray(staffList) ? staffList : [];
   const therapistsCount = safeList.filter((s) => s.is_therapist).length;
   const otherStaffCount = safeList.filter((s) => !s.is_therapist).length;
@@ -229,25 +252,20 @@ export default function SpaStaff() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-            Therapist Management
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400">
-            Manage therapist roster, support staff, specializations, employee codes, and weekly availability schedules
-          </p>
-        </div>
-
-        <button
-          onClick={openAddStaff}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#F5B716] px-4 py-2.5 text-xs sm:text-sm font-semibold text-[#1C1917] shadow-sm hover:bg-[#E5A910] transition-colors cursor-pointer self-start sm:self-auto"
-        >
-          <UserPlus size={16} />
-          <span>Add Staff Member</span>
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Spa Therapists"
+        description="Manage therapist roster, support staff, specializations, employee codes, and weekly availability schedules."
+        actions={
+          <button
+            onClick={openAddStaff}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#F5B716] px-4 py-2.5 text-xs sm:text-sm font-semibold text-[#1C1917] shadow-sm hover:bg-[#E5A910] transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <UserPlus size={16} />
+            <span>Add Staff Member</span>
+          </button>
+        }
+      />
 
       {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -413,6 +431,14 @@ export default function SpaStaff() {
                       <span>Schedule</span>
                     </button>
                   )}
+
+                  <button
+                    onClick={() => handleDeleteStaff(staff)}
+                    className="p-2 rounded-xl border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition cursor-pointer"
+                    title="Delete / Deactivate Staff Member"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
             );

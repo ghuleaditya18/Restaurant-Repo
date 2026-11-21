@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.entities import MenuCategory, MenuItem
 from app.api.deps import require_roles, require_restaurant_context
 from app.core.image_upload import save_menu_image, remove_menu_image
+from app.services.inventory_service import get_menu_item_inventory_status
 
 from app.schemas.menu import (
     MenuCategoryCreate,
@@ -53,7 +54,16 @@ def get_menu_item_record(db: Session, item_id: int):
     return item
 
 
-def menu_item_to_response(item):
+def menu_item_to_response(item, db: Session | None = None):
+    inv_status = None
+    max_servings = None
+    if db is not None:
+        try:
+            status_obj = get_menu_item_inventory_status(db, item.id)
+            inv_status = status_obj.inventory_status
+            max_servings = status_obj.max_preparable_servings
+        except Exception:
+            pass
 
     return MenuItemResponse(
         id=item.id,
@@ -66,6 +76,8 @@ def menu_item_to_response(item):
         image_url=item.image_url,
         created_at=item.created_at,
         updated_at=item.updated_at,
+        inventory_status=inv_status,
+        max_preparable_servings=max_servings,
     )
 
 
@@ -304,7 +316,7 @@ def get_all_menu_items(
 
     items = query.order_by(MenuItem.id.desc()).all()
 
-    return [menu_item_to_response(item) for item in items]
+    return [menu_item_to_response(item, db) for item in items]
 
 
 # 8. GET SINGLE MENU ITEM
@@ -318,7 +330,7 @@ def get_menu_item(
 
     item = get_menu_item_record(db, item_id)
 
-    return menu_item_to_response(item)
+    return menu_item_to_response(item, db)
 
 
 # 9. UPDATE MENU ITEM

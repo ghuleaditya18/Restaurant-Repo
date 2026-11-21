@@ -34,6 +34,9 @@ import {
 // menuService.js yet. Missing members here do not break the page (a named
 // import of a missing export would).
 import * as menuService from "../services/menuService";
+import PageHeader from "../components/PageHeader";
+import AlertBanner from "../components/AlertBanner";
+import Modal from "../components/Modal";
 
 // ==========================================
 // CONSTANTS
@@ -772,77 +775,49 @@ export default function Menu() {
 
   return (
     <div className="space-y-6">
-      {/* PAGE HEADER */}
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Menu Management"
+        description="Manage menu items, categories and availability."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openCategoryManager}
+              className="flex items-center gap-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer transition shadow-2xs"
+            >
+              <Tags size={17} />
+              <span>Manage Categories</span>
+            </button>
 
-      <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-xl font-semibold text-[#1C1917] md:text-2xl">
-            Menu Management
-          </h1>
-
-          <p className="mt-1 text-sm text-[#78716C]">
-            Manage menu items, categories and availability.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={openCategoryManager}
-            className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm font-medium text-[#1C1917] hover:bg-[#FAF9F6]"
-          >
-            <Tags size={17} />
-            Manage Categories
-          </button>
-
-          <button
-            type="button"
-            onClick={openAddItemModal}
-            className="flex items-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer"
-          >
-            <Plus size={17} />
-            Add Menu Item
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              onClick={openAddItemModal}
+              className="flex items-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition"
+            >
+              <Plus size={17} />
+              <span>Add Menu Item</span>
+            </button>
+          </div>
+        }
+      />
 
       {/* SUCCESS MESSAGE */}
-
       {successMessage && (
-        <div
-          role="status"
-          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
-        >
-          <span>{successMessage}</span>
-
-          <button
-            type="button"
-            onClick={() => setSuccessMessage("")}
-            aria-label="Dismiss message"
-            className="text-[#78716C] hover:text-[#1C1917]"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AlertBanner
+          type="success"
+          message={successMessage}
+          onDismiss={() => setSuccessMessage("")}
+        />
       )}
 
       {/* ERROR MESSAGE */}
-
       {pageError && (
-        <div
-          role="alert"
-          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
-        >
-          <span>{pageError}</span>
-
-          <button
-            type="button"
-            onClick={() => setPageError("")}
-            aria-label="Dismiss error"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AlertBanner
+          type="error"
+          message={pageError}
+          onDismiss={() => setPageError("")}
+        />
       )}
 
       {/* SUMMARY CARDS */}
@@ -1046,7 +1021,10 @@ export default function Menu() {
                     </td>
 
                     <td className="hidden px-4 py-3 sm:table-cell">
-                      <AvailabilityBadge available={item.is_available} />
+                      <div className="flex flex-col gap-1 items-start">
+                        <AvailabilityBadge available={item.is_available} />
+                        <InventoryStatusBadge status={item.inventory_status} maxServings={item.max_preparable_servings} />
+                      </div>
                     </td>
 
                     <td className="px-4 py-3">
@@ -1150,7 +1128,10 @@ export default function Menu() {
               </p>
             </div>
 
-            <AvailabilityBadge available={viewingItem.is_available} />
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1.5">
+              <AvailabilityBadge available={viewingItem.is_available} />
+              <InventoryStatusBadge status={viewingItem.inventory_status} maxServings={viewingItem.max_preparable_servings} />
+            </div>
           </div>
 
           <div className="mb-5 rounded-lg bg-[#FAFAF9] p-4">
@@ -1170,6 +1151,11 @@ export default function Menu() {
             />
 
             <DetailItem label="Item ID" value={viewingItem.id} />
+
+            <DetailItem
+              label="Kitchen Stock Readiness"
+              value={viewingItem.inventory_status ? `${viewingItem.inventory_status.replace(/_/g, ' ')} (${viewingItem.max_preparable_servings ?? 0} servings)` : "No Recipe Defined"}
+            />
 
             {formatDateTime(viewingItem.created_at) && (
               <DetailItem
@@ -1695,6 +1681,35 @@ function AvailabilityBadge({ available }) {
   );
 }
 
+function InventoryStatusBadge({ status, maxServings }) {
+  if (!status || status === "NO_RECIPE") {
+    return (
+      <span className="inline-block shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium bg-stone-100 text-stone-500 border border-stone-200">
+        No Recipe
+      </span>
+    );
+  }
+  if (status === "OUT_OF_STOCK") {
+    return (
+      <span className="inline-block shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+        Out of Stock (0)
+      </span>
+    );
+  }
+  if (status === "LOW_STOCK") {
+    return (
+      <span className="inline-block shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+        Low Stock ({maxServings ?? "?"})
+      </span>
+    );
+  }
+  return (
+    <span className="inline-block shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+      In Stock {maxServings != null ? `(${maxServings})` : ""}
+    </span>
+  );
+}
+
 function DetailItem({ label, value }) {
   return (
     <div>
@@ -1741,66 +1756,18 @@ function ModalShell({
   onClose,
   children,
   maxWidth = "max-w-xl",
-  layer = "z-50",
-  disableClose = false,
-  closeOnEscape = true,
 }) {
-  // Lock background scroll while the modal is open
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-
-  // Escape closes the modal
-  useEffect(() => {
-    if (!closeOnEscape) return undefined;
-
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape" && !disableClose) onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [closeOnEscape, disableClose, onClose]);
-
+  const modalSize = maxWidth.includes("4xl") || maxWidth.includes("3xl") ? "lg" : maxWidth.includes("lg") || maxWidth.includes("xl") || maxWidth.includes("2xl") ? "md" : "sm";
   return (
-    <div
-      className={`fixed inset-0 ${layer} flex items-center justify-center overflow-y-auto bg-[#1C1917]/50 p-4`}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !disableClose) onClose();
-      }}
+    <Modal
+      isOpen={true}
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      size={modalSize}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className={`my-auto max-h-[90vh] w-full ${maxWidth} overflow-y-auto rounded-xl bg-white shadow-xl`}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E7E5E4] bg-white px-5 py-4">
-          <div>
-            <h2 className="font-semibold text-[#1C1917]">{title}</h2>
-
-            <p className="mt-0.5 text-xs text-[#78716C]">{subtitle}</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={disableClose}
-            className="rounded-lg p-2 text-[#78716C] hover:bg-[#FAFAF9] disabled:opacity-50"
-            aria-label="Close dialog"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
+      {children}
+    </Modal>
   );
 }
 

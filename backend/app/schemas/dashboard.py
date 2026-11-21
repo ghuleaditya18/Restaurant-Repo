@@ -19,6 +19,10 @@ class DashboardStatistics(BaseModel):
     active_orders: int = 0
     pending_payments: int = 0
     total_revenue: Decimal = Decimal("0.00")
+    total_inventory_items: int = 0
+    low_stock_items_count: int = 0
+    out_of_stock_items_count: int = 0
+    total_inventory_valuation: Decimal = Decimal("0.00")
     date_filter_label: str = "Today"
 
 

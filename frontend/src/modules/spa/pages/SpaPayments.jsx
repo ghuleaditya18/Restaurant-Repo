@@ -8,6 +8,8 @@ import {
   Smartphone,
 } from "lucide-react";
 import spaApi from "../services/spaApi";
+import PageHeader from "../../../components/PageHeader";
+import AlertBanner from "../../../components/AlertBanner";
 
 export default function SpaPayments() {
   const [payments, setPayments] = useState([]);
@@ -92,15 +94,19 @@ export default function SpaPayments() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-          Payment Transactions
-        </h1>
-        <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400">
-          Complete settlement ledger across UPI, Cards, Net Banking and Cash collections
-        </p>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Spa Payments"
+        description="Complete settlement ledger across UPI, Cards, Net Banking and Cash collections."
+      />
+
+      {error && (
+        <AlertBanner
+          type="error"
+          message={error}
+          onDismiss={() => setError(null)}
+        />
+      )}
 
       {/* Aggregate Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

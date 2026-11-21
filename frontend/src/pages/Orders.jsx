@@ -4,7 +4,6 @@ import {
   Plus,
   Search,
   Eye,
-  X,
   Pencil,
   RefreshCw,
   Trash2,
@@ -27,6 +26,8 @@ import {
   updateOrderStatus,
 } from "../services/orderService";
 import DateFilter from "../components/DateFilter";
+import PageHeader from "../components/PageHeader";
+import Modal from "../components/Modal";
 import { useNotification } from "../context/NotificationContext";
 import {
   ORDER_WORKFLOW_STAGES,
@@ -659,19 +660,10 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
-      {/* PAGE HEADER */}
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
-            Order Management
-          </h1>
-          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
-            Coordinate the 4-stage dining workflow:{" "}
-            <span className="font-semibold text-stone-700">Ordered → In Progress → Served → Completed</span>
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Orders"
+        actions={
           <button
             type="button"
             onClick={openCreateModal}
@@ -680,8 +672,8 @@ export default function Orders() {
             <Plus size={17} />
             <span>Create New Order</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* VIEW TABS: ACTIVE ORDERS vs ORDER HISTORY */}
       <div className="flex flex-col gap-4 border-b border-stone-200 pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1515,29 +1507,16 @@ export default function Orders() {
 // ==========================================
 
 function ModalShell({ title, subtitle, onClose, size = "max-w-2xl", children }) {
+  const modalSize = size.includes("4xl") || size.includes("3xl") ? "lg" : size.includes("lg") || size.includes("2xl") ? "md" : "sm";
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-2xs">
-      <div
-        className={`w-full ${size} max-h-[90vh] overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
-      >
-        <div className="mb-5 flex items-start justify-between border-b border-stone-100 pb-4">
-          <div>
-            <h2 className="text-lg font-bold text-[#1C1917]">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>}
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
-            aria-label="Close modal"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {children}
-      </div>
-    </div>
+    <Modal
+      isOpen={true}
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      size={modalSize}
+    >
+      {children}
+    </Modal>
   );
 }

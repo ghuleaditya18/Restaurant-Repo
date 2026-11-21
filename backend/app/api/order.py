@@ -9,6 +9,10 @@ from app.core.date_utils import get_date_range, get_kolkata_now
 
 from app.db.session import get_db
 from app.services.order_service import cancel_stale_orders
+from app.services.inventory_service import (
+    deduct_inventory_for_order,
+    reverse_order_inventory_deduction,
+)
 from app.models.entities import (
     User,
     Customer,
@@ -662,6 +666,18 @@ def update_order_status(
     previous_status = order.status
 
     try:
+        # Trigger atomic stock deduction when transitioning to PREPARING
+        if data.status == OrderStatus.PREPARING:
+            deduct_inventory_for_order(db=db, order=order, user_id=current_user.id)
+
+        # Trigger atomic stock restoration if cancelling an order that reached PREPARING or beyond
+        if data.status == OrderStatus.CANCELLED and previous_status in {
+            OrderStatus.PREPARING,
+            OrderStatus.READY,
+            OrderStatus.SERVED,
+        }:
+            reverse_order_inventory_deduction(db=db, order=order, user_id=current_user.id)
+
         order.status = data.status
 
         db.add(

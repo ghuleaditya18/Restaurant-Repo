@@ -23,6 +23,7 @@ export const spaApi = {
   createCustomer: (data) => api.post("/api/spa/customers", data),
   getCustomer: (id) => api.get(`/api/spa/customers/${id}`),
   updateCustomer: (id, data) => api.put(`/api/spa/customers/${id}`, data),
+  deleteCustomer: (id) => api.delete(`/api/spa/customers/${id}`),
   getCustomerBookingHistory: (id) => api.get(`/api/spa/customers/${id}/bookings`),
 
   // Staff & Therapists
@@ -30,6 +31,7 @@ export const spaApi = {
   createStaff: (data) => api.post("/api/spa/staff", data),
   getStaffDetail: (id) => api.get(`/api/spa/staff/${id}`),
   updateStaff: (id, data) => api.put(`/api/spa/staff/${id}`, data),
+  deleteStaff: (id) => api.delete(`/api/spa/staff/${id}`),
   updateStaffAvailability: (id, availabilities) =>
     api.put(`/api/spa/staff/${id}/availability`, availabilities),
 

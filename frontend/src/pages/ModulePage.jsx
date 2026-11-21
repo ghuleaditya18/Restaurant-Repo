@@ -1,12 +1,10 @@
 import { ClipboardList } from "lucide-react";
+import PageHeader from "../components/PageHeader";
 
 function ModulePage({ title, description, emptyMessage }) {
   return (
     <div className="space-y-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">{title}</h1>
-        <p className="mt-1 text-xs text-stone-500 sm:text-sm">{description}</p>
-      </div>
+      <PageHeader title={title} description={description} />
 
       <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-stone-200/90 bg-white px-6 text-center shadow-xs">
         <div className="mb-4 rounded-2xl bg-[#FEF9C3] p-5 text-amber-900 border border-yellow-200 shadow-2xs">

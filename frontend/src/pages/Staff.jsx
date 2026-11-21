@@ -27,6 +27,8 @@ import {
   deleteStaff,
 } from "../services/staffService";
 import { useNotification } from "../context/NotificationContext";
+import PageHeader from "../components/PageHeader";
+import AlertBanner from "../components/AlertBanner";
 
 // Initial state for add/edit form
 const EMPTY_FORM = {
@@ -410,64 +412,37 @@ export default function Staff() {
 
   return (
     <div className="space-y-6">
-      {/* Page Heading */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
-            Staff Management
-          </h1>
-
-          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
-            Manage restaurant personnel, role designations, and active credentials.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
-        >
-          <Plus size={17} />
-          <span>Add New Staff</span>
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Staff"
+        actions={
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+          >
+            <Plus size={17} />
+            <span>Add New Staff</span>
+          </button>
+        }
+      />
 
       {/* Success Message */}
       {successMessage && (
-        <div
-          role="status"
-          className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800"
-        >
-          <span>{successMessage}</span>
-
-          <button
-            type="button"
-            onClick={() => setSuccessMessage("")}
-            aria-label="Dismiss message"
-            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AlertBanner
+          type="success"
+          message={successMessage}
+          onDismiss={() => setSuccessMessage("")}
+        />
       )}
 
       {/* Error Message */}
       {pageError && (
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-        >
-          <span>{pageError}</span>
-
-          <button
-            type="button"
-            onClick={() => setPageError("")}
-            aria-label="Dismiss error"
-            className="text-red-700 hover:text-red-900 cursor-pointer"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AlertBanner
+          type="error"
+          message={pageError}
+          onDismiss={() => setPageError("")}
+        />
       )}
 
       {/* Statistics Cards */}

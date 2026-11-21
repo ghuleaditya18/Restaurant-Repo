@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Plus, Search, Pencil, Eye, Trash2, X, RefreshCw, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Search, Pencil, Eye, Trash2, RefreshCw, Mail, Phone, MapPin } from "lucide-react";
 
 import {
   getAllCustomers,
@@ -10,6 +10,9 @@ import {
   deleteCustomer,
 } from "../services/customerService";
 import { useNotification } from "../context/NotificationContext";
+import PageHeader from "../components/PageHeader";
+import AlertBanner from "../components/AlertBanner";
+import Modal from "../components/Modal";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -266,73 +269,56 @@ export default function Customers() {
 
   return (
     <div className="space-y-6">
-      {/* PAGE HEADER */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917] sm:text-3xl">
-            Customer Directory
-          </h1>
-
-          <p className="mt-1 text-xs text-stone-500 sm:text-sm">
-            Maintain guest dining records, contacts, and order profiles.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
-        >
-          <Plus size={18} />
-          <span>Add Customer</span>
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Customers"
+        actions={
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+          >
+            <Plus size={18} />
+            <span>Add Customer</span>
+          </button>
+        }
+      />
 
       {/* SUCCESS MESSAGE */}
       {successMessage && (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          <span>{successMessage}</span>
-          <button
-            type="button"
-            onClick={() => setSuccessMessage("")}
-            className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AlertBanner
+          type="success"
+          message={successMessage}
+          onDismiss={() => setSuccessMessage("")}
+        />
       )}
 
       {/* ERROR MESSAGE */}
       {pageError && (
-        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-          <span>{pageError}</span>
-          <button
-            type="button"
-            onClick={() => setPageError("")}
-            className="text-red-700 hover:text-red-900 cursor-pointer"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <AlertBanner
+          type="error"
+          message={pageError}
+          onDismiss={() => setPageError("")}
+        />
       )}
 
       {/* METRIC OVERVIEW */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <div className="rounded-xl border border-stone-200/90 bg-white p-4 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Registered Guests</p>
-          <p className="mt-1 text-2xl font-bold text-[#1C1917]">{customers.length}</p>
+        <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">Registered Guests</p>
+          <p className="mt-1 text-2xl font-bold text-[#1C1917] dark:text-stone-100 tabular-nums">{customers.length}</p>
         </div>
 
-        <div className="rounded-xl border border-stone-200/90 bg-white p-4 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">With Email On File</p>
-          <p className="mt-1 text-2xl font-bold text-stone-800">
+        <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">With Email On File</p>
+          <p className="mt-1 text-2xl font-bold text-stone-800 dark:text-stone-200 tabular-nums">
             {customers.filter((c) => Boolean(c.email)).length}
           </p>
         </div>
 
-        <div className="rounded-xl border border-stone-200/90 bg-white p-4 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">With Address Records</p>
-          <p className="mt-1 text-2xl font-bold text-stone-800">
+        <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">With Address Records</p>
+          <p className="mt-1 text-2xl font-bold text-stone-800 dark:text-stone-200 tabular-nums">
             {customers.filter((c) => Boolean(c.address)).length}
           </p>
         </div>
@@ -635,27 +621,15 @@ export default function Customers() {
 
 function ModalShell({ title, subtitle, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs">
-      <div className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-        <div className="sticky top-0 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
-          <div>
-            <h2 className="text-lg font-bold text-[#1C1917]">{title}</h2>
-            <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
-            aria-label="Close dialog"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-6">{children}</div>
-      </div>
-    </div>
+    <Modal
+      isOpen={true}
+      title={title}
+      subtitle={subtitle}
+      onClose={onClose}
+      size="sm"
+    >
+      {children}
+    </Modal>
   );
 }
 

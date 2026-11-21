@@ -7,12 +7,13 @@ import {
   Edit2,
   CheckCircle2,
   XCircle,
-  AlertCircle,
   X,
   Layers,
 } from "lucide-react";
 import spaApi from "../services/spaApi";
 import { useNotification } from "../../../context/NotificationContext";
+import PageHeader from "../../../components/PageHeader";
+import AlertBanner from "../../../components/AlertBanner";
 
 function formatCurrency(val) {
   const num = Number(val || 0);
@@ -141,59 +142,50 @@ export default function SpaServices() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-[#F5B716]/10 text-[#F5B716] dark:bg-[#F5B716]/20">
-              <Sparkles size={20} />
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100">
-              Service Management
-            </h1>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Spa Services"
+        description="Configure spa treatments, therapies, durations, and pricing."
+        actions={
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setCatModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition cursor-pointer shadow-xs"
+            >
+              <Layers size={14} />
+              <span>Add Category</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEditingService(null);
+                setServiceForm({
+                  category_id: categories[0]?.id || "",
+                  name: "",
+                  description: "",
+                  price: "",
+                  duration_minutes: 60,
+                  is_available: true,
+                });
+                setServiceModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>Add Service</span>
+            </button>
           </div>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Configure spa treatments, therapies, durations, and pricing.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setCatModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition cursor-pointer shadow-xs"
-          >
-            <Layers size={14} />
-            <span>Add Category</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setEditingService(null);
-              setServiceForm({
-                category_id: categories[0]?.id || "",
-                name: "",
-                description: "",
-                price: "",
-                duration_minutes: 60,
-                is_available: true,
-              });
-              setServiceModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
-          >
-            <Plus size={16} />
-            <span>Add Service</span>
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm flex items-center gap-2">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
+        <AlertBanner
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+        />
       )}
 
       {/* Categories Filter Pills */}

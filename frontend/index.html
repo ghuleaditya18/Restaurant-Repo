@@ -8,8 +8,9 @@
     <script>
       (function() {
         try {
-          var saved = localStorage.getItem("dineflow_theme");
-          if (saved === "dark") {
+          var saved = localStorage.getItem("dineflow_theme_mode") || localStorage.getItem("dineflow_theme");
+          var isDark = saved === "dark" || (saved !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (isDark) {
             document.documentElement.classList.add("dark");
             document.documentElement.setAttribute("data-theme", "dark");
           }

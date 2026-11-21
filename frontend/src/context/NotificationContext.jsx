@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 
 const NotificationContext = createContext(null);
@@ -69,6 +69,19 @@ export function NotificationProvider({ children }) {
     });
   }, []);
 
+  // Escape key handler for confirmation dialog
+  useEffect(() => {
+    if (!confirmDialog) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        confirmDialog.onCancel();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [confirmDialog]);
+
   return (
     <NotificationContext.Provider
       value={{
@@ -136,17 +149,25 @@ export function NotificationProvider({ children }) {
         })}
       </div>
 
-      {/* CONFIRMATION MODAL */}
+      {/* CONFIRMATION MODAL (A4 Standard Locked Dialog) */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1C1917] p-6 shadow-2xl border border-stone-100 dark:border-stone-800 animate-in fade-in zoom-in-95 duration-150">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1C1917] p-6 shadow-2xl border border-stone-100 dark:border-stone-800 animate-in fade-in zoom-in-95 duration-150"
+          >
             <div className="flex items-start gap-4">
               <div
                 className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
                   confirmDialog.variant === "danger"
-                    ? "bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400"
+                    ? "bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40"
                     : confirmDialog.variant === "warning"
-                    ? "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"
+                    ? "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40"
                     : "bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800"
                 }`}
               >
@@ -169,6 +190,7 @@ export function NotificationProvider({ children }) {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
+                autoFocus
                 onClick={confirmDialog.onCancel}
                 className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700 transition cursor-pointer"
               >

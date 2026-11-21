@@ -235,3 +235,7 @@ class MenuItemResponse(BaseModel):
     created_at: datetime | None = None
 
     updated_at: datetime | None = None
+
+    inventory_status: str | None = None
+
+    max_preparable_servings: int | None = None

@@ -32,6 +32,8 @@ import {
 
 import { getAllOrders } from "../services/orderService";
 import DateFilter from "../components/DateFilter";
+import PageHeader from "../components/PageHeader";
+import StandardModal from "../components/Modal";
 import { useNotification } from "../context/NotificationContext";
 
 // ==========================================
@@ -731,28 +733,21 @@ export default function Invoices() {
 
   return (
     <div className="space-y-6">
-      {/* PAGE HEADER */}
-
-      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-semibold text-[#1C1917] md:text-3xl">
-            Invoice Management
-          </h1>
-
-          <p className="mt-1 text-sm text-gray-500">
-            Generate invoices and manage customer payments.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={openGenerateInvoiceModal}
-          className="flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition"
-        >
-          <Plus size={18} />
-          Generate Invoice
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Invoices"
+        description="Generate invoices and manage customer payments."
+        actions={
+          <button
+            type="button"
+            onClick={openGenerateInvoiceModal}
+            className="flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition"
+          >
+            <Plus size={18} />
+            <span>Generate Invoice</span>
+          </button>
+        }
+      />
 
       {/* NOTIFICATIONS */}
 
@@ -1604,28 +1599,14 @@ function SummaryCard({ title, value, icon, active = false, onClick }) {
 
 function Modal({ title, onClose, children, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 p-4">
-      <div
-        className={`my-auto max-h-[92vh] w-full ${
-          wide ? "max-w-3xl" : "max-w-lg"
-        } overflow-y-auto rounded-xl bg-white shadow-xl`}
-      >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E7E5E4] bg-white px-5 py-4">
-          <h2 className="font-semibold text-[#1C1917]">{title}</h2>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-2 hover:bg-gray-100"
-            aria-label="Close dialog"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-5">{children}</div>
-      </div>
-    </div>
+    <StandardModal
+      isOpen={true}
+      title={title}
+      onClose={onClose}
+      size={wide ? "lg" : "md"}
+    >
+      {children}
+    </StandardModal>
   );
 }
 

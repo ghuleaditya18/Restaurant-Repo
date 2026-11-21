@@ -20,11 +20,18 @@ import {
   HeartHandshake,
   AlertCircle,
   Quote,
+  Sun,
+  Moon,
+  Monitor,
+  Check,
+  Palette,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
+import { useTheme } from "../context/ThemeContext";
 import { updateProfile } from "../services/authService";
+import PageHeader from "../components/PageHeader";
 import { RESTAURANT_ABOUT } from "../config/restaurantAbout";
 import { SPA_ABOUT, SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
 import {
@@ -216,13 +223,15 @@ export default function Settings() {
   const isSpaContext = user?.business_context === "SPA";
   const currentHelpSections = isSpaContext ? SPA_HELP_SECTIONS : HELP_SECTIONS;
 
-  // Active section tab: 'profile' | 'help' | 'about' (appearance removed in favor of top header toggle)
+  const { themeMode, setThemeMode } = useTheme();
+
+  // Active section tab: 'profile' | 'appearance' | 'help' | 'about'
   const rawTab = searchParams.get("tab");
-  const activeTab = rawTab === "help" || rawTab === "about" ? rawTab : "profile";
+  const activeTab = ["profile", "appearance", "help", "about"].includes(rawTab) ? rawTab : "profile";
 
   useEffect(() => {
-    // Gracefully normalize legacy deep links like ?tab=appearance or invalid tabs to profile
-    if (rawTab && !["profile", "help", "about"].includes(rawTab)) {
+    // Gracefully normalize invalid tabs to profile
+    if (rawTab && !["profile", "appearance", "help", "about"].includes(rawTab)) {
       setSearchParams({ tab: "profile" }, { replace: true });
     }
   }, [rawTab, setSearchParams]);
@@ -371,59 +380,66 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      {/* PAGE HEADER */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
-            Settings
-          </h1>
-          <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-            Manage your profile details, access operational help, and view {isSpaContext ? "spa facility" : "restaurant"} information.
-          </p>
-        </div>
+      {/* STANDARDIZED PAGE HEADER WITH TAB CONTROLS */}
+      <PageHeader
+        title={isSpaContext ? "Spa Facility Settings" : "System Settings"}
+        description={`Manage your account profile, theme appearance, operational help, and ${isSpaContext ? "spa facility" : "restaurant"} information.`}
+        actions={
+          <div className="inline-flex rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-1 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab("profile")}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                activeTab === "profile"
+                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+              }`}
+            >
+              <User size={14} />
+              <span>Profile</span>
+            </button>
 
-        {/* Quick Tab Switcher */}
-        <div className="inline-flex rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-1 shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab("profile")}
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
-              activeTab === "profile"
-                ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
-            }`}
-          >
-            <User size={14} />
-            <span>Profile</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("appearance")}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                activeTab === "appearance"
+                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+              }`}
+            >
+              <Palette size={14} />
+              <span>Appearance</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("help")}
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
-              activeTab === "help"
-                ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
-            }`}
-          >
-            <HelpCircle size={14} />
-            <span>Help & Support</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("help")}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                activeTab === "help"
+                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+              }`}
+            >
+              <HelpCircle size={14} />
+              <span>Help & Support</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("about")}
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
-              activeTab === "about"
-                ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
-            }`}
-          >
-            <Info size={14} />
-            <span>About</span>
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("about")}
+              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                activeTab === "about"
+                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+              }`}
+            >
+              <Info size={14} />
+              <span>About</span>
+            </button>
+          </div>
+        }
+      />
 
       {/* =========================================================================
           TAB 1: RECEPTIONIST PROFILE SETTINGS (READ-ONLY BY DEFAULT)
@@ -725,6 +741,137 @@ export default function Settings() {
               </form>
             </div>
           )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: THEME & APPEARANCE (A2 STANDARD)
+         ========================================================================= */}
+      {activeTab === "appearance" && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 shadow-xs">
+            <div>
+              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+                Application Appearance
+              </h2>
+              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
+                Select your preferred interface display theme. The selected setting persists per user and applies throughout the entire application.
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Light Mode Card */}
+              <button
+                type="button"
+                onClick={() => {
+                  setThemeMode("light", user?.id);
+                  showSuccess("Appearance set to Light Mode");
+                }}
+                className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                  themeMode === "light"
+                    ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-amber-50/20 dark:bg-amber-950/20"
+                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#1C1917]"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700 border border-amber-200">
+                      <Sun size={20} />
+                    </div>
+                    {themeMode === "light" && (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5B716] text-[#1C1917]">
+                        <Check size={14} className="stroke-[3]" />
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold text-stone-900 dark:text-stone-100">
+                    Light Theme
+                  </h3>
+                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                    Crisp, bright aesthetic designed for daytime reception counters and well-lit office terminals.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
+                  <span>Surface: Crisp White</span>
+                  <span className="font-semibold text-amber-600">Active Bright</span>
+                </div>
+              </button>
+
+              {/* Dark Mode Card */}
+              <button
+                type="button"
+                onClick={() => {
+                  setThemeMode("dark", user?.id);
+                  showSuccess("Appearance set to Dark Mode");
+                }}
+                className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                  themeMode === "dark"
+                    ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-amber-50/20 dark:bg-amber-950/20"
+                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#1C1917]"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-900 text-amber-400 border border-stone-800">
+                      <Moon size={20} />
+                    </div>
+                    {themeMode === "dark" && (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5B716] text-[#1C1917]">
+                        <Check size={14} className="stroke-[3]" />
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold text-stone-900 dark:text-stone-100">
+                    Dark Theme
+                  </h3>
+                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                    Rich charcoal and espresso palette designed to reduce screen glare during evening service and low-light counters.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
+                  <span>Surface: Deep Espresso</span>
+                  <span className="font-semibold text-amber-400">Low Glare</span>
+                </div>
+              </button>
+
+              {/* System Sync Card */}
+              <button
+                type="button"
+                onClick={() => {
+                  setThemeMode("system", user?.id);
+                  showSuccess("Appearance set to System Default");
+                }}
+                className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                  themeMode === "system"
+                    ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-amber-50/20 dark:bg-amber-950/20"
+                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#1C1917]"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                      <Monitor size={20} />
+                    </div>
+                    {themeMode === "system" && (
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5B716] text-[#1C1917]">
+                        <Check size={14} className="stroke-[3]" />
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold text-stone-900 dark:text-stone-100">
+                    System Sync
+                  </h3>
+                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                    Automatically switches between Light and Dark appearance according to your device's operating system preferences.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
+                  <span>Adaptive Dynamic</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">OS Matched</span>
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

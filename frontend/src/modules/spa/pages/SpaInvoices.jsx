@@ -24,6 +24,7 @@ import {
 import spaApi from "../services/spaApi";
 import { PaymentStatusBadge } from "../components/StatusBadges";
 import DateFilter from "../../../components/DateFilter";
+import PageHeader from "../../../components/PageHeader";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
 
@@ -755,26 +756,21 @@ export default function SpaInvoices() {
 
   return (
     <div className="space-y-6">
-      {/* PAGE HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
-            Spa Invoice Management
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-0.5">
-            Generate treatment invoices, manage customer payments and track outstanding balances.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={openGenerateInvoiceModal}
-          className="flex items-center justify-center gap-2 rounded-xl bg-[#F5B716] px-4 py-2.5 text-xs sm:text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition self-start sm:self-auto"
-        >
-          <Plus size={16} />
-          <span>Generate Invoice</span>
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Spa Invoices"
+        description="Generate treatment invoices, manage customer payments and track outstanding balances."
+        actions={
+          <button
+            type="button"
+            onClick={openGenerateInvoiceModal}
+            className="flex items-center justify-center gap-2 rounded-xl bg-[#F5B716] px-4 py-2.5 text-xs sm:text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition self-start sm:self-auto"
+          >
+            <Plus size={16} />
+            <span>Generate Invoice</span>
+          </button>
+        }
+      />
 
       {/* DATE FILTER */}
       <div className="flex flex-wrap items-center justify-between gap-3">

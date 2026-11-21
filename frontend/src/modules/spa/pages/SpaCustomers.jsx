@@ -7,13 +7,15 @@ import {
   Mail,
   Edit2,
   Calendar,
-  AlertCircle,
   X,
+  Trash2,
 } from "lucide-react";
 import spaApi from "../services/spaApi";
 import { BookingStatusBadge } from "../components/StatusBadges";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
+import PageHeader from "../../../components/PageHeader";
+import AlertBanner from "../../../components/AlertBanner";
 
 function formatCurrency(val) {
   const num = Number(val || 0);
@@ -21,7 +23,7 @@ function formatCurrency(val) {
 }
 
 export default function SpaCustomers() {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, confirm } = useNotification();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -100,43 +102,54 @@ export default function SpaCustomers() {
     }
   };
 
+  const handleDeleteCustomer = async (cust) => {
+    const confirmed = await confirm({
+      title: "Delete Customer",
+      message: `Are you sure you want to delete ${cust.full_name}? This action cannot be undone.`,
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const res = await spaApi.deleteCustomer(cust.id);
+      showSuccess(res.data?.message || `${cust.full_name} deleted successfully.`, "Customer Deleted");
+      setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to delete customer.", "Delete Failed");
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-[#F5B716]/10 text-[#F5B716] dark:bg-[#F5B716]/20">
-              <Users size={20} />
-            </span>
-            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100">
-              Customer Management
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1">
-            Registered spa guests, treatment preferences, and appointment records.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setEditingCustomer(null);
-            setForm({ full_name: "", phone: "", email: "", notes: "", is_active: true });
-            setModalOpen(true);
-          }}
-          className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
-        >
-          <Plus size={16} />
-          <span>Register Customer</span>
-        </button>
-      </div>
+      {/* A1 Standard PageHeader */}
+      <PageHeader
+        title="Spa Customers"
+        description="Registered spa guests, treatment preferences, and appointment records."
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              setEditingCustomer(null);
+              setForm({ full_name: "", phone: "", email: "", notes: "", is_active: true });
+              setModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
+          >
+            <Plus size={16} />
+            <span>Register Customer</span>
+          </button>
+        }
+      />
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-sm flex items-center gap-2">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-        </div>
+        <AlertBanner
+          type="error"
+          message={error}
+          onDismiss={() => setError("")}
+        />
       )}
 
       {/* Search Input */}
@@ -242,6 +255,14 @@ export default function SpaCustomers() {
                           title="Edit Customer"
                         >
                           <Edit2 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCustomer(c)}
+                          className="p-1.5 rounded-lg border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition cursor-pointer"
+                          title="Delete Customer"
+                        >
+                          <Trash2 size={13} />
                         </button>
                       </div>
                     </td>

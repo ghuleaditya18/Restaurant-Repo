@@ -17,7 +17,7 @@ import { BookingStatusBadge } from "../components/StatusBadges";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTime12Hour, formatTimeRange12Hour } from "../utils/timeFormat";
 import PageHeader from "../../../components/PageHeader";
-import AlertBanner from "../../../components/AlertBanner";
+import Pagination from "../../../components/Pagination";
 
 function formatCurrency(val) {
   const num = Number(val || 0);
@@ -34,12 +34,13 @@ export default function SpaBookings() {
   const [therapists, setTherapists] = useState([]);
   const [availableServices, setAvailableServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   // Filter state
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Booking Modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -84,7 +85,6 @@ export default function SpaBookings() {
   const fetchAllData = useCallback(async () => {
     try {
       setLoading(true);
-      setError("");
       const [bRes, cRes, stRes, sRes] = await Promise.all([
         spaApi.getBookings(),
         spaApi.getCustomers({ active_only: true }),
@@ -96,11 +96,11 @@ export default function SpaBookings() {
       setTherapists(stRes.data);
       setAvailableServices(sRes.data);
     } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to load bookings.");
+      showError(err?.response?.data?.detail || "Failed to load bookings.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     fetchAllData();
@@ -444,21 +444,13 @@ export default function SpaBookings() {
               });
               setCreateModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 transition shadow-xs cursor-pointer"
           >
             <Plus size={16} />
             <span>New Appointment</span>
           </button>
         }
       />
-
-      {error && (
-        <AlertBanner
-          type="error"
-          message={error}
-          onDismiss={() => setError("")}
-        />
-      )}
 
       {/* Tabs and Filters */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -475,10 +467,13 @@ export default function SpaBookings() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setCurrentPage(1);
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 activeTab === tab.id
-                  ? "bg-[#F5B716] text-[#1C1917]"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold"
                   : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
               }`}
             >
@@ -494,23 +489,32 @@ export default function SpaBookings() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Search reference, customer..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F5B716]"
+              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
             />
           </div>
 
           <input
             type="date"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => {
+              setDateFilter(e.target.value);
+              setCurrentPage(1);
+            }}
             className="px-2.5 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 focus:outline-none"
             title="Filter by appointment date"
           />
           {dateFilter && (
             <button
               type="button"
-              onClick={() => setDateFilter("")}
+              onClick={() => {
+                setDateFilter("");
+                setCurrentPage(1);
+              }}
               className="text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 underline cursor-pointer"
             >
               Clear
@@ -545,7 +549,7 @@ export default function SpaBookings() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-700 dark:text-stone-200">
-                {filteredBookings.map((b) => (
+                {filteredBookings.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((b) => (
                   <tr
                     key={b.id}
                     className="hover:bg-stone-50/60 dark:hover:bg-stone-800/40 transition"
@@ -632,7 +636,7 @@ export default function SpaBookings() {
                               <button
                                 type="button"
                                 onClick={() => handleGenerateInvoice(b.id, b.booking_number)}
-                                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#F5B716] text-[#1C1917] hover:bg-[#E5A910] cursor-pointer transition flex items-center gap-1"
+                                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 cursor-pointer transition flex items-center gap-1"
                               >
                                 <FileText size={12} />
                                 <span>Bill</span>
@@ -697,6 +701,13 @@ export default function SpaBookings() {
             </table>
           </div>
         )}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredBookings.length / pageSize) || 1}
+          onPageChange={setCurrentPage}
+          totalRecords={filteredBookings.length}
+          limit={pageSize}
+        />
       </div>
 
       {/* CREATE BOOKING MODAL */}
@@ -705,7 +716,7 @@ export default function SpaBookings() {
           <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 my-8">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-[#F5B716]" />
+                <Sparkles size={18} className="text-[#F59E0B]" />
                 <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                   Book Spa Appointment
                 </h2>
@@ -732,7 +743,7 @@ export default function SpaBookings() {
                       name="cust_mode"
                       checked={bookingForm.customer_mode === "existing"}
                       onChange={() => setBookingForm({ ...bookingForm, customer_mode: "existing" })}
-                      className="text-[#F5B716] focus:ring-[#F5B716]"
+                      className="text-[#F59E0B] focus:ring-[#F59E0B]"
                     />
                     <span className="text-stone-700 dark:text-stone-300 font-medium">Select Registered Customer</span>
                   </label>
@@ -742,7 +753,7 @@ export default function SpaBookings() {
                       name="cust_mode"
                       checked={bookingForm.customer_mode === "new"}
                       onChange={() => setBookingForm({ ...bookingForm, customer_mode: "new" })}
-                      className="text-[#F5B716] focus:ring-[#F5B716]"
+                      className="text-[#F59E0B] focus:ring-[#F59E0B]"
                     />
                     <span className="text-stone-700 dark:text-stone-300 font-medium">+ Register New Customer</span>
                   </label>
@@ -753,7 +764,7 @@ export default function SpaBookings() {
                     required
                     value={bookingForm.customer_id}
                     onChange={(e) => setBookingForm({ ...bookingForm, customer_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                   >
                     <option value="">Select Customer...</option>
                     {customers.map((c) => (
@@ -776,7 +787,7 @@ export default function SpaBookings() {
                             new_customer: { ...bookingForm.new_customer, full_name: e.target.value },
                           })
                         }
-                        className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                        className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                       />
                     </div>
                     <div>
@@ -791,7 +802,7 @@ export default function SpaBookings() {
                             new_customer: { ...bookingForm.new_customer, phone: e.target.value },
                           })
                         }
-                        className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                        className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                       />
                     </div>
                   </div>
@@ -809,7 +820,7 @@ export default function SpaBookings() {
                   onChange={(e) =>
                     setBookingForm({ ...bookingForm, staff_id: e.target.value, start_time: "" })
                   }
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                 >
                   <option value="">Select Therapist...</option>
                   {therapists.map((th) => (
@@ -833,7 +844,7 @@ export default function SpaBookings() {
                   onChange={(e) =>
                     setBookingForm({ ...bookingForm, booking_date: e.target.value, start_time: "" })
                   }
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                 />
               </div>
 
@@ -880,7 +891,7 @@ export default function SpaBookings() {
                                 });
                               }
                             }}
-                            className="rounded text-[#F5B716] focus:ring-[#F5B716]"
+                            className="rounded text-[#F59E0B] focus:ring-[#F59E0B]"
                           />
                           <div>
                             <span className="font-semibold text-stone-900 dark:text-stone-100">
@@ -936,7 +947,7 @@ export default function SpaBookings() {
                             onClick={() => setBookingForm((prev) => ({ ...prev, start_time: slot.start_time }))}
                             className={`px-2.5 py-2 rounded-xl text-xs font-semibold transition border text-center cursor-pointer ${
                               isSelected
-                                ? "bg-[#F5B716] text-stone-900 border-[#F5B716] shadow-xs ring-2 ring-amber-300 font-bold"
+                                ? "bg-[#F59E0B] text-stone-900 border-[#F59E0B] shadow-xs ring-2 ring-amber-300 font-bold"
                                 : "bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200 border-stone-200 dark:border-stone-700"
                             }`}
                             title={`Therapy: ${slot.display_text} (Therapist reserved until next available appointment)`}
@@ -994,7 +1005,7 @@ export default function SpaBookings() {
                   value={bookingForm.notes}
                   onChange={(e) => setBookingForm({ ...bookingForm, notes: e.target.value })}
                   placeholder="e.g. Focus on shoulder tension, allergy notes..."
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                 />
               </div>
 
@@ -1010,7 +1021,7 @@ export default function SpaBookings() {
                 <button
                   type="submit"
                   disabled={!bookingForm.start_time || computedBookingStats.totalMinutes <= 0}
-                  className="px-5 py-2 font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] cursor-pointer transition shadow-xs disabled:opacity-50"
+                  className="px-5 py-2 font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 cursor-pointer transition shadow-xs disabled:opacity-50"
                 >
                   Confirm & Schedule
                 </button>
@@ -1045,7 +1056,7 @@ export default function SpaBookings() {
                 <select
                   value={rescheduleForm.staff_id}
                   onChange={(e) => setRescheduleForm({ ...rescheduleForm, staff_id: e.target.value, start_time: "" })}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                 >
                   {therapists.map((th) => (
                     <option key={th.id} value={th.id}>
@@ -1065,7 +1076,7 @@ export default function SpaBookings() {
                   min={new Date().toISOString().split("T")[0]}
                   value={rescheduleForm.booking_date}
                   onChange={(e) => setRescheduleForm({ ...rescheduleForm, booking_date: e.target.value, start_time: "" })}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
                 />
               </div>
 
@@ -1103,7 +1114,7 @@ export default function SpaBookings() {
                             onClick={() => setRescheduleForm((prev) => ({ ...prev, start_time: slot.start_time }))}
                             className={`px-2.5 py-2 rounded-xl text-xs font-semibold transition border text-center cursor-pointer ${
                               isSelected
-                                ? "bg-[#F5B716] text-stone-900 border-[#F5B716] shadow-xs ring-2 ring-amber-300 font-bold"
+                                ? "bg-[#F59E0B] text-stone-900 border-[#F59E0B] shadow-xs ring-2 ring-amber-300 font-bold"
                                 : "bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200 border-stone-200 dark:border-stone-700"
                             }`}
                             title={`Therapy: ${slot.display_text} (Therapist reserved until next available appointment)`}
@@ -1140,7 +1151,7 @@ export default function SpaBookings() {
                 <button
                   type="submit"
                   disabled={!rescheduleForm.start_time}
-                  className="px-5 py-2 font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] cursor-pointer transition shadow-xs disabled:opacity-50"
+                  className="px-5 py-2 font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 cursor-pointer transition shadow-xs disabled:opacity-50"
                 >
                   Confirm Reschedule
                 </button>
@@ -1291,7 +1302,7 @@ export default function SpaBookings() {
               {selectedBookingDetails.status_history?.length > 0 && (
                 <div>
                   <h3 className="font-bold text-stone-800 dark:text-stone-200 mb-1.5">Audit Trail</h3>
-                  <div className="space-y-1.5 border-l-2 border-[#F5B716] pl-3 py-1">
+                  <div className="space-y-1.5 border-l-2 border-[#F59E0B] pl-3 py-1">
                     {selectedBookingDetails.status_history.map((h) => (
                       <div key={h.id} className="text-xs">
                         <div className="font-semibold text-stone-800 dark:text-stone-200">

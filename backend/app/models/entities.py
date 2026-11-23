@@ -12,9 +12,11 @@ from sqlalchemy import (
     Enum as SQLAlchemyEnum,
     ForeignKey,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 
@@ -80,6 +82,7 @@ class PaymentMethod(str, Enum):
 
 class PaymentStatus(str, Enum):
     PENDING = "Pending"
+    PARTIALLY_PAID = "Partially Paid"
     PAID = "Paid"
 
 
@@ -145,13 +148,19 @@ class User(TimestampMixin, Base):
         nullable=False
     )
 
+    avatar_url: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
     staff_profile: Mapped[Staff | None] = relationship(
         back_populates="user",
         uselist=False
     )
 
     created_orders: Mapped[list[Order]] = relationship(
-        back_populates="created_by"
+        back_populates="created_by",
+        foreign_keys="[Order.created_by_user_id]"
     )
 
 
@@ -196,6 +205,11 @@ class Staff(TimestampMixin, Base):
         nullable=True
     )
 
+    image_url: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
     user: Mapped[User] = relationship(
         back_populates="staff_profile"
     )
@@ -233,6 +247,11 @@ class Customer(TimestampMixin, Base):
 
     address: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True
+    )
+
+    image_url: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True
     )
 
@@ -420,6 +439,21 @@ class Order(TimestampMixin, Base):
         nullable=True
     )
 
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True
+    )
+
+    archived_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
+    archive_reason: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
     customer: Mapped[Customer] = relationship(
         back_populates="orders"
     )
@@ -429,7 +463,8 @@ class Order(TimestampMixin, Base):
     )
 
     created_by: Mapped[User] = relationship(
-        back_populates="created_orders"
+        back_populates="created_orders",
+        foreign_keys=[created_by_user_id]
     )
 
     items: Mapped[list[OrderItem]] = relationship(
@@ -665,3 +700,213 @@ class Payment(TimestampMixin, Base):
     invoice: Mapped[Invoice] = relationship(
         back_populates="payments"
     )
+
+
+# ==========================================
+# 12. BUSINESS PROFILE
+# ==========================================
+
+class BusinessProfile(TimestampMixin, Base):
+    __tablename__ = "business_profiles"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    business_context: Mapped[str] = mapped_column(
+        String(50),
+        unique=True,
+        index=True,
+        nullable=False
+    )
+
+    business_name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False
+    )
+
+    business_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    business_category: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    tagline: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    description: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    established_year: Mapped[str | None] = mapped_column(
+        String(10),
+        nullable=True
+    )
+
+    story_heading: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True
+    )
+
+    story_subheading: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    story_content: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    founder_name: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True
+    )
+
+    founder_designation: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    founder_bio: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    founder_quote: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    founder_image_url: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    business_email: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True
+    )
+
+    business_phone: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True
+    )
+
+    address_line: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    city: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    state: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    postal_code: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True
+    )
+
+    country: Mapped[str | None] = mapped_column(
+        String(100),
+        default="India",
+        nullable=True
+    )
+
+    operating_hours: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    weekly_closed_days: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True
+    )
+
+    business_highlights: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    is_profile_complete: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
+
+# ==========================================
+# 11. ENTITY IMAGES (BYTEA STORAGE)
+# ==========================================
+
+class EntityImage(TimestampMixin, Base):
+
+    __tablename__ = "entity_images"
+    __table_args__ = (
+        UniqueConstraint(
+            "business_context",
+            "entity_type",
+            "entity_id",
+            name="uq_entity_images_context_type_id",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    entity_type: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False
+    )
+
+    business_context: Mapped[str] = mapped_column(
+        String(50),
+        index=True,
+        nullable=False
+    )
+
+    entity_id: Mapped[int] = mapped_column(
+        Integer,
+        index=True,
+        nullable=False
+    )
+
+    image_data: Mapped[bytes] = mapped_column(
+        LargeBinary,
+        nullable=False
+    )
+
+    mime_type: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False
+    )
+
+    file_size: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    checksum: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False
+    )
+

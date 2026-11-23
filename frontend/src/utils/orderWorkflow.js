@@ -1,17 +1,15 @@
 // ==========================================
 // DINEFLOW ORDER WORKFLOW SPECIFICATION
-// Primary 4-Stage Workflow:
-// 1. Ordered      -> Order has been placed / confirmed
-// 2. In Progress  -> Kitchen / preparation work has started
-// 3. Served       -> Order has been delivered to customer
-// 4. Completed    -> Order has been finalized & settled
+// Standard 5-Stage Operational Lifecycle:
+// 1. Ordered   -> Customer order has been placed (DB: Pending)
+// 2. Confirmed -> Staff/manager has accepted the order (DB: Confirmed)
+// 3. Ready     -> Kitchen has completed preparation (DB: Ready / Preparing)
+// 4. Served    -> Food delivered to customer table (DB: Served)
+// [PAYMENT]    -> Financial settlement step
+// 5. Completed -> Full payment received & order closed (DB: Completed)
 //
 // Exception:
-// - Cancelled     -> Order terminated prematurely
-//
-// Backend Compatibility:
-// Backend Enum values: Pending, Confirmed, Preparing, Ready, Served, Completed, Cancelled
-// This mapping displays the 4-stage workflow cleanly without altering backend enum contracts.
+// - Cancelled  -> Order terminated prematurely (DB: Cancelled)
 // ==========================================
 
 export const ORDER_WORKFLOW_STAGES = [
@@ -19,36 +17,44 @@ export const ORDER_WORKFLOW_STAGES = [
     key: "ORDERED",
     label: "Ordered",
     step: 1,
-    description: "Order placed & confirmed",
-    backendStatuses: ["Pending", "Confirmed"],
+    description: "Order placed by customer",
+    backendStatuses: ["Pending"],
   },
   {
-    key: "IN_PROGRESS",
-    label: "In Progress",
+    key: "CONFIRMED",
+    label: "Confirmed",
     step: 2,
-    description: "Kitchen preparation & food ready",
-    backendStatuses: ["Preparing", "Ready"],
+    description: "Accepted by staff",
+    backendStatuses: ["Confirmed"],
+  },
+  {
+    key: "READY",
+    label: "Ready",
+    step: 3,
+    description: "Kitchen prepared & food ready",
+    backendStatuses: ["Ready", "Preparing"],
   },
   {
     key: "SERVED",
     label: "Served",
-    step: 3,
-    description: "Delivered to table / dining",
+    step: 4,
+    description: "Delivered to dining table",
     backendStatuses: ["Served"],
   },
   {
     key: "COMPLETED",
     label: "Completed",
-    step: 4,
-    description: "Invoiced, settled & finalized",
+    step: 5,
+    description: "Fully settled & closed",
     backendStatuses: ["Completed"],
   },
 ];
 
 /**
- * Maps any backend status string into the primary 4-stage workflow label.
- * @param {string} backendStatus - Raw status from backend (Pending, Confirmed, etc.)
- * @returns {string} One of: "Ordered", "In Progress", "Served", "Completed", "Cancelled"
+ * Normalizes any backend status into the 5 standard user-facing stage labels.
+ * Removes all redundant "(Pending)", "(Confirmed)", "(Preparing)" qualifiers.
+ * @param {string} backendStatus - Raw status from backend
+ * @returns {string} One of: "Ordered", "Confirmed", "Ready", "Served", "Completed", "Cancelled"
  */
 export const getWorkflowStageLabel = (backendStatus) => {
   if (!backendStatus) return "Unknown";
@@ -57,11 +63,13 @@ export const getWorkflowStageLabel = (backendStatus) => {
 
   switch (norm) {
     case "pending":
-    case "confirmed":
+    case "ordered":
       return "Ordered";
+    case "confirmed":
+      return "Confirmed";
     case "preparing":
     case "ready":
-      return "In Progress";
+      return "Ready";
     case "served":
       return "Served";
     case "completed":
@@ -74,37 +82,14 @@ export const getWorkflowStageLabel = (backendStatus) => {
 };
 
 /**
- * Detailed label showing the 4-stage workflow phase with sub-status context if applicable.
+ * Clean display status label with NO duplicate or internal enum aliases.
  */
 export const getDetailedStatusLabel = (backendStatus) => {
-  switch (backendStatus) {
-    case "Pending":
-      return "Ordered (Pending)";
-    case "Confirmed":
-      return "Ordered (Confirmed)";
-    case "Preparing":
-      return "In Progress (Preparing)";
-    case "Ready":
-      return "In Progress (Food Ready)";
-    case "Served":
-      return "Served";
-    case "Completed":
-      return "Completed";
-    case "Cancelled":
-      return "Cancelled";
-    default:
-      return backendStatus || "Unknown";
-  }
+  return getWorkflowStageLabel(backendStatus);
 };
 
 /**
- * Returns consistent, subtle, high-contrast badge styles for the workflow stages.
- * Visual direction:
- * - Ordered: Soft yellow
- * - In Progress: Warm amber
- * - Served: Soft green
- * - Completed: Neutral slate/gray
- * - Cancelled: Subtle red
+ * High-contrast, theme-consistent badge styles for standard order statuses.
  */
 export const getOrderStatusBadgeStyle = (status) => {
   const stage = getWorkflowStageLabel(status);
@@ -112,15 +97,21 @@ export const getOrderStatusBadgeStyle = (status) => {
   switch (stage) {
     case "Ordered":
       return {
-        badge: "bg-yellow-50 dark:bg-yellow-950/60 text-amber-900 dark:text-amber-200 border border-yellow-200/90 dark:border-yellow-800/80 font-medium",
-        dot: "bg-yellow-500",
+        badge: "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800/80 font-medium",
+        dot: "bg-amber-500",
         label: "Ordered",
       };
-    case "In Progress":
+    case "Confirmed":
       return {
-        badge: "bg-amber-50 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800/80 font-medium",
-        dot: "bg-amber-500 animate-pulse",
-        label: "In Progress",
+        badge: "bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800/80 font-medium",
+        dot: "bg-blue-500",
+        label: "Confirmed",
+      };
+    case "Ready":
+      return {
+        badge: "bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-200 border border-purple-200 dark:border-purple-800/80 font-medium",
+        dot: "bg-purple-500 animate-pulse",
+        label: "Ready",
       };
     case "Served":
       return {
@@ -150,50 +141,114 @@ export const getOrderStatusBadgeStyle = (status) => {
 };
 
 /**
- * Workflow progression steps helper for timeline steppers.
- * Returns numeric step (1 to 4).
+ * Returns 1-based step index (1 to 5) for the visual workflow stepper.
  */
 export const getWorkflowStepNumber = (backendStatus) => {
-  switch (backendStatus) {
-    case "Pending":
-    case "Confirmed":
+  const norm = String(backendStatus || "").trim().toLowerCase();
+  switch (norm) {
+    case "pending":
+    case "ordered":
       return 1;
-    case "Preparing":
-    case "Ready":
+    case "confirmed":
       return 2;
-    case "Served":
+    case "preparing":
+    case "ready":
       return 3;
-    case "Completed":
+    case "served":
       return 4;
+    case "completed":
+      return 5;
     default:
       return 0; // Cancelled or unknown
   }
 };
 
 /**
- * Human-friendly transition options preserving exact backend transition values.
+ * Contextual direct actions based on current status and payment settlement.
+ */
+export const getContextualOrderAction = (order) => {
+  if (!order) return null;
+
+  const stage = getWorkflowStageLabel(order.status);
+  const outstanding = Number(order.outstanding_balance ?? order.subtotal ?? 0);
+  const isPaid = (order.payment_status || "").toUpperCase() === "PAID" || outstanding <= 0;
+
+  switch (stage) {
+    case "Ordered":
+      return {
+        actionKey: "confirm",
+        label: "Confirm Order",
+        targetStatus: "Confirmed",
+        type: "status_transition",
+        buttonStyle: "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs hover:opacity-95",
+      };
+    case "Confirmed":
+      return {
+        actionKey: "ready",
+        label: "Mark Ready",
+        targetStatus: "Ready",
+        type: "status_transition",
+        buttonStyle: "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs hover:opacity-95",
+      };
+    case "Ready":
+      return {
+        actionKey: "serve",
+        label: "Mark Served",
+        targetStatus: "Served",
+        type: "status_transition",
+        buttonStyle: "bg-gradient-to-r from-teal-500 to-teal-600 text-white font-bold shadow-xs hover:opacity-95",
+      };
+    case "Served":
+      if (!isPaid) {
+        return {
+          actionKey: "collect_payment",
+          label: "Collect Payment",
+          type: "open_payment",
+          buttonStyle: "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs hover:opacity-95",
+        };
+      }
+      return {
+        actionKey: "complete",
+        label: "Complete Order",
+        targetStatus: "Completed",
+        type: "status_transition",
+        buttonStyle: "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold shadow-xs hover:opacity-95",
+      };
+    case "Completed":
+      return {
+        actionKey: "view_invoice",
+        label: "View / Share Invoice",
+        type: "view_invoice",
+        buttonStyle: "border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 font-semibold",
+      };
+    default:
+      return null;
+  }
+};
+
+/**
+ * Backward compatibility stub for existing callers.
  */
 export const STATUS_ACTION_LABELS = {
   Pending: [
-    { target: "Confirmed", label: "Confirm Order → Ordered (Confirmed)", stage: "Ordered" },
-    { target: "Preparing", label: "Start Kitchen Preparation → In Progress", stage: "In Progress" },
-    { target: "Cancelled", label: "Cancel Order", stage: "Cancelled", isDanger: true },
+    { target: "Confirmed", label: "Confirm Order" },
+    { target: "Cancelled", label: "Cancel Order", isDanger: true },
   ],
   Confirmed: [
-    { target: "Preparing", label: "Send to Kitchen → In Progress (Preparing)", stage: "In Progress" },
-    { target: "Cancelled", label: "Cancel Order", stage: "Cancelled", isDanger: true },
+    { target: "Ready", label: "Mark Ready" },
+    { target: "Cancelled", label: "Cancel Order", isDanger: true },
   ],
   Preparing: [
-    { target: "Ready", label: "Mark Food Ready → In Progress (Ready)", stage: "In Progress" },
-    { target: "Served", label: "Deliver to Table → Served", stage: "Served" },
-    { target: "Cancelled", label: "Cancel Order", stage: "Cancelled", isDanger: true },
+    { target: "Ready", label: "Mark Ready" },
+    { target: "Served", label: "Mark Served" },
+    { target: "Cancelled", label: "Cancel Order", isDanger: true },
   ],
   Ready: [
-    { target: "Served", label: "Deliver to Table → Served", stage: "Served" },
-    { target: "Cancelled", label: "Cancel Order", stage: "Cancelled", isDanger: true },
+    { target: "Served", label: "Mark Served" },
+    { target: "Cancelled", label: "Cancel Order", isDanger: true },
   ],
   Served: [
-    { target: "Completed", label: "Finalize & Close → Completed (Requires Paid Invoice)", stage: "Completed" },
+    { target: "Completed", label: "Complete Order" },
   ],
   Completed: [],
   Cancelled: [],

@@ -16,10 +16,13 @@ import {
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
+import Pagination from "../../../components/Pagination";
 
 export default function InventoryStockCount() {
   const [counts, setCounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Active Audit Sheet Modal
   const [auditModalOpen, setAuditModalOpen] = useState(false);
@@ -187,7 +190,7 @@ export default function InventoryStockCount() {
                   </td>
                 </tr>
               ) : (
-                counts.map((c) => (
+                counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
                   <tr key={c.id} className={TABLE_STYLES.tr}>
                     <td className={TABLE_STYLES.td}>
                       <span className="font-bold font-mono text-stone-900 dark:text-stone-100">{c.count_number}</span>
@@ -241,12 +244,19 @@ export default function InventoryStockCount() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(counts.length / pageSize) || 1}
+          onPageChange={setCurrentPage}
+          totalRecords={counts.length}
+          limit={pageSize}
+        />
       </div>
 
       {/* START COUNT MODAL */}
       {startModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 Start Stocktake Session
@@ -311,7 +321,7 @@ export default function InventoryStockCount() {
       {/* AUDIT SHEET MODAL */}
       {auditModalOpen && activeCount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-4xl bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] flex flex-col">
+          <div className="w-full max-w-4xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3 shrink-0">
               <div>
                 <div className="flex items-center gap-2">

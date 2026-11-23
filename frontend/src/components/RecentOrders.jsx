@@ -12,27 +12,27 @@ const formatCurrency = (amount) =>
 
 function RecentOrders({ orders = [], loading = false }) {
   return (
-    <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs">
+    <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-base font-bold text-[#1C1917] dark:text-stone-100">Recent Orders</h3>
-          <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+          <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">Recent Orders</h3>
+          <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
             Latest live restaurant orders and status updates
           </p>
         </div>
 
         <Link
           to="/orders"
-          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 transition"
+          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-100 dark:hover:bg-[#151D29] hover:text-stone-900 dark:hover:text-white transition"
         >
           <span>View All Orders</span>
           <ArrowRight size={14} />
         </Link>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-stone-200/80 dark:border-stone-800">
+      <div className="overflow-x-auto rounded-lg border border-[#E5E9F0] dark:border-[#1E293B]">
         <table className="w-full min-w-[560px] text-left">
-          <thead className="bg-stone-50/80 dark:bg-stone-900/70 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+          <thead className="bg-stone-50/80 dark:bg-[#151D29]/70 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
             <tr>
               <th className="px-3.5 py-2.5">Order ID</th>
               <th className="px-3.5 py-2.5">Customer</th>
@@ -43,12 +43,12 @@ function RecentOrders({ orders = [], loading = false }) {
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
+          <tbody className="divide-y divide-[#E5E9F0] dark:divide-[#1E293B] text-xs">
             {loading ? (
               <tr>
                 <td
                   colSpan="6"
-                  className="py-10 text-center text-xs text-stone-500 dark:text-stone-400"
+                  className="py-10 text-center text-xs text-stone-500 dark:text-[#8A9AB2]"
                 >
                   Loading recent orders...
                 </td>
@@ -57,7 +57,7 @@ function RecentOrders({ orders = [], loading = false }) {
               <tr>
                 <td
                   colSpan="6"
-                  className="py-10 text-center text-xs text-stone-500 dark:text-stone-400"
+                  className="py-10 text-center text-xs text-stone-500 dark:text-[#8A9AB2]"
                 >
                   No recent orders found.
                 </td>
@@ -70,9 +70,9 @@ function RecentOrders({ orders = [], loading = false }) {
                 return (
                   <tr
                     key={order.id || order.order_number}
-                    className="transition-colors hover:bg-stone-50/70 dark:hover:bg-stone-800/40"
+                    className="transition-colors hover:bg-stone-50/70 dark:hover:bg-[#151D29]/40"
                   >
-                    <td className="whitespace-nowrap px-3.5 py-2.5 font-semibold text-[#1C1917] dark:text-stone-100">
+                    <td className="whitespace-nowrap px-3.5 py-2.5 font-semibold text-stone-900 dark:text-stone-100">
                       {order.order_number || order.id}
                     </td>
 
@@ -80,7 +80,7 @@ function RecentOrders({ orders = [], loading = false }) {
                       {order.customer_name || "—"}
                     </td>
 
-                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-600 dark:text-stone-400">
+                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-600 dark:text-[#8A9AB2]">
                       {order.table_number
                         ? String(order.table_number).startsWith("Table")
                           ? order.table_number
@@ -88,11 +88,11 @@ function RecentOrders({ orders = [], loading = false }) {
                         : "—"}
                     </td>
 
-                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-600 dark:text-stone-400">
+                    <td className="whitespace-nowrap px-3.5 py-2.5 text-stone-600 dark:text-[#8A9AB2]">
                       {order.items_count ?? "—"}
                     </td>
 
-                    <td className="whitespace-nowrap px-3.5 py-2.5 font-semibold text-[#1C1917] dark:text-stone-100">
+                    <td className="whitespace-nowrap px-3.5 py-2.5 font-semibold text-stone-900 dark:text-stone-100">
                       {formatCurrency(order.subtotal)}
                     </td>
 

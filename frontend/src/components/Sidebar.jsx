@@ -1,5 +1,7 @@
+import { useState, useRef, useEffect } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { resolveImageUrl } from "../utils/mediaUtils";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -15,6 +17,8 @@ import {
   ChefHat,
   Sparkles,
   Package,
+  ChevronUp,
+  User,
 } from "lucide-react";
 
 const restaurantMenuItems = [
@@ -39,6 +43,18 @@ const spaMenuItems = [
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 
+function formatRole(role, context) {
+  if (!role) {
+    return context === "SPA" ? "Spa Staff" : "Staff";
+  }
+  const r = String(role).trim().toLowerCase();
+  if (r === "manager") return "Manager";
+  if (r === "staff") return "Staff";
+  if (r === "receptionist") return "Receptionist";
+  if (r === "admin") return "Admin";
+  return r.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function SidebarNav({ items, onClose, collapsed = false }) {
   return (
     <nav className="space-y-1.5" aria-label="Main Navigation">
@@ -58,27 +74,166 @@ function SidebarNav({ items, onClose, collapsed = false }) {
                   : "gap-3 px-3.5 py-2.5"
               } ${
                 isActive
-                  ? "bg-[#F5B716] text-[#1C1917] font-semibold shadow-xs"
-                  : "text-stone-300 hover:bg-white/10 hover:text-white"
+                  ? "bg-[#30251C] text-[#FFB02E] font-semibold border-l-3 border-[#F59E0B] shadow-xs"
+                  : "text-[#8A9AB2] hover:bg-[#151D29] hover:text-white"
               }`
             }
           >
-            <Icon
-              size={collapsed ? 20 : 18}
-              className="shrink-0 transition-transform group-hover:scale-105"
-            />
-            {!collapsed && <span className="truncate">{item.name}</span>}
+            {({ isActive }) => (
+              <>
+                <Icon
+                  size={collapsed ? 20 : 18}
+                  className={`shrink-0 transition-transform group-hover:scale-105 ${
+                    isActive ? "text-[#F59E0B]" : "text-[#8A9AB2] group-hover:text-white"
+                  }`}
+                />
+                {!collapsed && <span className="truncate">{item.name}</span>}
 
-            {/* Accessible tooltip when collapsed */}
-            {collapsed && (
-              <span className="pointer-events-none absolute left-full ml-2 hidden rounded-md bg-[#29231F] px-2.5 py-1 text-xs font-semibold text-white shadow-lg group-hover:block z-50 whitespace-nowrap border border-white/10">
-                {item.name}
-              </span>
+                {/* Accessible tooltip when collapsed */}
+                {collapsed && (
+                  <span className="pointer-events-none absolute left-full ml-2 hidden rounded-md bg-[#101722] px-2.5 py-1 text-xs font-semibold text-white shadow-lg group-hover:block z-50 whitespace-nowrap border border-[#1E293B]">
+                    {item.name}
+                  </span>
+                )}
+              </>
             )}
           </NavLink>
         );
       })}
     </nav>
+  );
+}
+
+function SidebarProfile({ user, collapsed = false, onNavigate }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (ref.current && !ref.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
+
+  const userName =
+    user?.full_name?.trim() ||
+    user?.name?.trim() ||
+    (user?.email ? user.email.split("@")[0] : "User");
+
+  const userInitial = (
+    user?.full_name?.trim()?.charAt(0) ||
+    user?.name?.trim()?.charAt(0) ||
+    user?.email?.charAt(0) ||
+    "U"
+  ).toUpperCase();
+
+  const userRole = formatRole(user?.role || user?.designation, user?.business_context);
+  const avatarUrl = resolveImageUrl(user?.avatar_url);
+
+  const Avatar = (
+    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-[#FFB02E] to-[#D97706] border border-[#F59E0B]/50 text-sm font-bold text-[#0D1420] shadow-2xs">
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={userName}
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      ) : (
+        <span>{userInitial}</span>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="relative" ref={ref}>
+      {/* Profile Popover / Dropdown Menu */}
+      {open && (
+        <div
+          className={`absolute z-50 rounded-2xl border border-[#1E293B] bg-[#101722] p-1.5 shadow-2xl animate-in fade-in-50 duration-150 text-white ${
+            collapsed
+              ? "left-full bottom-0 ml-2 w-56"
+              : "bottom-full left-0 right-0 mb-2 w-full"
+          }`}
+        >
+          {/* User Details Header */}
+          <div className="border-b border-[#1E293B] px-3.5 py-3">
+            <p className="truncate text-sm font-bold text-white">{userName}</p>
+            <p className="truncate text-xs text-[#8A9AB2] mt-0.5">{user?.email}</p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="inline-block rounded-full bg-[#30251C] border border-[#F59E0B]/40 px-2 py-0.5 text-[10px] font-bold text-[#FFB02E] uppercase tracking-wider">
+                {userRole}
+              </span>
+            </div>
+          </div>
+
+          {/* Navigation Action */}
+          <div className="py-1">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onNavigate("/settings?tab=profile");
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[38px]"
+            >
+              <User size={14} className="text-[#F59E0B]" />
+              <span>View Profile</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Trigger Row */}
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className="group relative flex items-center justify-center rounded-xl p-1.5 hover:bg-[#151D29] transition cursor-pointer"
+          title={`${userName} (${userRole})`}
+          aria-label="User Profile"
+        >
+          {Avatar}
+          <span className="pointer-events-none absolute left-full ml-2 hidden rounded-md bg-[#101722] px-2.5 py-1 text-xs font-semibold text-white shadow-lg group-hover:block z-50 whitespace-nowrap border border-[#1E293B]">
+            {userName} ({userRole})
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className="flex w-full items-center justify-between gap-2.5 rounded-xl px-2.5 py-2 hover:bg-[#151D29] transition cursor-pointer min-h-[44px] text-left"
+          aria-expanded={open}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {Avatar}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm font-semibold leading-tight text-white truncate">
+                {userName}
+              </p>
+              <p className="text-[10px] sm:text-[11px] text-[#8A9AB2] font-medium truncate">
+                {userRole}
+              </p>
+            </div>
+          </div>
+          <ChevronUp
+            size={16}
+            className={`text-[#8A9AB2] shrink-0 transition-transform duration-200 ${
+              open ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -95,6 +250,11 @@ function Sidebar({
     logout();
     onClose?.();
     navigate("/login", { replace: true });
+  };
+
+  const handleNavigate = (path) => {
+    onClose?.();
+    navigate(path);
   };
 
   const isSpa = user?.business_context === "SPA";
@@ -116,19 +276,19 @@ function Sidebar({
 
       {/* Mobile Sidebar Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#1C1917] text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col bg-[#101722] text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Branding & Close Button */}
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+        <div className="flex items-center justify-between border-b border-[#1E293B]/70 px-4 py-4">
           <Link
             to={brandLink}
             onClick={onClose}
             className="group flex items-center gap-2.5 transition-opacity hover:opacity-95 min-w-0 cursor-pointer"
             title={`${brandTitle} - Dashboard`}
           >
-            <div className="rounded-lg bg-[#F5B716] p-2 text-[#1C1917] shadow-xs group-hover:bg-[#E5A910] transition-colors shrink-0 font-bold">
+            <div className="rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-2 text-[#0D1420] shadow-xs transition-opacity shrink-0 font-bold">
               <BrandIcon size={19} />
             </div>
             <div className="min-w-0">
@@ -139,7 +299,7 @@ function Sidebar({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+            className="rounded-lg p-1.5 text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition-colors cursor-pointer"
             aria-label="Close sidebar"
             title="Close navigation drawer"
           >
@@ -149,39 +309,50 @@ function Sidebar({
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-3.5 py-4">
-          <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-stone-400">
+          <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
             {isSpa ? "Spa Navigation" : "Main Navigation"}
           </p>
           <SidebarNav items={visibleMenuItems} onClose={onClose} collapsed={false} />
         </div>
 
-        {/* Bottom Actions */}
-        <div className="border-t border-white/10 p-3.5">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-stone-300 transition hover:bg-white/10 hover:text-white cursor-pointer"
-            title="Logout"
-          >
-            <LogOut size={18} className="shrink-0" />
-            <span>Logout</span>
-          </button>
+        {/* Bottom Profile & Actions */}
+        <div className="border-t border-[#1E293B]/70 p-3.5 space-y-2">
+          {/* User Profile Section */}
+          <SidebarProfile
+            user={user}
+            collapsed={false}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+          />
+
+          {/* Logout Section */}
+          <div className="border-t border-[#1E293B]/50 pt-2">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[44px]"
+              title="Logout"
+            >
+              <LogOut size={18} className="shrink-0" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Desktop Sidebar (Collapsible) */}
       <aside
-        className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-[#1C1917] text-white transition-all duration-300 ease-in-out lg:flex overflow-x-hidden ${
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col bg-[#101722] text-white transition-all duration-300 ease-in-out lg:flex overflow-x-hidden border-r border-[#1E293B]/50 ${
           collapsed ? "w-[72px]" : "w-[240px]"
         }`}
       >
         {/* Branding & Hamburger Header */}
         {collapsed ? (
-          <div className="flex flex-col items-center justify-center gap-2.5 border-b border-white/10 py-3.5 px-2">
+          <div className="flex flex-col items-center justify-center gap-2.5 border-b border-[#1E293B]/70 py-3.5 px-2">
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="rounded-lg p-2 text-stone-300 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+              className="rounded-lg p-2 text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition-colors cursor-pointer"
               title="Expand Sidebar"
               aria-label="Expand Sidebar"
             >
@@ -190,7 +361,7 @@ function Sidebar({
 
             <Link
               to={brandLink}
-              className="group flex items-center justify-center rounded-lg bg-[#F5B716] p-2 text-[#1C1917] shadow-xs group-hover:bg-[#E5A910] transition-colors cursor-pointer font-bold"
+              className="group flex items-center justify-center rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-2 text-[#0D1420] shadow-xs transition-opacity cursor-pointer font-bold"
               title={`${brandTitle} - Dashboard`}
               aria-label={`${brandTitle} - Dashboard`}
             >
@@ -198,13 +369,13 @@ function Sidebar({
             </Link>
           </div>
         ) : (
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+          <div className="flex items-center justify-between border-b border-[#1E293B]/70 px-4 py-4">
             <Link
               to={brandLink}
               className="group flex items-center gap-2.5 transition-opacity hover:opacity-95 min-w-0 cursor-pointer"
               title={`${brandTitle} - Dashboard`}
             >
-              <div className="rounded-lg bg-[#F5B716] p-2 text-[#1C1917] shrink-0 shadow-xs group-hover:bg-[#E5A910] transition-colors font-bold">
+              <div className="rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-2 text-[#0D1420] shrink-0 shadow-xs font-bold">
                 <BrandIcon size={20} />
               </div>
               <div className="min-w-0 overflow-hidden">
@@ -215,7 +386,7 @@ function Sidebar({
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="rounded-lg p-1.5 text-stone-300 hover:bg-white/10 hover:text-white transition-colors shrink-0 cursor-pointer"
+              className="rounded-lg p-1.5 text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition-colors shrink-0 cursor-pointer"
               title="Collapse Sidebar"
               aria-label="Collapse Sidebar"
             >
@@ -227,7 +398,7 @@ function Sidebar({
         {/* Navigation */}
         <div className={`flex-1 overflow-y-auto overflow-x-hidden py-4 ${collapsed ? "px-2" : "px-3.5"}`}>
           {!collapsed && (
-            <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-stone-400">
+            <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
               {isSpa ? "Spa Navigation" : "Main Navigation"}
             </p>
           )}
@@ -235,22 +406,32 @@ function Sidebar({
           <SidebarNav items={visibleMenuItems} collapsed={collapsed} />
         </div>
 
-        {/* Bottom Actions */}
-        <div className={`border-t border-white/10 ${collapsed ? "p-2.5 flex justify-center" : "p-3.5"}`}>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className={`flex items-center rounded-xl text-xs sm:text-sm text-stone-300 transition hover:bg-white/10 hover:text-white cursor-pointer ${
-              collapsed
-                ? "justify-center p-2.5"
-                : "w-full gap-2.5 px-3.5 py-2.5"
-            }`}
-            title="Logout"
-            aria-label="Logout"
-          >
-            <LogOut size={collapsed ? 20 : 18} className="shrink-0" />
-            {!collapsed && <span>Logout</span>}
-          </button>
+        {/* Bottom Profile & Actions */}
+        <div className={`border-t border-[#1E293B]/70 ${collapsed ? "p-2 space-y-2 flex flex-col items-center" : "p-3 space-y-2"}`}>
+          {/* User Profile Section */}
+          <SidebarProfile
+            user={user}
+            collapsed={collapsed}
+            onNavigate={handleNavigate}
+          />
+
+          {/* Logout Section */}
+          <div className={`w-full border-t border-[#1E293B]/50 ${collapsed ? "pt-1.5 flex justify-center" : "pt-2"}`}>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={`flex items-center rounded-xl text-xs sm:text-sm text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer ${
+                collapsed
+                  ? "justify-center p-2.5"
+                  : "w-full gap-2.5 px-3.5 py-2 min-h-[40px]"
+              }`}
+              title="Logout"
+              aria-label="Logout"
+            >
+              <LogOut size={collapsed ? 20 : 18} className="shrink-0" />
+              {!collapsed && <span>Logout</span>}
+            </button>
+          </div>
         </div>
       </aside>
     </>

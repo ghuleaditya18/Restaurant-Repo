@@ -123,8 +123,8 @@ export default function Select({
           error
             ? "border-rose-500 ring-1 ring-rose-500/30"
             : isOpen
-            ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-white dark:bg-[#292524]"
-            : "border-stone-300 dark:border-stone-700 bg-white dark:bg-[#292524] hover:border-stone-400 dark:hover:border-stone-600"
+            ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-white dark:bg-[#151D29]"
+            : "border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] hover:border-stone-400 dark:hover:border-stone-600"
         } text-stone-900 dark:text-stone-100 shadow-2xs`}
       >
         <span className={`truncate ${!selectedOption ? "text-stone-400 dark:text-stone-500 font-normal" : "font-medium"}`}>
@@ -156,11 +156,11 @@ export default function Select({
       {isOpen && (
         <div
           role="listbox"
-          className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-1.5 shadow-xl animate-in fade-in-50 duration-100"
+          className="absolute z-50 left-0 right-0 mt-1 max-h-60 overflow-y-auto rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1.5 shadow-xl animate-in fade-in-50 duration-100"
         >
           {searchable && (
-            <div className="p-1 mb-1 border-b border-stone-100 dark:border-stone-800 relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <div className="p-1 mb-1 border-b border-[#E5E9F0] dark:border-[#1E293B] relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]" />
               <input
                 ref={searchInputRef}
                 type="text"
@@ -170,13 +170,13 @@ export default function Select({
                   setHighlightedIndex(0);
                 }}
                 placeholder="Search..."
-                className="w-full rounded-md border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 pl-8 pr-2 py-1 text-xs text-stone-900 dark:text-stone-100 outline-none focus:border-[#F5B716]"
+                className="w-full rounded-md border border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50 dark:bg-[#151D29] pl-8 pr-2 py-1 text-xs text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B]"
               />
             </div>
           )}
 
           {filteredOptions.length === 0 ? (
-            <div className="py-3 px-3 text-center text-xs text-stone-400 dark:text-stone-500 font-medium">
+            <div className="py-3 px-3 text-center text-xs text-stone-400 dark:text-[#8A9AB2] font-medium">
               No matching options
             </div>
           ) : (
@@ -193,14 +193,14 @@ export default function Select({
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs font-medium cursor-pointer transition ${
                     isSelected
-                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 font-semibold"
+                      ? "bg-[#FFF7E8] dark:bg-[#30251C] text-[#9A3412] dark:text-[#FFB02E] font-semibold"
                       : isHighlighted
-                      ? "bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100"
-                      : "text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-850"
+                      ? "bg-stone-100 dark:bg-[#151D29] text-stone-900 dark:text-stone-100"
+                      : "text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
                   }`}
                 >
                   <span className="truncate">{opt.label}</span>
-                  {isSelected && <Check size={14} className="text-[#F5B716] shrink-0 ml-2" />}
+                  {isSelected && <Check size={14} className="text-[#F59E0B] shrink-0 ml-2" />}
                 </div>
               );
             })

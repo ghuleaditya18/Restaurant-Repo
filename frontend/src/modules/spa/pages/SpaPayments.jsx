@@ -9,14 +9,18 @@ import {
 } from "lucide-react";
 import spaApi from "../services/spaApi";
 import PageHeader from "../../../components/PageHeader";
-import AlertBanner from "../../../components/AlertBanner";
+import Pagination from "../../../components/Pagination";
+import { useNotification } from "../../../context/NotificationContext";
 
 export default function SpaPayments() {
+  const { showError } = useNotification();
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [methodFilter, setMethodFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const fetchPayments = useCallback(async () => {
     try {
@@ -28,16 +32,22 @@ export default function SpaPayments() {
       const data = Array.isArray(res?.data) ? res.data : [];
       setPayments(data);
     } catch (err) {
-      setError(err.response?.data?.detail || "Failed to load payment transactions");
+      const msg = err.response?.data?.detail || "Failed to load payment transactions";
+      setError(msg);
+      showError(msg);
       setPayments([]);
     } finally {
       setLoading(false);
     }
-  }, [methodFilter]);
+  }, [methodFilter, showError]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [methodFilter, search]);
 
   const safePayments = Array.isArray(payments) ? payments : [];
   const filteredPayments = safePayments.filter((p) => {
@@ -100,22 +110,14 @@ export default function SpaPayments() {
         description="Complete settlement ledger across UPI, Cards, Net Banking and Cash collections."
       />
 
-      {error && (
-        <AlertBanner
-          type="error"
-          message={error}
-          onDismiss={() => setError(null)}
-        />
-      )}
-
       {/* Aggregate Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 sm:p-5 shadow-xs">
+        <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-4 sm:p-5 shadow-xs">
           <p className="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
             Total Revenue
           </p>
           <div className="flex items-center gap-1.5 mt-2">
-            <IndianRupee size={22} className="text-[#F5B716]" />
+            <IndianRupee size={22} className="text-[#F59E0B]" />
             <span className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white">
               {totalCollected.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
@@ -178,8 +180,8 @@ export default function SpaPayments() {
               onClick={() => setMethodFilter(tab.key)}
               className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 methodFilter === tab.key
-                  ? "bg-[#1C1917] dark:bg-white text-white dark:text-[#1C1917]"
-                  : "border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                  : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
               }`}
             >
               {tab.label}
@@ -197,13 +199,13 @@ export default function SpaPayments() {
             placeholder="Search reference, transaction ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] pl-10 pr-4 py-2 text-xs sm:text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F5B716] focus:outline-none"
+            className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] pl-10 pr-4 py-2 text-xs sm:text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F59E0B] focus:outline-none"
           />
         </div>
       </div>
 
       {/* Ledger Table */}
-      <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] overflow-hidden shadow-xs">
+      <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] overflow-hidden shadow-xs">
         {loading ? (
           <div className="p-12 text-center text-xs sm:text-sm text-stone-400">
             Loading transaction ledger...
@@ -237,7 +239,9 @@ export default function SpaPayments() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
-                {filteredPayments.map((p) => {
+                {filteredPayments
+                  .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                  .map((p) => {
                   const amount = Number(p.amount || 0);
                   return (
                     <tr
@@ -279,6 +283,18 @@ export default function SpaPayments() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {!loading && filteredPayments.length > 0 && (
+          <div className="border-t border-stone-200/80 dark:border-stone-800 p-4">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(filteredPayments.length / pageSize) || 1}
+              onPageChange={setCurrentPage}
+              totalRecords={filteredPayments.length}
+              limit={pageSize}
+            />
           </div>
         )}
       </div>

@@ -13,7 +13,7 @@ from app.api.deps import get_current_user, require_restaurant_context, require_r
 from app.core.date_utils import get_date_range, get_kolkata_now
 from app.core.image_upload import remove_bill_image, save_bill_image
 from app.db.session import get_db
-from app.models.entities import MenuItem, User
+from app.models.entities import MenuItem, Order, OrderItem, OrderStatus, User
 from app.models.inventory import (
     GoodsReceipt,
     GoodsReceiptItem,
@@ -65,6 +65,7 @@ from app.schemas.inventory import (
     StockCountItemResponse,
     StockCountResponse,
     StockCountSubmit,
+    StockMovementReversalRequest,
     StockMovementResponse,
     StockValuationItem,
     StockValuationReport,
@@ -88,6 +89,7 @@ from app.services.inventory_service import (
     record_opening_stock,
     record_stock_adjustment,
     record_wastage,
+    reverse_wastage_or_adjustment_movement,
 )
 
 router = APIRouter(
@@ -714,6 +716,46 @@ def create_or_update_recipe(
     return _enrich_recipe_response(refreshed)
 
 
+@router.delete("/recipes/menu/{menu_item_id}")
+def delete_recipe_by_menu_item(
+    menu_item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    recipe = db.query(Recipe).filter(Recipe.menu_item_id == menu_item_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="No recipe found for this menu item.")
+
+    # Guard: prevent deleting recipe if active dining orders reference this menu item
+    active_orders = (
+        db.query(Order.order_number)
+        .join(OrderItem, OrderItem.order_id == Order.id)
+        .filter(
+            OrderItem.menu_item_id == menu_item_id,
+            Order.status.in_([
+                OrderStatus.PENDING,
+                OrderStatus.CONFIRMED,
+                OrderStatus.PREPARING,
+                OrderStatus.READY,
+                OrderStatus.SERVED,
+            ]),
+        )
+        .all()
+    )
+    if active_orders:
+        order_nums = ", ".join([o[0] for o in active_orders[:3]])
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete recipe: Item is currently part of active dining order(s) ({order_nums}). Complete or cancel active orders first.",
+        )
+
+    # Delete recipe BOM items without deleting the menu item
+    db.query(RecipeItem).filter(RecipeItem.recipe_id == recipe.id).delete(synchronize_session=False)
+    db.delete(recipe)
+    db.commit()
+    return {"message": "Recipe BOM configuration deleted successfully."}
+
+
 # ==========================================
 # 5. PURCHASE ORDERS & GOODS RECEIPTS
 # ==========================================
@@ -888,6 +930,101 @@ def update_po_status(
     return _enrich_po_response(refreshed)
 
 
+@router.put("/purchase-orders/{po_id}", response_model=PurchaseOrderResponse)
+@router.patch("/purchase-orders/{po_id}", response_model=PurchaseOrderResponse)
+def update_purchase_order(
+    po_id: int,
+    data: PurchaseOrderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found.")
+
+    if po.status != POStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only Draft purchase orders can be edited.")
+
+    if data.supplier_id is not None:
+        supplier = db.query(Supplier).filter(Supplier.id == data.supplier_id).first()
+        if not supplier or not supplier.is_active:
+            raise HTTPException(status_code=400, detail="Supplier not found or inactive.")
+        po.supplier_id = data.supplier_id
+
+    if data.order_date is not None:
+        po.order_date = data.order_date
+    if data.expected_delivery_date is not None:
+        po.expected_delivery_date = data.expected_delivery_date
+    if data.notes is not None:
+        po.notes = data.notes
+
+    if data.items is not None:
+        if len(data.items) == 0:
+            raise HTTPException(status_code=400, detail="Purchase order must contain at least one item.")
+        # Delete existing items
+        db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po.id).delete(synchronize_session=False)
+        subtotal = Decimal("0.00")
+        for it in data.items:
+            inv_item = db.query(InventoryItem).filter(InventoryItem.id == it.inventory_item_id).first()
+            if not inv_item or not inv_item.is_active:
+                raise HTTPException(status_code=400, detail=f"Inventory item ID {it.inventory_item_id} is invalid or inactive.")
+            line_total = (it.ordered_quantity * it.unit_price).quantize(Decimal("0.01"))
+            subtotal += line_total
+            po_item = PurchaseOrderItem(
+                po_id=po.id,
+                inventory_item_id=it.inventory_item_id,
+                ordered_quantity=it.ordered_quantity,
+                received_quantity=Decimal("0.0000"),
+                unit_price=it.unit_price,
+                line_total=line_total,
+            )
+            db.add(po_item)
+        po.subtotal = subtotal
+        tax = data.tax_amount if data.tax_amount is not None else po.tax_amount
+        po.tax_amount = tax
+        po.total_amount = subtotal + tax
+    elif data.tax_amount is not None:
+        po.tax_amount = data.tax_amount
+        po.total_amount = po.subtotal + data.tax_amount
+
+    db.commit()
+
+    refreshed = (
+        db.query(PurchaseOrder)
+        .options(
+            joinedload(PurchaseOrder.supplier),
+            selectinload(PurchaseOrder.items).joinedload(PurchaseOrderItem.inventory_item),
+        )
+        .filter(PurchaseOrder.id == po.id)
+        .first()
+    )
+    return _enrich_po_response(refreshed)
+
+
+@router.delete("/purchase-orders/{po_id}")
+def delete_purchase_order(
+    po_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found.")
+
+    if po.status != POStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only Draft purchase orders can be deleted. Cancel non-draft purchase orders instead.")
+
+    # Check if any GRN was attached
+    grn_count = db.query(GoodsReceipt).filter(GoodsReceipt.po_id == po.id).count()
+    if grn_count > 0:
+        raise HTTPException(status_code=400, detail="Cannot delete purchase order with associated goods receipts.")
+
+    db.query(PurchaseOrderItem).filter(PurchaseOrderItem.po_id == po.id).delete(synchronize_session=False)
+    db.delete(po)
+    db.commit()
+    return {"message": "Purchase order deleted successfully."}
+
+
 @router.post("/purchase-orders/{po_id}/receive", response_model=GoodsReceiptResponse, status_code=status.HTTP_201_CREATED)
 def receive_goods(
     po_id: int,
@@ -992,6 +1129,52 @@ def get_goods_receipts(db: Session = Depends(get_db)):
             )
         )
     return results
+
+
+@router.get("/goods-receipts/{grn_id}", response_model=GoodsReceiptResponse)
+def get_goods_receipt(grn_id: int, db: Session = Depends(get_db)):
+    grn = (
+        db.query(GoodsReceipt)
+        .options(
+            joinedload(GoodsReceipt.purchase_order).joinedload(PurchaseOrder.supplier),
+            selectinload(GoodsReceipt.items).joinedload(GoodsReceiptItem.inventory_item),
+        )
+        .filter(GoodsReceipt.id == grn_id)
+        .first()
+    )
+    if not grn:
+        raise HTTPException(status_code=404, detail="Goods receipt not found.")
+
+    items_resp = [
+        GoodsReceiptItemResponse(
+            id=it.id,
+            goods_receipt_id=it.goods_receipt_id,
+            po_item_id=it.po_item_id,
+            inventory_item_id=it.inventory_item_id,
+            inventory_item_name=it.inventory_item.name if it.inventory_item else "",
+            inventory_item_unit=it.inventory_item.base_unit if it.inventory_item else "",
+            received_quantity=it.received_quantity,
+            unit_cost=it.unit_cost,
+            line_total=it.line_total,
+        )
+        for it in grn.items
+    ]
+    return GoodsReceiptResponse(
+        id=grn.id,
+        grn_number=grn.grn_number,
+        po_id=grn.po_id,
+        po_number=grn.purchase_order.po_number if grn.purchase_order else "",
+        supplier_name=grn.purchase_order.supplier.name if grn.purchase_order and grn.purchase_order.supplier else "",
+        supplier_bill_number=grn.supplier_bill_number,
+        bill_date=grn.bill_date,
+        bill_image_url=grn.bill_image_url,
+        received_date=grn.received_date,
+        total_received_amount=grn.total_received_amount,
+        notes=grn.notes,
+        received_by_user_id=grn.received_by_user_id,
+        created_at=grn.created_at,
+        items=items_resp,
+    )
 
 
 @router.post("/goods-receipts/{grn_id}/bill")
@@ -1102,6 +1285,30 @@ def get_all_movements(
             resp.inventory_item_unit = m.inventory_item.base_unit
         results.append(resp)
     return results
+
+
+@router.post("/movements/{movement_id}/reverse", response_model=StockMovementResponse)
+def reverse_movement(
+    movement_id: int,
+    data: StockMovementReversalRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rev_movement = reverse_wastage_or_adjustment_movement(
+        db=db,
+        movement_id=movement_id,
+        reason=data.reason,
+        user_id=current_user.id,
+    )
+    db.commit()
+    db.refresh(rev_movement)
+
+    inv_item = db.query(InventoryItem).filter(InventoryItem.id == rev_movement.inventory_item_id).first()
+    resp = StockMovementResponse.model_validate(rev_movement)
+    if inv_item:
+        resp.inventory_item_name = inv_item.name
+        resp.inventory_item_unit = inv_item.base_unit
+    return resp
 
 
 # ==========================================

@@ -286,6 +286,12 @@ class PurchaseOrder(TimestampMixin, Base):
         SQLAlchemyEnum(POStatus, native_enum=False), default=POStatus.DRAFT, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -344,6 +350,12 @@ class GoodsReceipt(Base):
     received_date: Mapped[date] = mapped_column(Date, nullable=False)
     total_received_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_reversed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    reversed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reversed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reversal_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     received_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -405,6 +417,12 @@ class StockMovement(Base):
     reference_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # ORDER, PO, GRN, WASTAGE, ADJUSTMENT, STOCK_COUNT
     reference_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )

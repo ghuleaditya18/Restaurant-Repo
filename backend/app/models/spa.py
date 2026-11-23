@@ -124,6 +124,7 @@ class SpaCustomer(TimestampMixin, Base):
     phone: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     email: Mapped[str | None] = mapped_column(String(150), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     bookings: Mapped[list[SpaBooking]] = relationship("SpaBooking", back_populates="customer")
@@ -143,6 +144,7 @@ class SpaStaff(TimestampMixin, Base):
     phone: Mapped[str] = mapped_column(String(20), nullable=False)
     email: Mapped[str | None] = mapped_column(String(150), nullable=True)
     specialization: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_therapist: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

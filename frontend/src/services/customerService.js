@@ -40,3 +40,19 @@ export const deleteCustomer = async (customerId) => {
 
   return response.data;
 };
+
+// Upload customer profile image
+export const uploadCustomerImage = async (customerId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post(`/api/customers/${customerId}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+// Delete customer profile image
+export const deleteCustomerImage = async (customerId) => {
+  const response = await api.delete(`/api/customers/${customerId}/image`);
+  return response.data;
+};

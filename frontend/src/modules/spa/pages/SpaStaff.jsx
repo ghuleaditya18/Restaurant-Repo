@@ -9,7 +9,6 @@ import {
   Sparkles,
   Edit2,
   Calendar,
-  X,
   Phone,
   Mail,
   Award,
@@ -21,6 +20,10 @@ import spaApi from "../services/spaApi";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
 import PageHeader from "../../../components/PageHeader";
+import Modal from "../../../components/Modal";
+import Pagination from "../../../components/Pagination";
+import ProfilePhotoUpload from "../../../components/ProfilePhotoUpload";
+import AuthenticatedImage from "../../../components/AuthenticatedImage";
 
 const DAYS_OF_WEEK = [
   "Monday",
@@ -39,6 +42,8 @@ export default function SpaStaff() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [filterTherapist, setFilterTherapist] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Add / Edit Modal state
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
@@ -55,6 +60,8 @@ export default function SpaStaff() {
   });
   const [formError, setFormError] = useState("");
   const [savingStaff, setSavingStaff] = useState(false);
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [isImageRemoved, setIsImageRemoved] = useState(false);
 
   // Availability Modal state
   const [isAvailModalOpen, setIsAvailModalOpen] = useState(false);
@@ -98,6 +105,8 @@ export default function SpaStaff() {
       is_active: true,
     });
     setFormError("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
     setIsStaffModalOpen(true);
   };
 
@@ -114,6 +123,8 @@ export default function SpaStaff() {
       is_active: staff.is_active ?? true,
     });
     setFormError("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
     setIsStaffModalOpen(true);
   };
 
@@ -141,12 +152,27 @@ export default function SpaStaff() {
         is_active: Boolean(staffForm.is_active),
       };
 
+      let staffId;
       if (editingStaff) {
         await spaApi.updateStaff(editingStaff.id, payload);
+        staffId = editingStaff.id;
+
+        if (selectedImageFile) {
+          await spaApi.uploadStaffImage(staffId, selectedImageFile);
+        } else if (isImageRemoved) {
+          await spaApi.deleteStaffImage(staffId);
+        }
       } else {
-        await spaApi.createStaff(payload);
+        const res = await spaApi.createStaff(payload);
+        staffId = res.data?.id;
+
+        if (selectedImageFile && staffId) {
+          await spaApi.uploadStaffImage(staffId, selectedImageFile);
+        }
       }
       setIsStaffModalOpen(false);
+      setSelectedImageFile(null);
+      setIsImageRemoved(false);
       showSuccess(
         editingStaff
           ? "Staff member updated successfully."
@@ -259,7 +285,7 @@ export default function SpaStaff() {
         actions={
           <button
             onClick={openAddStaff}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#F5B716] px-4 py-2.5 text-xs sm:text-sm font-semibold text-[#1C1917] shadow-sm hover:bg-[#E5A910] transition-colors cursor-pointer self-start sm:self-auto"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs sm:text-sm font-semibold text-stone-900 dark:text-stone-100 shadow-sm hover:bg-[#E5A910] transition-colors cursor-pointer self-start sm:self-auto"
           >
             <UserPlus size={16} />
             <span>Add Staff Member</span>
@@ -278,39 +304,51 @@ export default function SpaStaff() {
             type="text"
             placeholder="Search by name, employee code, specialization, or phone..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] pl-10 pr-4 py-2 text-xs sm:text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F5B716] focus:outline-none"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] pl-10 pr-4 py-2 text-xs sm:text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F59E0B] focus:outline-none"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setFilterTherapist("all")}
+            onClick={() => {
+              setFilterTherapist("all");
+              setCurrentPage(1);
+            }}
             className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
               filterTherapist === "all"
-                ? "bg-[#1C1917] dark:bg-white text-white dark:text-[#1C1917]"
-                : "border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
             }`}
           >
             All Staff ({safeList.length})
           </button>
           <button
-            onClick={() => setFilterTherapist("therapists")}
+            onClick={() => {
+              setFilterTherapist("therapists");
+              setCurrentPage(1);
+            }}
             className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               filterTherapist === "therapists"
-                ? "bg-[#1C1917] dark:bg-white text-white dark:text-[#1C1917]"
-                : "border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
             }`}
           >
-            <Sparkles size={13} className="text-[#F5B716]" />
+            <Sparkles size={13} className="text-[#F59E0B]" />
             Therapists Only ({therapistsCount})
           </button>
           <button
-            onClick={() => setFilterTherapist("other")}
+            onClick={() => {
+              setFilterTherapist("other");
+              setCurrentPage(1);
+            }}
             className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               filterTherapist === "other"
-                ? "bg-[#1C1917] dark:bg-white text-white dark:text-[#1C1917]"
-                : "border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
             }`}
           >
             Other Staff ({otherStaffCount})
@@ -338,19 +376,24 @@ export default function SpaStaff() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredStaff.map((staff) => {
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((staff) => {
             const displayName = staff.full_name || staff.name || "Staff Member";
             return (
               <div
                 key={staff.id}
-                className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs hover:border-[#F5B716]/40 transition-all flex flex-col justify-between"
+                className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-5 shadow-xs hover:border-[#F59E0B]/40 transition-all flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-[#D99A06] dark:text-[#F5B716] flex items-center justify-center font-bold text-sm">
-                        {displayName.charAt(0).toUpperCase()}
+                      <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-amber-500/10 dark:bg-amber-500/20 text-[#9A3412] dark:text-[#FFB02E] flex items-center justify-center font-bold text-sm shrink-0 border border-amber-500/20">
+                        <AuthenticatedImage
+                          src={staff.image_url}
+                          alt={displayName}
+                          fallback={displayName.charAt(0).toUpperCase()}
+                        />
                       </div>
                       <div>
                         <h3 className="text-sm sm:text-base font-bold text-stone-900 dark:text-white">
@@ -425,7 +468,7 @@ export default function SpaStaff() {
                   {staff.is_therapist && (
                     <button
                       onClick={() => openAvailability(staff)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 py-2 text-xs font-semibold text-amber-700 dark:text-[#F5B716] hover:bg-amber-500/20 transition cursor-pointer"
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 py-2 text-xs font-semibold text-amber-700 dark:text-[#F59E0B] hover:bg-amber-500/20 transition cursor-pointer"
                     >
                       <Calendar size={13} />
                       <span>Schedule</span>
@@ -443,302 +486,305 @@ export default function SpaStaff() {
               </div>
             );
           })}
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.ceil(filteredStaff.length / pageSize) || 1}
+            onPageChange={setCurrentPage}
+            totalRecords={filteredStaff.length}
+            limit={pageSize}
+          />
         </div>
       )}
 
       {/* Add / Edit Staff Modal */}
-      {isStaffModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-stone-800 shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
-              <h2 className="text-base font-bold text-stone-900 dark:text-white">
-                {editingStaff ? "Edit Staff Member" : "Add Staff Member"}
-              </h2>
-              <button
-                onClick={() => setIsStaffModalOpen(false)}
-                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {formError && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300 flex items-center gap-2">
-                <AlertCircle size={14} className="shrink-0" />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveStaff} className="mt-4 space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Full Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Maya Patel"
-                  value={staffForm.full_name}
-                  onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#29231F] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F5B716] focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Employee Code *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. TH-01"
-                    value={staffForm.employee_code}
-                    onChange={(e) => setStaffForm({ ...staffForm, employee_code: e.target.value })}
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#29231F] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F5B716] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Designation
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Senior Therapist"
-                    value={staffForm.designation}
-                    onChange={(e) => setStaffForm({ ...staffForm, designation: e.target.value })}
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#29231F] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F5B716] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Specialization
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Deep Tissue, Swedish, Facial"
-                  value={staffForm.specialization}
-                  onChange={(e) => setStaffForm({ ...staffForm, specialization: e.target.value })}
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#29231F] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F5B716] focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="9876543210"
-                    value={staffForm.phone}
-                    onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#29231F] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F5B716] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="staff@spa.com"
-                    value={staffForm.email}
-                    onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#29231F] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F5B716] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={staffForm.is_therapist}
-                    onChange={(e) => setStaffForm({ ...staffForm, is_therapist: e.target.checked })}
-                    className="rounded border-stone-300 text-[#F5B716] focus:ring-[#F5B716]"
-                  />
-                  <span className="text-xs font-medium text-stone-800 dark:text-stone-200">
-                    Is a Service Therapist (can be assigned to bookings)
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={staffForm.is_active}
-                    onChange={(e) => setStaffForm({ ...staffForm, is_active: e.target.checked })}
-                    className="rounded border-stone-300 text-[#F5B716] focus:ring-[#F5B716]"
-                  />
-                  <span className="text-xs font-medium text-stone-800 dark:text-stone-200">
-                    Active Employee
-                  </span>
-                </label>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setIsStaffModalOpen(false)}
-                  className="rounded-xl px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingStaff}
-                  className="rounded-xl bg-[#F5B716] px-5 py-2 text-xs font-semibold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-50 cursor-pointer"
-                >
-                  {savingStaff ? "Saving..." : "Save Staff"}
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={isStaffModalOpen}
+        onClose={() => setIsStaffModalOpen(false)}
+        title={editingStaff ? "Edit Staff Member" : "Add Staff Member"}
+        size="md"
+      >
+        {formError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300 flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{formError}</span>
           </div>
-        </div>
-      )}
+        )}
+
+        <form onSubmit={handleSaveStaff} className="space-y-3.5">
+          <div className="flex justify-center pb-2">
+            <ProfilePhotoUpload
+              currentImageUrl={editingStaff?.image_url}
+              name={staffForm.full_name}
+              selectedFile={selectedImageFile}
+              onImageSelected={(file) => {
+                setSelectedImageFile(file);
+                setIsImageRemoved(false);
+              }}
+              onImageRemoved={() => {
+                setSelectedImageFile(null);
+                setIsImageRemoved(true);
+              }}
+              isRemoved={isImageRemoved}
+              disabled={savingStaff}
+              onError={(msg) => showError(msg, "Invalid Photo")}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Maya Patel"
+              value={staffForm.full_name}
+              onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
+              className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                Employee Code *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. TH-01"
+                value={staffForm.employee_code}
+                onChange={(e) => setStaffForm({ ...staffForm, employee_code: e.target.value })}
+                className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                Designation
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Senior Therapist"
+                value={staffForm.designation}
+                onChange={(e) => setStaffForm({ ...staffForm, designation: e.target.value })}
+                className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Specialization
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Deep Tissue, Swedish, Facial"
+              value={staffForm.specialization}
+              onChange={(e) => setStaffForm({ ...staffForm, specialization: e.target.value })}
+              className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                Phone Number *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="9876543210"
+                value={staffForm.phone}
+                onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                placeholder="staff@spa.com"
+                value={staffForm.email}
+                onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={staffForm.is_therapist}
+                onChange={(e) => setStaffForm({ ...staffForm, is_therapist: e.target.checked })}
+                className="rounded border-stone-300 text-[#F59E0B] focus:ring-[#F59E0B]"
+              />
+              <span className="text-xs font-medium text-stone-800 dark:text-stone-200">
+                Is a Service Therapist (can be assigned to bookings)
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={staffForm.is_active}
+                onChange={(e) => setStaffForm({ ...staffForm, is_active: e.target.checked })}
+                className="rounded border-stone-300 text-[#F59E0B] focus:ring-[#F59E0B]"
+              />
+              <span className="text-xs font-medium text-stone-800 dark:text-stone-200">
+                Active Employee
+              </span>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-4 border-t border-stone-100 dark:border-stone-800">
+            <button
+              type="button"
+              onClick={() => setIsStaffModalOpen(false)}
+              className="rounded-xl px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={savingStaff}
+              className="rounded-xl bg-[#F59E0B] px-5 py-2 text-xs font-semibold text-stone-900 dark:text-stone-100 hover:bg-[#E5A910] disabled:opacity-50 cursor-pointer"
+            >
+              {savingStaff ? "Saving..." : "Save Staff"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Therapist Weekly Schedule / Availability Modal */}
-      {isAvailModalOpen && selectedStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
-              <div>
-                <h2 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                  <Calendar size={18} className="text-[#F5B716]" />
-                  <span>Therapist Schedule – {selectedStaff.full_name || selectedStaff.name}</span>
-                </h2>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                  Set weekly operating hours (0=Mon .. 6=Sun) for appointment conflict checks
-                </p>
-              </div>
-              <button
-                onClick={() => setIsAvailModalOpen(false)}
-                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-1"
+      <Modal
+        isOpen={Boolean(isAvailModalOpen && selectedStaff)}
+        onClose={() => setIsAvailModalOpen(false)}
+        title={`Therapist Schedule – ${selectedStaff?.full_name || selectedStaff?.name || ""}`}
+        size="lg"
+      >
+        <p className="-mt-3 mb-4 text-xs text-stone-500 dark:text-stone-400">
+          Set weekly operating hours (0=Mon .. 6=Sun) for appointment conflict checks
+        </p>
+
+        {availSuccess && (
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 size={14} className="shrink-0" />
+            <span>{availSuccess}</span>
+          </div>
+        )}
+
+        {loadingAvail ? (
+          <div className="py-12 text-center text-xs text-stone-400">
+            Loading schedule...
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {availabilityList.map((item, idx) => (
+              <div
+                key={item.day_of_week}
+                className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
+                  item.is_working
+                    ? "border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40"
+                    : "border-dashed border-stone-200 dark:border-stone-800/60 opacity-60 bg-transparent"
+                }`}
               >
-                <X size={18} />
-              </button>
-            </div>
+                <div className="flex items-center gap-3 w-32">
+                  <input
+                    type="checkbox"
+                    checked={item.is_working}
+                    onChange={(e) => {
+                      const updated = [...availabilityList];
+                      updated[idx].is_working = e.target.checked;
+                      setAvailabilityList(updated);
+                    }}
+                    className="rounded border-stone-300 text-[#F59E0B] focus:ring-[#F59E0B]"
+                  />
+                  <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
+                    {item.day_name}
+                  </span>
+                </div>
 
-            {availSuccess && (
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                <CheckCircle2 size={14} className="shrink-0" />
-                <span>{availSuccess}</span>
-              </div>
-            )}
-
-            {loadingAvail ? (
-              <div className="py-12 text-center text-xs text-stone-400">
-                Loading schedule...
-              </div>
-            ) : (
-              <div className="mt-4 space-y-2.5">
-                {availabilityList.map((item, idx) => (
-                  <div
-                    key={item.day_of_week}
-                    className={`flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors ${
-                      item.is_working
-                        ? "border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/40"
-                        : "border-dashed border-stone-200 dark:border-stone-800/60 opacity-60 bg-transparent"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 w-32">
+                {item.is_working ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={12} className="text-stone-400" />
                       <input
-                        type="checkbox"
-                        checked={item.is_working}
+                        type="time"
+                        value={item.start_time}
                         onChange={(e) => {
                           const updated = [...availabilityList];
-                          updated[idx].is_working = e.target.checked;
+                          updated[idx].start_time = e.target.value;
                           setAvailabilityList(updated);
                         }}
-                        className="rounded border-stone-300 text-[#F5B716] focus:ring-[#F5B716]"
+                        className="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2 py-1 text-xs text-stone-900 dark:text-white"
                       />
-                      <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                        {item.day_name}
-                      </span>
                     </div>
-
-                    {item.is_working ? (
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <Clock size={12} className="text-stone-400" />
-                          <input
-                            type="time"
-                            value={item.start_time}
-                            onChange={(e) => {
-                              const updated = [...availabilityList];
-                              updated[idx].start_time = e.target.value;
-                              setAvailabilityList(updated);
-                            }}
-                            className="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#29231F] px-2 py-1 text-xs text-stone-900 dark:text-white"
-                          />
-                        </div>
-                        <span className="text-stone-400 text-xs">to</span>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="time"
-                            value={item.end_time}
-                            onChange={(e) => {
-                              const updated = [...availabilityList];
-                              updated[idx].end_time = e.target.value;
-                              setAvailabilityList(updated);
-                            }}
-                            className="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#29231F] px-2 py-1 text-xs text-stone-900 dark:text-white"
-                          />
-                        </div>
-                        <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 ml-1">
-                          ({formatTimeRange12Hour(item.start_time, item.end_time)})
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs italic text-stone-400">Day Off</span>
-                    )}
+                    <span className="text-stone-400 text-xs">to</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="time"
+                        value={item.end_time}
+                        onChange={(e) => {
+                          const updated = [...availabilityList];
+                          updated[idx].end_time = e.target.value;
+                          setAvailabilityList(updated);
+                        }}
+                        className="rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2 py-1 text-xs text-stone-900 dark:text-white"
+                      />
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 ml-1">
+                      ({formatTimeRange12Hour(item.start_time, item.end_time)})
+                    </span>
                   </div>
-                ))}
-
-                <div className="flex items-center justify-between pt-4 border-t border-stone-100 dark:border-stone-800">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const preset = availabilityList.map((a) => ({
-                        ...a,
-                        is_working: a.day_of_week !== 6, // Mon-Sat working, Sun off
-                        start_time: "09:00",
-                        end_time: "18:00",
-                      }));
-                      setAvailabilityList(preset);
-                    }}
-                    className="text-xs text-amber-600 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
-                  >
-                    Reset (Mon–Sat 09:00–18:00)
-                  </button>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsAvailModalOpen(false)}
-                      className="rounded-xl px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="button"
-                      disabled={savingAvail}
-                      onClick={handleSaveAvailability}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#F5B716] px-5 py-2 text-xs font-semibold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-50 cursor-pointer"
-                    >
-                      <Save size={14} />
-                      <span>{savingAvail ? "Saving..." : "Save Schedule"}</span>
-                    </button>
-                  </div>
-                </div>
+                ) : (
+                  <span className="text-xs italic text-stone-400">Day Off</span>
+                )}
               </div>
-            )}
+            ))}
+
+            <div className="flex items-center justify-between pt-4 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const preset = availabilityList.map((a) => ({
+                    ...a,
+                    is_working: a.day_of_week !== 6, // Mon-Sat working, Sun off
+                    start_time: "09:00",
+                    end_time: "18:00",
+                  }));
+                  setAvailabilityList(preset);
+                }}
+                className="text-xs text-amber-600 dark:text-amber-400 font-semibold hover:underline cursor-pointer"
+              >
+                Reset (Mon–Sat 09:00–18:00)
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAvailModalOpen(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={savingAvail}
+                  onClick={handleSaveAvailability}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#F59E0B] px-5 py-2 text-xs font-semibold text-stone-900 dark:text-stone-100 hover:bg-[#E5A910] disabled:opacity-50 cursor-pointer"
+                >
+                  <Save size={14} />
+                  <span>{savingAvail ? "Saving..." : "Save Schedule"}</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

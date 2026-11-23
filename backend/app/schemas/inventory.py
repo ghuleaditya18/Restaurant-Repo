@@ -382,6 +382,7 @@ class PurchaseOrderCreate(BaseModel):
 
 
 class PurchaseOrderUpdate(BaseModel):
+    supplier_id: int | None = Field(default=None, gt=0)
     order_date: date | None = None
     expected_delivery_date: date | None = None
     tax_amount: Decimal | None = Field(default=None, ge=0)
@@ -441,10 +442,15 @@ class GoodsReceiptItemResponse(BaseModel):
 
 class GoodsReceiptCreate(BaseModel):
     received_date: date
-    supplier_bill_number: str | None = None
+    supplier_bill_number: str = Field(..., min_length=1, max_length=50)
     bill_date: date | None = None
     notes: str | None = None
     items: list[GoodsReceiptItemCreate] = Field(..., min_length=1)
+
+    @field_validator("supplier_bill_number")
+    @classmethod
+    def validate_bill_number(cls, v: str) -> str:
+        return clean_required_str(v, "Supplier bill number")
 
 
 class GoodsReceiptResponse(BaseModel):
@@ -511,6 +517,10 @@ class WastageCreate(BaseModel):
     quantity: Decimal = Field(..., gt=0)
     reason: WastageReason = WastageReason.SPOILAGE
     explanation: str = Field(..., min_length=3, max_length=255)
+
+
+class StockMovementReversalRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=255)
 
 
 # ==========================================

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   User,
@@ -17,23 +17,29 @@ import {
   Clock,
   MapPin,
   ChefHat,
-  HeartHandshake,
   AlertCircle,
-  Quote,
   Sun,
   Moon,
   Monitor,
   Check,
   Palette,
+  Camera,
+  Trash2,
+  Loader2,
+  Building2,
+  CheckCircle2,
+  BookOpen,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
 import { useNotification } from "../context/NotificationContext";
 import { useTheme } from "../context/ThemeContext";
-import { updateProfile } from "../services/authService";
+import { updateProfile, uploadProfileImage, deleteProfileImage } from "../services/authService";
+import { getBusinessProfile, updateBusinessProfile } from "../services/businessProfileService";
+import { resolveImageUrl } from "../utils/mediaUtils";
+import BusinessProfileEditor from "../components/BusinessProfileEditor";
 import PageHeader from "../components/PageHeader";
-import { RESTAURANT_ABOUT } from "../config/restaurantAbout";
-import { SPA_ABOUT, SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
+import { SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
 import {
   BUTTON_VARIANTS,
   INPUT_STYLES,
@@ -217,11 +223,12 @@ const HELP_SECTIONS = [
 
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, refreshUser } = useAuth();
   const { showSuccess, showError, confirm } = useNotification();
 
   const isSpaContext = user?.business_context === "SPA";
   const currentHelpSections = isSpaContext ? SPA_HELP_SECTIONS : HELP_SECTIONS;
+  const isManager = (user?.role || "").toLowerCase() === "manager" || (user?.role || "").toLowerCase() === "admin";
 
   const { themeMode, setThemeMode } = useTheme();
 
@@ -251,6 +258,94 @@ export default function Settings() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
+
+  // PROFILE AVATAR MANAGEMENT
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef(null);
+
+  const handleAvatarFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showError("Profile photo must be 5 MB or smaller.", "File Too Large");
+      return;
+    }
+
+    const validTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      showError("Only JPG, PNG or WebP images are allowed.", "Invalid Image");
+      return;
+    }
+
+    try {
+      setUploadingAvatar(true);
+      const updatedUser = await uploadProfileImage(file);
+      updateUser(updatedUser);
+      if (refreshUser) await refreshUser();
+      showSuccess("Profile photo updated successfully.", "Photo Updated");
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Failed to upload profile photo.";
+      showError(typeof msg === "string" ? msg : JSON.stringify(msg), "Upload Failed");
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
+
+  const handleAvatarDelete = async () => {
+    const confirmed = await confirm({
+      title: "Remove Profile Photo?",
+      message: "Are you sure you want to remove your profile photo? Your initials will be displayed instead.",
+      confirmText: "Remove Photo",
+      cancelText: "Keep Photo",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    try {
+      setUploadingAvatar(true);
+      const updatedUser = await deleteProfileImage();
+      updateUser(updatedUser);
+      if (refreshUser) await refreshUser();
+      showSuccess("Profile photo removed.", "Photo Removed");
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Failed to remove profile photo.";
+      showError(typeof msg === "string" ? msg : JSON.stringify(msg), "Removal Failed");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // DYNAMIC ABOUT BUSINESS PROFILE
+  const [bizProfile, setBizProfile] = useState(null);
+  const [bizLoading, setBizLoading] = useState(false);
+  const [bizEditing, setBizEditing] = useState(false);
+
+  const loadBizProfile = async () => {
+    try {
+      setBizLoading(true);
+      const data = await getBusinessProfile();
+      setBizProfile(data);
+    } catch (err) {
+      console.error("Failed to load business profile:", err);
+    } finally {
+      setBizLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "about" && !bizProfile && !bizLoading) {
+      loadBizProfile();
+    }
+  }, [activeTab, bizProfile, bizLoading]);
+
+  const handleBizSave = async (formData) => {
+    const updated = await updateBusinessProfile(formData);
+    setBizProfile(updated);
+    setBizEditing(false);
+    showSuccess("Business profile updated successfully.", "Profile Saved");
+  };
 
   useEffect(() => {
     if (user) {
@@ -385,14 +480,14 @@ export default function Settings() {
         title={isSpaContext ? "Spa Facility Settings" : "System Settings"}
         description={`Manage your account profile, theme appearance, operational help, and ${isSpaContext ? "spa facility" : "restaurant"} information.`}
         actions={
-          <div className="inline-flex rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-1 shadow-2xs">
+          <div className="flex flex-wrap sm:inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1 shadow-2xs gap-1 max-w-full">
             <button
               type="button"
               onClick={() => setActiveTab("profile")}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === "profile"
-                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
               }`}
             >
               <User size={14} />
@@ -402,10 +497,10 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => setActiveTab("appearance")}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === "appearance"
-                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
               }`}
             >
               <Palette size={14} />
@@ -415,10 +510,10 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => setActiveTab("help")}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === "help"
-                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
               }`}
             >
               <HelpCircle size={14} />
@@ -428,10 +523,10 @@ export default function Settings() {
             <button
               type="button"
               onClick={() => setActiveTab("about")}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              className={`flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
                 activeTab === "about"
-                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
               }`}
             >
               <Info size={14} />
@@ -447,26 +542,76 @@ export default function Settings() {
       {activeTab === "profile" && (
         <div className="space-y-6">
           {/* PROFILE SUMMARY HERO CARD */}
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 shadow-xs">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FEF08A] dark:bg-[#713F12]/40 border-2 border-[#FDE047] dark:border-[#EAB308]/60 text-2xl font-bold text-[#854D0E] dark:text-[#FEF08A] shadow-xs">
-                  {user?.full_name ? user.full_name.trim().charAt(0).toUpperCase() : "R"}
+          <div className="rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 sm:p-6 shadow-xs">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-w-0 flex-1">
+                {/* Profile Photo with Upload Controls */}
+                <div className="flex flex-col items-center gap-2 shrink-0">
+                  <div className="relative h-16 w-16 sm:h-20 sm:w-20 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border-2 border-[#F59E0B]/50 text-2xl font-bold shadow-xs flex items-center justify-center">
+                    {user?.avatar_url ? (
+                      <img
+                        src={resolveImageUrl(user.avatar_url)}
+                        alt={user?.full_name || "User"}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span>{user?.full_name ? user.full_name.trim().charAt(0).toUpperCase() : "U"}</span>
+                    )}
+
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white">
+                        <Loader2 size={22} className="animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Photo Actions */}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="file"
+                      ref={avatarInputRef}
+                      onChange={handleAvatarFileChange}
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={uploadingAvatar}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#30251C] hover:bg-[#3D2E22] text-[#FFB02E] border border-[#F59E0B]/40 px-2 py-0.5 text-[11px] font-semibold cursor-pointer"
+                      title="Upload or change profile photo"
+                    >
+                      <Camera size={12} />
+                      <span>{user?.avatar_url ? "Change" : "Upload"}</span>
+                    </button>
+
+                    {user?.avatar_url && (
+                      <button
+                        type="button"
+                        onClick={handleAvatarDelete}
+                        disabled={uploadingAvatar}
+                        className="inline-flex items-center gap-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/60 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/40 px-1.5 py-0.5 text-[11px] font-semibold cursor-pointer"
+                        title="Remove profile photo"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100">
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg sm:text-xl font-bold text-stone-900 dark:text-stone-100 truncate">
                       {user?.full_name || (isSpaContext ? "Spa Receptionist" : "Receptionist User")}
                     </h2>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
-                      <ShieldCheck size={12} />
-                      {user?.is_active !== false ? "Active Account" : "Inactive"}
-                    </span>
                   </div>
-                  <p className="mt-0.5 text-sm text-stone-500 dark:text-stone-400">
+                  <p className="mt-0.5 text-xs sm:text-sm text-stone-500 dark:text-stone-400 truncate">
                     {user?.email || "No email on file"}
                   </p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
                     <span className="rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 font-semibold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
                       {isSpaContext ? "Role: Spa Receptionist" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
                     </span>
@@ -488,7 +633,7 @@ export default function Settings() {
               </div>
 
               {!isEditing && (
-                <div>
+                <div className="shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -576,18 +721,6 @@ export default function Settings() {
                       ? "Authorized for Spa Appointments, Therapies, Invoices, and Billing."
                       : "Authorized for Orders, Tables, Invoices, and Billing."}
                   </p>
-                </div>
-
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4 sm:col-span-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                    Account Status
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 px-2.5 py-0.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      {user?.is_active !== false ? "Active & Verified" : "Inactive"}
-                    </span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -701,23 +834,6 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                      Account Status (Read-Only)
-                    </label>
-                    <input
-                      type="text"
-                      value={user?.is_active !== false ? "Active" : "Inactive"}
-                      disabled
-                      className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-850 px-3 py-2 text-sm text-stone-500 dark:text-stone-400 cursor-not-allowed"
-                    />
-                    <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
-                      Account status cannot be self-modified.
-                    </p>
-                  </div>
-                </div>
-
                 <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-end gap-3">
                   <button
                     type="button"
@@ -749,7 +865,7 @@ export default function Settings() {
          ========================================================================= */}
       {activeTab === "appearance" && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 shadow-xs">
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 shadow-xs">
             <div>
               <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 Application Appearance
@@ -769,8 +885,8 @@ export default function Settings() {
                 }}
                 className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
                   themeMode === "light"
-                    ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-amber-50/20 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#1C1917]"
+                    ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
+                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
                 }`}
               >
                 <div>
@@ -779,7 +895,7 @@ export default function Settings() {
                       <Sun size={20} />
                     </div>
                     {themeMode === "light" && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5B716] text-[#1C1917]">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
                         <Check size={14} className="stroke-[3]" />
                       </span>
                     )}
@@ -806,8 +922,8 @@ export default function Settings() {
                 }}
                 className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
                   themeMode === "dark"
-                    ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-amber-50/20 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#1C1917]"
+                    ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
+                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
                 }`}
               >
                 <div>
@@ -816,7 +932,7 @@ export default function Settings() {
                       <Moon size={20} />
                     </div>
                     {themeMode === "dark" && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5B716] text-[#1C1917]">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
                         <Check size={14} className="stroke-[3]" />
                       </span>
                     )}
@@ -843,8 +959,8 @@ export default function Settings() {
                 }}
                 className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
                   themeMode === "system"
-                    ? "border-[#F5B716] ring-2 ring-[#F5B716]/30 bg-amber-50/20 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#1C1917]"
+                    ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
+                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
                 }`}
               >
                 <div>
@@ -853,7 +969,7 @@ export default function Settings() {
                       <Monitor size={20} />
                     </div>
                     {themeMode === "system" && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F5B716] text-[#1C1917]">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
                         <Check size={14} className="stroke-[3]" />
                       </span>
                     )}
@@ -881,7 +997,7 @@ export default function Settings() {
       {activeTab === "help" && (
         <div className="space-y-6">
           {/* SEARCH HERO */}
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 shadow-xs">
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 shadow-xs">
             <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
               {isSpaContext ? "DineFlow Spa Knowledge Base & Help Centre" : "DineFlow Knowledge Base & Help Centre"}
             </h3>
@@ -901,7 +1017,7 @@ export default function Settings() {
                     ? "Search topics, e.g. time slots, check-in, complete session, GST invoice..."
                     : "Search topics, e.g. table occupied, cancel stale order, GST invoice, dark mode..."
                 }
-                className="h-11 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850 pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F5B716] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F5B716]/30"
+                className="h-11 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850 pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F59E0B] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F59E0B]/30"
               />
               <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
               {helpSearch && (
@@ -919,7 +1035,7 @@ export default function Settings() {
           {/* ACCORDION SECTIONS */}
           <div className="space-y-4">
             {filteredHelpSections.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-stone-300 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-10 text-center">
+              <div className="rounded-2xl border border-dashed border-stone-300 dark:border-stone-800 bg-white dark:bg-[#101722] p-10 text-center">
                 <HelpCircle size={36} className="mx-auto text-stone-400 mb-2" />
                 <h4 className="font-bold text-stone-800 dark:text-stone-200">No matching help topics found</h4>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
@@ -939,7 +1055,7 @@ export default function Settings() {
                 return (
                   <div
                     key={sec.id}
-                    className="overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] shadow-xs"
+                    className="overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] shadow-xs"
                   >
                     <button
                       type="button"
@@ -986,533 +1102,323 @@ export default function Settings() {
       )}
 
       {/* =========================================================================
-          TAB 3: ABOUT (CONTEXT-AWARE: SPA FACILITY OR RESTAURANT PROFILE)
+          TAB 3: ABOUT (DYNAMIC CONTEXT-AWARE BUSINESS INFORMATION)
          ========================================================================= */}
       {activeTab === "about" && (
-        isSpaContext ? (
+        bizLoading ? (
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-12 text-center shadow-xs">
+            <Loader2 size={32} className="animate-spin text-[#F59E0B] mx-auto mb-3" />
+            <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">
+              Loading business profile...
+            </p>
+          </div>
+        ) : bizEditing ? (
+          <BusinessProfileEditor
+            profile={bizProfile}
+            onSave={handleBizSave}
+            onCancel={() => setBizEditing(false)}
+            notify={(msg, type) => (type === "error" ? showError(msg) : showSuccess(msg))}
+          />
+        ) : !bizProfile?.is_profile_complete ? (
+          /* PROFILE COMPLETION CALLOUT STATE */
+          <div className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-white dark:bg-[#101722] p-8 text-center space-y-4 shadow-xs">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
+              <Building2 size={32} />
+            </div>
+            <div>
+              <h3 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100">
+                Complete Your Business Profile
+              </h3>
+              <p className="mt-1.5 text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
+                Some business information still needs to be added before your {isSpaContext ? "spa facility" : "restaurant"} profile is fully configured.
+              </p>
+            </div>
+
+            {bizProfile?.missing_fields?.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
+                  Pending Required Information:
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-2 max-w-md mx-auto">
+                  {bizProfile.missing_fields.map((mf) => (
+                    <span
+                      key={mf}
+                      className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-300"
+                    >
+                      {mf}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isManager ? (
+              <div className="pt-3">
+                <button
+                  type="button"
+                  onClick={() => setBizEditing(true)}
+                  className={BUTTON_VARIANTS.primary}
+                >
+                  <Edit3 size={15} />
+                  <span>Update Business Information</span>
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400 italic pt-2">
+                Authorized business managers can configure establishment details.
+              </p>
+            )}
+          </div>
+        ) : (
+          /* COMPLETED DYNAMIC ABOUT PRESENTATION */
           <div className="space-y-6">
-            {/* A. SPA OVERVIEW & HERO BANNER */}
-            <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 sm:p-8 shadow-xs">
-              {/* Ambient Background Accent */}
-              <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#F5B716]/10 blur-3xl dark:bg-[#F5B716]/5" />
+            {/* A. OVERVIEW HERO BANNER */}
+            <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 sm:p-8 shadow-xs">
+              <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#F59E0B]/10 blur-3xl dark:bg-[#F59E0B]/5" />
 
               <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-3 max-w-2xl">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF08A] dark:bg-[#713F12]/50 border border-[#FDE047] dark:border-[#EAB308]/60 px-3 py-0.5 text-xs font-bold text-[#854D0E] dark:text-[#FEF08A]">
-                      <Sparkles size={13} />
-                      {SPA_ABOUT.overview.facilityType}
-                    </span>
-                    <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-3 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
-                      Context: {SPA_ABOUT.overview.businessContext}
-                    </span>
+                    {bizProfile.business_type && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF7E8] dark:bg-[#30251C] border border-[#FFEDD5] dark:border-[#9A3412]/40 px-3 py-0.5 text-xs font-semibold text-[#9A3412] dark:text-[#FFB02E]">
+                        {isSpaContext ? <Sparkles size={13} /> : <Utensils size={13} />}
+                        {bizProfile.business_type}
+                      </span>
+                    )}
+                    {bizProfile.business_category && (
+                      <span className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-3 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                        {bizProfile.business_category}
+                      </span>
+                    )}
+                    {bizProfile.established_year && (
+                      <span className="rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs text-stone-500 dark:text-stone-400">
+                        Est. {bizProfile.established_year}
+                      </span>
+                    )}
                     <span className="rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs text-stone-500 dark:text-stone-400">
-                      Est. {SPA_ABOUT.overview.establishedYear}
+                      Context: {bizProfile.business_context}
                     </span>
                   </div>
 
                   <div>
                     <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
-                      {SPA_ABOUT.overview.facilityName === "Not configured" ? "Spa Facility Profile" : SPA_ABOUT.overview.facilityName}
+                      {bizProfile.business_name}
                     </h2>
-                    <p className="mt-1 text-sm font-semibold text-stone-500 dark:text-stone-400">
-                      Tagline: <span className="italic">{SPA_ABOUT.overview.tagline}</span>
-                    </p>
-                  </div>
-
-                  <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300 pt-1">
-                    This profile presents the registered facility information, operational schedule, and system parameters governing DineFlow's Spa &amp; Wellness operations. Unconfigured business details are marked accordingly until provisioned by an administrator.
-                  </p>
-                </div>
-
-                {/* Decorative Visual Card */}
-                <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#1C1917] p-6 text-center w-52 shrink-0 shadow-2xs">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F5B716] text-[#1C1917] shadow-xs">
-                    <Sparkles size={28} />
-                  </div>
-                  <h4 className="mt-3 text-sm font-bold text-stone-900 dark:text-stone-100">
-                    Spa &amp; Wellness
-                  </h4>
-                  <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400 leading-tight">
-                    Therapy management &amp; holistic scheduling
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* B. FACILITY DETAILS & OPERATIONAL PARAMETERS */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {/* FACILITY DETAILS */}
-              <div className={CARD_STYLES.base}>
-                <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
-                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                    <MapPin size={18} className="text-[#F5B716]" />
-                    <span>Facility Registration &amp; Contact</span>
-                  </h3>
-                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                    Official business identification and facility communication channels.
-                  </p>
-                </div>
-
-                <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Facility Name:</span>
-                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                      {SPA_ABOUT.overview.facilityName}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Facility Type:</span>
-                    <span className="font-medium text-stone-900 dark:text-stone-100">
-                      {SPA_ABOUT.overview.facilityType}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Physical Address:</span>
-                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                      {SPA_ABOUT.overview.address}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Owner / Management:</span>
-                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                      {SPA_ABOUT.overview.ownerName}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Contact Phone:</span>
-                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                      {SPA_ABOUT.overview.contactPhone}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Official Email:</span>
-                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                      {SPA_ABOUT.overview.officialEmail}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Achievements / Accreditations:</span>
-                    <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                      {SPA_ABOUT.overview.achievements}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* OPERATIONAL SYSTEM PARAMETERS */}
-              <div className={CARD_STYLES.base}>
-                <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
-                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                    <Clock size={18} className="text-[#F5B716]" />
-                    <span>Operational System Parameters</span>
-                  </h3>
-                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                    Active operational rules governing scheduling, slots, and invoicing.
-                  </p>
-                </div>
-
-                <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Operating Hours:</span>
-                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                      {SPA_ABOUT.operationalConfig.operatingHours}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Operating Timezone:</span>
-                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                      {SPA_ABOUT.operationalConfig.timezone}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Slot Interval:</span>
-                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                      {SPA_ABOUT.operationalConfig.slotInterval}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Default Tax Rate:</span>
-                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                      {SPA_ABOUT.operationalConfig.defaultTaxRate}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Booking Lifecycle:</span>
-                    <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
-                      {SPA_ABOUT.operationalConfig.workflow}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1 py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">Concurrency Protection:</span>
-                    <span className="text-[11px] text-stone-600 dark:text-stone-400 font-mono bg-stone-50 dark:bg-stone-850 p-2 rounded-lg border border-stone-100 dark:border-stone-800">
-                      {SPA_ABOUT.operationalConfig.concurrencyProtection}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* C. SPA OPERATIONAL WORKFLOWS */}
-            <div className={CARD_STYLES.base}>
-              <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-5">
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <ShieldCheck size={18} className="text-[#F5B716]" />
-                  <span>Spa Operating Principles &amp; Workflow Standards</span>
-                </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  Standardized execution protocols ensuring seamless therapy delivery and client satisfaction.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      01
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      Three-Stage Lifecycle
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    Appointments follow a strict state progression: Booked → In Progress → Completed. Direct bypasses are prevented at the database level.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      02
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      Dynamic Slot Availability
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    Appointment slots calculate cumulative treatment duration against therapist working shifts, with automatic exclusion of past time slots for current-day bookings.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      03
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      Concurrency-Safe Scheduling
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    Therapist availability checks and booking transactions are protected by PostgreSQL row locks, preventing race conditions or accidental double-booking.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      04
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      Compliant Invoicing
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    Official GST invoices unlock immediately upon session completion with itemized therapy pricing, configurable GST tax rates, and download-ready PDF receipts.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      05
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      Flexible Settlement Modes
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    Supports full settlement, installment payments, and multi-mode payment splitting (UPI, Cards, Cash) with real-time balance tracking.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      06
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      Therapist Shift Roster
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    Weekly therapist schedules are managed per weekday (Monday–Sunday) within standard operating hours, ensuring therapists are never scheduled outside duty shifts.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-          {/* A. RESTAURANT OVERVIEW & HERO BANNER */}
-          <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-6 sm:p-8 shadow-xs">
-            {/* Ambient Background Accent */}
-            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#F5B716]/10 blur-3xl dark:bg-[#F5B716]/5" />
-
-            <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-3 max-w-2xl">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF08A] dark:bg-[#713F12]/50 border border-[#FDE047] dark:border-[#EAB308]/60 px-3 py-0.5 text-xs font-bold text-[#854D0E] dark:text-[#FEF08A]">
-                    <Utensils size={13} />
-                    {RESTAURANT_ABOUT.overview.type}
-                  </span>
-                  <span className="rounded-full bg-stone-100 dark:bg-stone-800 px-3 py-0.5 text-xs font-semibold text-stone-600 dark:text-stone-300">
-                    {RESTAURANT_ABOUT.overview.cuisine}
-                  </span>
-                  <span className="rounded-full bg-stone-100 dark:bg-stone-800 px-2.5 py-0.5 text-xs text-stone-500 dark:text-stone-400">
-                    Est. {RESTAURANT_ABOUT.overview.establishedYear}
-                  </span>
-                </div>
-
-                <div>
-                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-stone-900 dark:text-stone-100">
-                    {RESTAURANT_ABOUT.overview.name}
-                  </h2>
-                  <p className="mt-1 text-base font-semibold text-[#854D0E] dark:text-[#FDE047]">
-                    "{RESTAURANT_ABOUT.overview.tagline}"
-                  </p>
-                </div>
-
-                <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300 pt-1">
-                  {RESTAURANT_ABOUT.overview.description}
-                </p>
-              </div>
-
-              {/* Decorative Visual Card */}
-              <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#1C1917] p-6 text-center w-52 shrink-0 shadow-2xs">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F5B716] text-[#1C1917] shadow-xs">
-                  <ChefHat size={28} />
-                </div>
-                <h4 className="mt-3 text-sm font-bold text-stone-900 dark:text-stone-100">
-                  Authentic Dining
-                </h4>
-                <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400 leading-tight">
-                  Traditional culinary craft & contemporary warmth
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* B. OUR STORY & C. MEET THE FOUNDER */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            {/* OUR STORY (2 cols) */}
-            <div className={`lg:col-span-2 ${CARD_STYLES.base}`}>
-              <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <HeartHandshake size={18} className="text-[#F5B716]" />
-                  <span>{RESTAURANT_ABOUT.story.title}</span>
-                </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  {RESTAURANT_ABOUT.story.subtitle}
-                </p>
-              </div>
-
-              <div className="space-y-3.5 text-sm leading-relaxed text-stone-600 dark:text-stone-300">
-                {RESTAURANT_ABOUT.story.paragraphs.map((para, idx) => (
-                  <p key={idx}>{para}</p>
-                ))}
-              </div>
-            </div>
-
-            {/* MEET THE FOUNDER (1 col) */}
-            <div className={CARD_STYLES.base}>
-              <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
-                  {RESTAURANT_ABOUT.founder.title}
-                </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  Hospitality & Leadership
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3.5 mb-4">
-                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border-2 border-[#FDE047] dark:border-[#EAB308]/60 shadow-xs bg-[#FEF08A] dark:bg-[#713F12]/40">
-                  <img
-                    src={RESTAURANT_ABOUT.founder.image}
-                    alt={RESTAURANT_ABOUT.founder.name}
-                    className="h-full w-full object-cover object-top"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center text-lg font-bold text-[#854D0E] dark:text-[#FEF08A] -z-10">
-                    {RESTAURANT_ABOUT.founder.name.charAt(0)}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm">
-                    {RESTAURANT_ABOUT.founder.name}
-                  </h4>
-                  <p className="text-xs font-semibold text-[#854D0E] dark:text-[#FDE047]">
-                    {RESTAURANT_ABOUT.founder.role}
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                {RESTAURANT_ABOUT.founder.bio}
-              </p>
-
-              <div className="mt-4 rounded-xl border border-stone-200/80 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-850/60 p-3 text-xs italic text-stone-700 dark:text-stone-300 flex items-start gap-2">
-                <Quote size={14} className="text-[#F5B716] shrink-0 mt-0.5" />
-                <p>"{RESTAURANT_ABOUT.founder.quote}"</p>
-              </div>
-            </div>
-          </div>
-
-          {/* D. OUR FOOD PHILOSOPHY */}
-          <div className={CARD_STYLES.base}>
-            <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-5">
-              <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                <Sparkles size={18} className="text-[#F5B716]" />
-                <span>{RESTAURANT_ABOUT.philosophy.title}</span>
-              </h3>
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                The culinary standards and hygiene practices guiding our preparation every day.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {RESTAURANT_ABOUT.philosophy.principles.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4 transition hover:border-amber-300 dark:hover:border-amber-700"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/80 text-[11px] font-bold text-amber-800 dark:text-amber-300">
-                      0{idx + 1}
-                    </span>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      {item.title}
-                    </h4>
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                    {item.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* E. OUR SPECIALITIES */}
-          <div className={CARD_STYLES.base}>
-            <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <Utensils size={18} className="text-[#F5B716]" />
-                  <span>{RESTAURANT_ABOUT.specialities.title}</span>
-                </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  {RESTAURANT_ABOUT.specialities.subtitle}
-                </p>
-              </div>
-              <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400">
-                5 Culinary Categories
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {RESTAURANT_ABOUT.specialities.categories.map((cat, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col justify-between rounded-xl border border-stone-200/70 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50 p-4"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="rounded-md bg-[#FEF08A] dark:bg-[#713F12]/50 px-2 py-0.5 text-[10px] font-bold text-[#854D0E] dark:text-[#FEF08A]">
-                        {cat.tag}
-                      </span>
-                    </div>
-                    <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
-                      {cat.name}
-                    </h4>
-                    <p className="mt-1.5 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                      {cat.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* F. RESTAURANT DETAILS & G. DINING EXPERIENCE */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* RESTAURANT DETAILS */}
-            <div className={CARD_STYLES.base}>
-              <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <MapPin size={18} className="text-[#F5B716]" />
-                  <span>{RESTAURANT_ABOUT.details.title}</span>
-                </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  {RESTAURANT_ABOUT.details.subtitle}
-                </p>
-              </div>
-
-              <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
-                {RESTAURANT_ABOUT.details.fields.map((field, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-2.5">
-                    <span className="font-semibold text-stone-700 dark:text-stone-300">
-                      {field.label}:
-                    </span>
-                    {field.isConfigured ? (
-                      <span className="font-medium text-stone-900 dark:text-stone-100 text-right">
-                        {field.value}
-                      </span>
-                    ) : (
-                      <span className="rounded-md bg-stone-100 dark:bg-stone-850 px-2 py-0.5 text-[11px] font-medium text-stone-500 dark:text-stone-400 border border-stone-200/70 dark:border-stone-800">
-                        {field.value}
-                      </span>
+                    {bizProfile.tagline && (
+                      <p className="mt-1 text-sm font-semibold text-stone-500 dark:text-stone-400 italic">
+                        &quot;{bizProfile.tagline}&quot;
+                      </p>
                     )}
                   </div>
-                ))}
+
+                  {bizProfile.description && (
+                    <p className="text-sm leading-relaxed text-stone-600 dark:text-stone-300 pt-1">
+                      {bizProfile.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col items-end gap-3 shrink-0">
+                  {isManager && (
+                    <button
+                      type="button"
+                      onClick={() => setBizEditing(true)}
+                      className={BUTTON_VARIANTS.primary}
+                    >
+                      <Edit3 size={15} />
+                      <span>Edit Business Information</span>
+                    </button>
+                  )}
+
+                  <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#101722] p-5 text-center w-48 shadow-2xs">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
+                      {isSpaContext ? <Sparkles size={24} /> : <ChefHat size={24} />}
+                    </div>
+                    <h4 className="mt-2.5 text-xs font-bold text-stone-900 dark:text-stone-100">
+                      {isSpaContext ? "Spa & Wellness" : "Restaurant & Dining"}
+                    </h4>
+                    <p className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400 leading-tight">
+                      Verified Business Identity
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* DINING EXPERIENCE */}
-            <div className={CARD_STYLES.base}>
-              <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
-                  <Clock size={18} className="text-[#F5B716]" />
-                  <span>{RESTAURANT_ABOUT.experience.title}</span>
-                </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                  Creating comfortable, memorable dining moments for every party.
-                </p>
-              </div>
-
-              <div className="space-y-3.5">
-                {RESTAURANT_ABOUT.experience.points.map((point, idx) => (
-                  <div key={idx} className="flex items-start gap-3">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/80 text-[10px] font-bold text-amber-800 dark:text-amber-300 shrink-0 mt-0.5">
-                      ✓
-                    </span>
-                    <div>
-                      <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                        {point.title}
-                      </h4>
-                      <p className="mt-0.5 text-xs leading-relaxed text-stone-600 dark:text-stone-300">
-                        {point.description}
-                      </p>
+            {/* B. OUR STORY & FOUNDER / OWNER CARD */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+              {/* OUR STORY */}
+              {(bizProfile.story_content || bizProfile.story_heading) && (
+                <div className={`${bizProfile.founder_name ? "lg:col-span-8" : "lg:col-span-12"} ${CARD_STYLES.base} min-w-0 flex flex-col justify-between`}>
+                  <div>
+                    <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
+                      <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                        <BookOpen size={18} className="text-[#F59E0B]" />
+                        <span>{bizProfile.story_heading || "Our Story"}</span>
+                      </h3>
+                      {bizProfile.story_subheading && (
+                        <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                          {bizProfile.story_subheading}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-3 text-sm leading-relaxed text-stone-600 dark:text-stone-300">
+                      {bizProfile.story_content?.split("\n\n").map((para, idx) => (
+                        <p key={idx}>{para}</p>
+                      ))}
                     </div>
                   </div>
-                ))}
+                </div>
+              )}
+
+              {/* FOUNDER / OWNER CARD */}
+              {bizProfile.founder_name && (
+                <div className={`${(bizProfile.story_content || bizProfile.story_heading) ? "lg:col-span-4" : "lg:col-span-12"} ${CARD_STYLES.base} min-w-0 flex flex-col`}>
+                  <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
+                    <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                      <User size={18} className="text-[#F59E0B]" />
+                      <span>Meet the Founder &amp; Leadership</span>
+                    </h3>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-4 items-start">
+                    <div className="h-20 w-20 sm:h-24 sm:w-24 shrink-0 rounded-2xl overflow-hidden border-2 border-[#F59E0B]/50 bg-stone-100 dark:bg-stone-800 flex items-center justify-center shadow-xs">
+                      {bizProfile.founder_image_url ? (
+                        <img
+                          src={resolveImageUrl(bizProfile.founder_image_url)}
+                          alt={bizProfile.founder_name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] text-2xl font-bold">
+                          {bizProfile.founder_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-base font-bold text-stone-900 dark:text-stone-100 break-words">
+                        {bizProfile.founder_name}
+                      </h4>
+                      <p className="text-xs font-semibold text-[#9A3412] dark:text-[#FFB02E] break-words">
+                        {bizProfile.founder_designation || "Founder & Owner"}
+                      </p>
+                      {bizProfile.founder_quote && (
+                        <p className="mt-2 text-xs italic text-stone-500 dark:text-stone-400 border-l-2 border-[#F59E0B] pl-2.5 py-0.5 break-words">
+                          &quot;{bizProfile.founder_quote}&quot;
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {bizProfile.founder_bio && (
+                    <p className="mt-4 text-xs leading-relaxed text-stone-600 dark:text-stone-300 border-t border-stone-100 dark:border-stone-800/80 pt-3 break-words">
+                      {bizProfile.founder_bio}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* C. OFFICIAL CONTACT DETAILS & OPERATING HOURS */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className={`${CARD_STYLES.base} min-w-0 flex flex-col justify-between`}>
+                <div>
+                  <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
+                    <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                      <MapPin size={18} className="text-[#F59E0B]" />
+                      <span>Official Business &amp; Contact Details</span>
+                    </h3>
+                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                      Official business registration and communication channels.
+                    </p>
+                  </div>
+
+                  <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
+                    <div className="flex items-center justify-between py-2.5 gap-2">
+                      <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Establishment:</span>
+                      <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0 break-words">{bizProfile.business_name}</span>
+                    </div>
+                    {bizProfile.business_email && (
+                      <div className="flex items-center justify-between py-2.5 gap-2">
+                        <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Official Email:</span>
+                        <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0 break-all">{bizProfile.business_email}</span>
+                      </div>
+                    )}
+                    {bizProfile.business_phone && (
+                      <div className="flex items-center justify-between py-2.5 gap-2">
+                        <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Contact Phone:</span>
+                        <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0">{bizProfile.business_phone}</span>
+                      </div>
+                    )}
+                    {bizProfile.address_line && (
+                      <div className="flex items-start justify-between py-2.5 gap-4">
+                        <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Address:</span>
+                        <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0 break-words">
+                          {[bizProfile.address_line, bizProfile.city, bizProfile.state, bizProfile.postal_code, bizProfile.country].filter(Boolean).join(", ")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className={`${CARD_STYLES.base} min-w-0 flex flex-col justify-between`}>
+                <div>
+                  <div className="border-b border-stone-200/80 dark:border-stone-800 pb-4 mb-4">
+                    <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                      <Clock size={18} className="text-[#F59E0B]" />
+                      <span>Operating Hours &amp; Services</span>
+                    </h3>
+                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                      Business operating timings and operational highlights.
+                    </p>
+                  </div>
+
+                  <div className="divide-y divide-stone-100 dark:divide-stone-800/80 text-xs">
+                    {bizProfile.operating_hours && (
+                      <div className="flex items-center justify-between py-2.5 gap-2">
+                        <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Daily Hours:</span>
+                        <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0">{bizProfile.operating_hours}</span>
+                      </div>
+                    )}
+                    {bizProfile.weekly_closed_days && (
+                      <div className="flex items-center justify-between py-2.5 gap-2">
+                        <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Weekly Closed Days:</span>
+                        <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0">{bizProfile.weekly_closed_days}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between py-2.5 gap-2">
+                      <span className="font-semibold text-stone-700 dark:text-stone-300 shrink-0">Timezone:</span>
+                      <span className="font-medium text-stone-900 dark:text-stone-100 text-right min-w-0">Asia/Kolkata (IST)</span>
+                    </div>
+                  </div>
+
+                  {bizProfile.business_highlights && (
+                    <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800/80">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
+                        Specialties &amp; Highlights:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {bizProfile.business_highlights.split(",").map((h, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 rounded-lg bg-stone-100 dark:bg-stone-800 px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-stone-300"
+                          >
+                            <CheckCircle2 size={12} className="text-[#F59E0B]" />
+                            <span>{h.trim()}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )
-    )}
+        )
+      )}
+
     </div>
   );
 }

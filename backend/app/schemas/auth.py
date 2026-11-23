@@ -23,6 +23,7 @@ class UserResponse(BaseModel):
     is_active: bool
     business_context: str = "RESTAURANT"
     phone: str | None = None
+    avatar_url: str | None = None
 
 
 class ProfileUpdateRequest(BaseModel):

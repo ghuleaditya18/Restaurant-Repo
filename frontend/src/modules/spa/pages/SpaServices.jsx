@@ -7,13 +7,13 @@ import {
   Edit2,
   CheckCircle2,
   XCircle,
-  X,
   Layers,
 } from "lucide-react";
 import spaApi from "../services/spaApi";
 import { useNotification } from "../../../context/NotificationContext";
 import PageHeader from "../../../components/PageHeader";
-import AlertBanner from "../../../components/AlertBanner";
+import Modal from "../../../components/Modal";
+import Pagination from "../../../components/Pagination";
 
 function formatCurrency(val) {
   const num = Number(val || 0);
@@ -21,13 +21,14 @@ function formatCurrency(val) {
 }
 
 export default function SpaServices() {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showUpdate, showError } = useNotification();
   const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [selectedCatId, setSelectedCatId] = useState(null);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Modals
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
@@ -47,7 +48,6 @@ export default function SpaServices() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      setError("");
       const [catsRes, svcsRes] = await Promise.all([
         spaApi.getServiceCategories(),
         spaApi.getServices(),
@@ -55,11 +55,11 @@ export default function SpaServices() {
       setCategories(catsRes.data);
       setServices(svcsRes.data);
     } catch (err) {
-      setError(err?.response?.data?.detail || "Failed to load Spa services.");
+      showError(err?.response?.data?.detail || "Failed to load Spa services.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     fetchData();
@@ -86,12 +86,11 @@ export default function SpaServices() {
 
       setServiceModalOpen(false);
       setEditingService(null);
-      showSuccess(
-        editingService
-          ? "Treatment service updated successfully."
-          : "Treatment service created successfully.",
-        "Service Saved"
-      );
+      if (editingService) {
+        showUpdate("Treatment service updated successfully.", "Service Updated");
+      } else {
+        showSuccess("Treatment service created successfully.", "Service Saved");
+      }
       fetchData();
     } catch (err) {
       showError(err?.response?.data?.detail || "Failed to save service.", "Service Error");
@@ -120,7 +119,7 @@ export default function SpaServices() {
     try {
       const newStatus = !svc.is_available;
       await spaApi.updateService(svc.id, { is_available: newStatus });
-      showSuccess(
+      showUpdate(
         `Service "${svc.name}" is now ${newStatus ? "Available" : "Unavailable"}.`,
         "Availability Updated"
       );
@@ -171,7 +170,7 @@ export default function SpaServices() {
                 });
                 setServiceModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] transition shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 transition shadow-xs cursor-pointer"
             >
               <Plus size={16} />
               <span>Add Service</span>
@@ -180,22 +179,17 @@ export default function SpaServices() {
         }
       />
 
-      {error && (
-        <AlertBanner
-          type="error"
-          message={error}
-          onDismiss={() => setError("")}
-        />
-      )}
-
       {/* Categories Filter Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
         <button
           type="button"
-          onClick={() => setSelectedCatId(null)}
+          onClick={() => {
+            setSelectedCatId(null);
+            setCurrentPage(1);
+          }}
           className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer border ${
             selectedCatId === null
-              ? "bg-[#F5B716] text-[#1C1917] border-[#F5B716]"
+              ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold border-[#F59E0B]"
               : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800"
           }`}
         >
@@ -205,10 +199,13 @@ export default function SpaServices() {
           <button
             key={c.id}
             type="button"
-            onClick={() => setSelectedCatId(c.id)}
+            onClick={() => {
+              setSelectedCatId(c.id);
+              setCurrentPage(1);
+            }}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition cursor-pointer border ${
               selectedCatId === c.id
-                ? "bg-[#F5B716] text-[#1C1917] border-[#F5B716]"
+                ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold border-[#F59E0B]"
                 : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:bg-stone-50 dark:hover:bg-stone-800"
             }`}
           >
@@ -223,9 +220,12 @@ export default function SpaServices() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
           placeholder="Search treatments or categories..."
-          className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F5B716] transition"
+          className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] transition"
         />
       </div>
 
@@ -239,272 +239,257 @@ export default function SpaServices() {
           <p className="text-xs text-stone-400 mt-1">Add a new treatment or clear active filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredServices.map((svc) => (
-            <div
-              key={svc.id}
-              className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs flex flex-col justify-between hover:border-[#F5B716]/60 transition"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400">
-                    {svc.category_name || "General"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleAvailability(svc)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition ${
-                      svc.is_available
-                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                        : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
-                    }`}
-                    title="Click to toggle availability"
-                  >
-                    {svc.is_available ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
-                    <span>{svc.is_available ? "Available" : "Unavailable"}</span>
-                  </button>
-                </div>
-
-                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 mt-2.5">
-                  {svc.name}
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 line-clamp-2">
-                  {svc.description || "No description provided."}
-                </p>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 text-xs text-stone-600 dark:text-stone-300">
-                    <Clock size={14} className="text-[#F5B716]" />
-                    <span>{svc.duration_minutes} mins</span>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((svc) => (
+              <div
+                key={svc.id}
+                className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs flex flex-col justify-between hover:border-[#F59E0B]/60 transition"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400">
+                      {svc.category_name || "General"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAvailability(svc)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition ${
+                        svc.is_available
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                          : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                      }`}
+                      title="Click to toggle availability"
+                    >
+                      {svc.is_available ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                      <span>{svc.is_available ? "Available" : "Unavailable"}</span>
+                    </button>
                   </div>
-                  <div className="text-base font-extrabold text-stone-900 dark:text-stone-100">
-                    {formatCurrency(svc.price)}
-                  </div>
+
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 mt-2.5">
+                    {svc.name}
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 line-clamp-2">
+                    {svc.description || "No description provided."}
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingService(svc);
-                      setServiceForm({
-                        category_id: svc.category_id,
-                        name: svc.name,
-                        description: svc.description || "",
-                        price: svc.price,
-                        duration_minutes: svc.duration_minutes,
-                        is_available: svc.is_available,
-                      });
-                      setServiceModalOpen(true);
-                    }}
-                    className="p-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 transition cursor-pointer"
-                    title="Edit Service"
-                  >
-                    <Edit2 size={14} />
-                  </button>
+                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 text-xs text-stone-600 dark:text-stone-300">
+                      <Clock size={14} className="text-[#F59E0B]" />
+                      <span>{svc.duration_minutes} mins</span>
+                    </div>
+                    <div className="text-base font-extrabold text-stone-900 dark:text-stone-100">
+                      {formatCurrency(svc.price)}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingService(svc);
+                        setServiceForm({
+                          category_id: svc.category_id,
+                          name: svc.name,
+                          description: svc.description || "",
+                          price: svc.price,
+                          duration_minutes: svc.duration_minutes,
+                          is_available: svc.is_available,
+                        });
+                        setServiceModalOpen(true);
+                      }}
+                      className="p-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 transition cursor-pointer"
+                      title="Edit Service"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.ceil(filteredServices.length / pageSize) || 1}
+            onPageChange={setCurrentPage}
+            totalRecords={filteredServices.length}
+            limit={pageSize}
+          />
         </div>
       )}
 
       {/* Add / Edit Service Modal */}
-      {serviceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-                {editingService ? "Edit Spa Service" : "Add New Spa Service"}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setServiceModalOpen(false)}
-                className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveService} className="mt-4 space-y-4 text-xs sm:text-sm">
-              <div>
-                <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Category *
-                </label>
-                <select
-                  required
-                  value={serviceForm.category_id}
-                  onChange={(e) => setServiceForm({ ...serviceForm, category_id: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Service Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={serviceForm.name}
-                  onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
-                  placeholder="e.g. Aromatherapy Swedish Massage"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Price (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={serviceForm.price}
-                    onChange={(e) => setServiceForm({ ...serviceForm, price: e.target.value })}
-                    placeholder="2500.00"
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                    Duration (Minutes) *
-                  </label>
-                  <input
-                    type="number"
-                    min="5"
-                    step="5"
-                    required
-                    value={serviceForm.duration_minutes}
-                    onChange={(e) => setServiceForm({ ...serviceForm, duration_minutes: e.target.value })}
-                    placeholder="60"
-                    className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows="3"
-                  value={serviceForm.description}
-                  onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
-                  placeholder="Therapeutic benefits, herbal oils used, technique details..."
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="is_available_chk"
-                  checked={serviceForm.is_available}
-                  onChange={(e) => setServiceForm({ ...serviceForm, is_available: e.target.checked })}
-                  className="w-4 h-4 rounded text-[#F5B716] focus:ring-[#F5B716]"
-                />
-                <label htmlFor="is_available_chk" className="font-medium text-stone-700 dark:text-stone-300 cursor-pointer">
-                  Available for customer booking
-                </label>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setServiceModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] cursor-pointer transition shadow-xs"
-                >
-                  Save Service
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={serviceModalOpen}
+        onClose={() => setServiceModalOpen(false)}
+        title={editingService ? "Edit Spa Service" : "Add New Spa Service"}
+        size="md"
+      >
+        <form onSubmit={handleSaveService} className="space-y-4 text-xs sm:text-sm">
+          <div>
+            <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Category *
+            </label>
+            <select
+              required
+              value={serviceForm.category_id}
+              onChange={(e) => setServiceForm({ ...serviceForm, category_id: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+            >
+              <option value="">Select Category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Service Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={serviceForm.name}
+              onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
+              placeholder="e.g. Aromatherapy Swedish Massage"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                Price (₹) *
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                value={serviceForm.price}
+                onChange={(e) => setServiceForm({ ...serviceForm, price: e.target.value })}
+                placeholder="2500.00"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                Duration (Minutes) *
+              </label>
+              <input
+                type="number"
+                min="5"
+                step="5"
+                required
+                value={serviceForm.duration_minutes}
+                onChange={(e) => setServiceForm({ ...serviceForm, duration_minutes: e.target.value })}
+                placeholder="60"
+                className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Description
+            </label>
+            <textarea
+              rows="3"
+              value={serviceForm.description}
+              onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
+              placeholder="Therapeutic benefits, herbal oils used, technique details..."
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="is_available_chk"
+              checked={serviceForm.is_available}
+              onChange={(e) => setServiceForm({ ...serviceForm, is_available: e.target.checked })}
+              className="w-4 h-4 rounded text-[#F59E0B] focus:ring-[#F59E0B]"
+            />
+            <label htmlFor="is_available_chk" className="font-medium text-stone-700 dark:text-stone-300 cursor-pointer">
+              Available for customer booking
+            </label>
+          </div>
+
+          <div className="pt-4 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
+            <button
+              type="button"
+              onClick={() => setServiceModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 cursor-pointer transition shadow-xs"
+            >
+              Save Service
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Category Modal */}
-      {catModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-                Add Service Category
-              </h2>
-              <button
-                type="button"
-                onClick={() => setCatModalOpen(false)}
-                className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveCategory} className="mt-4 space-y-4 text-xs sm:text-sm">
-              <div>
-                <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Category Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={catForm.name}
-                  onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
-                  placeholder="e.g. Skin Care & Facials"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows="2"
-                  value={catForm.description}
-                  onChange={(e) => setCatForm({ ...catForm, description: e.target.value })}
-                  placeholder="Holistic skin rejuvenation and body polishing..."
-                  className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F5B716] focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setCatModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-bold rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] cursor-pointer transition shadow-xs"
-                >
-                  Create Category
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={catModalOpen}
+        onClose={() => setCatModalOpen(false)}
+        title="Add Service Category"
+        size="sm"
+      >
+        <form onSubmit={handleSaveCategory} className="space-y-4 text-xs sm:text-sm">
+          <div>
+            <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Category Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={catForm.name}
+              onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+              placeholder="e.g. Skin Care & Facials"
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+            />
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
+              Description
+            </label>
+            <textarea
+              rows="2"
+              value={catForm.description}
+              onChange={(e) => setCatForm({ ...catForm, description: e.target.value })}
+              placeholder="Holistic skin rejuvenation and body polishing..."
+              className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+            />
+          </div>
+
+          <div className="pt-4 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
+            <button
+              type="button"
+              onClick={() => setCatModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 cursor-pointer transition shadow-xs"
+            >
+              Create Category
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

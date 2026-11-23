@@ -10,6 +10,8 @@ from app.models.entities import (
     OrderStatusHistory,
     Invoice,
     Payment,
+    BusinessProfile,
+    EntityImage,
 )
 from app.models.spa import (
     SpaBookingStatus,
@@ -60,6 +62,8 @@ __all__ = [
     "OrderStatusHistory",
     "Invoice",
     "Payment",
+    "BusinessProfile",
+    "EntityImage",
     "SpaBookingStatus",
     "SpaPaymentStatus",
     "SpaPaymentMethod",

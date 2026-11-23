@@ -10,7 +10,7 @@ function ProtectedRoute({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FAFAF9] text-[#1C1917] font-semibold text-sm">
+      <div className="min-h-screen flex items-center justify-center bg-[#F0F2F7] dark:bg-[#0B111A] text-stone-900 dark:text-stone-100 font-semibold text-sm">
         Verifying your session...
       </div>
     );

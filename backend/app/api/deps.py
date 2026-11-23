@@ -122,3 +122,15 @@ def require_spa_context(
             detail="Access denied: Spa account required"
         )
     return current_user
+
+
+def require_restaurant_context_image(
+    current_user: User = Depends(require_restaurant_context)
+) -> User:
+    return current_user
+
+
+def require_spa_context_image(
+    current_user: User = Depends(require_spa_context)
+) -> User:
+    return current_user

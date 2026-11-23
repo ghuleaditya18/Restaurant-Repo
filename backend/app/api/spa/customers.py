@@ -1,11 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.db.session import get_db
-from app.api.deps import require_spa_context
+from app.api.deps import require_spa_context, require_spa_context_image
 from app.models.entities import User
 from app.models.spa import SpaCustomer, SpaBooking
+from app.services.entity_image_service import (
+    validate_image_file,
+    save_or_replace_entity_image,
+    get_entity_image,
+    delete_entity_image,
+    build_image_response,
+)
 from app.schemas.spa import (
     SpaCustomerCreate,
     SpaCustomerUpdate,
@@ -13,7 +20,7 @@ from app.schemas.spa import (
     SpaBookingResponse,
 )
 
-router = APIRouter(dependencies=[Depends(require_spa_context)])
+router = APIRouter()
 
 
 @router.get("/customers", response_model=list[SpaCustomerResponse])
@@ -199,7 +206,86 @@ def delete_customer(
             detail="Customer cannot be deleted because existing bookings are associated with this customer. Deactivate the customer instead.",
         )
 
+    delete_entity_image(db, "spa_customer", customer_id, business_context="spa")
     db.delete(customer)
     db.commit()
 
     return {"message": f"Customer '{customer.full_name}' deleted successfully."}
+
+
+@router.post("/customers/{customer_id}/image", response_model=SpaCustomerResponse)
+async def upload_spa_customer_image(
+    customer_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    customer = db.get(SpaCustomer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    image_bytes, mime_type, file_size, checksum = await validate_image_file(file)
+
+    img_record = save_or_replace_entity_image(
+        db=db,
+        entity_type="spa_customer",
+        business_context="spa",
+        entity_id=customer.id,
+        image_data=image_bytes,
+        mime_type=mime_type,
+        file_size=file_size,
+        checksum=checksum,
+    )
+
+    v = int(img_record.updated_at.timestamp())
+    customer.image_url = f"/api/spa/customers/{customer.id}/image?v={v}"
+    db.commit()
+    db.refresh(customer)
+
+    cnt = db.query(func.count(SpaBooking.id)).filter(SpaBooking.customer_id == customer.id).scalar() or 0
+    resp = SpaCustomerResponse.model_validate(customer)
+    resp.booking_count = cnt
+    return resp
+
+
+@router.get("/customers/{customer_id}/image")
+def get_spa_customer_image_endpoint(
+    customer_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context_image),
+):
+    customer = db.get(SpaCustomer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    img_record = get_entity_image(db, "spa_customer", customer.id, business_context="spa")
+    if not img_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Spa customer photograph not found.",
+        )
+
+    if_none_match = request.headers.get("if-none-match")
+    return build_image_response(img_record, if_none_match)
+
+
+@router.delete("/customers/{customer_id}/image", response_model=SpaCustomerResponse)
+def delete_spa_customer_image_endpoint(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    customer = db.get(SpaCustomer, customer_id)
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found.")
+
+    delete_entity_image(db, "spa_customer", customer.id, business_context="spa")
+    customer.image_url = None
+    db.commit()
+    db.refresh(customer)
+
+    cnt = db.query(func.count(SpaBooking.id)).filter(SpaBooking.customer_id == customer.id).scalar() or 0
+    resp = SpaCustomerResponse.model_validate(customer)
+    resp.booking_count = cnt
+    return resp

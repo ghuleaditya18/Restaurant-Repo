@@ -168,3 +168,5 @@ class CustomerResponse(BaseModel):
     email: str | None
 
     address: str | None
+
+    image_url: str | None = None

@@ -60,10 +60,10 @@ export default function DateFilter({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-1.5 shadow-xs transition-colors ${className}`}
+      className={`flex flex-wrap items-center gap-2 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1.5 shadow-xs transition-colors ${className}`}
     >
-      <div className="flex items-center gap-1.5 px-2 text-stone-500 dark:text-stone-400 text-xs font-semibold uppercase tracking-wider">
-        <Calendar size={14} className="text-[#F5B716]" />
+      <div className="flex items-center gap-1.5 px-2 text-stone-500 dark:text-[#8A9AB2] text-xs font-semibold uppercase tracking-wider">
+        <Calendar size={14} className="text-[#F59E0B]" />
         <span>Date:</span>
       </div>
 
@@ -77,8 +77,8 @@ export default function DateFilter({
               onClick={() => handlePresetChange(opt.value)}
               className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                 isActive
-                  ? "bg-[#F5B716] text-[#1C1917] shadow-xs"
-                  : "bg-stone-50 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 border border-stone-200/60 dark:border-stone-700"
+                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
+                  : "bg-stone-50 dark:bg-[#151D29] text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-100 dark:hover:bg-[#1E293B] border border-[#E5E9F0] dark:border-[#1E293B]"
               }`}
             >
               {opt.label}
@@ -88,12 +88,12 @@ export default function DateFilter({
       </div>
 
       {localPreset === "custom" && (
-        <div className="flex items-center gap-2 pl-2 border-l border-stone-200 dark:border-stone-800">
+        <div className="flex items-center gap-2 pl-2 border-l border-[#E5E9F0] dark:border-[#1E293B]">
           <input
             type="date"
             value={localStart}
             onChange={(e) => handleDateChange(e.target.value, localEnd)}
-            className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-850 px-2 py-1 text-xs text-stone-800 dark:text-stone-200 outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+            className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-2 py-1 text-xs text-stone-800 dark:text-stone-200 outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
             title="Start Date"
           />
           <span className="text-xs text-stone-400">to</span>
@@ -101,7 +101,7 @@ export default function DateFilter({
             type="date"
             value={localEnd}
             onChange={(e) => handleDateChange(localStart, e.target.value)}
-            className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-850 px-2 py-1 text-xs text-stone-800 dark:text-stone-200 outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+            className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-2 py-1 text-xs text-stone-800 dark:text-stone-200 outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
             title="End Date"
           />
         </div>

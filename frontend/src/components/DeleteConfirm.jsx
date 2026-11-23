@@ -76,7 +76,7 @@ export default function DeleteConfirm({
       <div
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[480px] my-8 rounded-2xl bg-white dark:bg-[#1C1917] p-6 shadow-2xl border border-rose-200 dark:border-rose-900/60 text-stone-900 dark:text-stone-100 animate-in fade-in zoom-in-95 duration-150"
+        className="relative w-full max-w-[480px] my-8 rounded-2xl bg-white dark:bg-[#101722] p-6 shadow-2xl border border-rose-200 dark:border-rose-900/60 text-stone-900 dark:text-stone-100 animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Header Icon + Title */}
         <div className="flex items-start gap-4">

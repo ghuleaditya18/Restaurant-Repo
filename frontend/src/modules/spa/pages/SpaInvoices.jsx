@@ -25,6 +25,8 @@ import spaApi from "../services/spaApi";
 import { PaymentStatusBadge } from "../components/StatusBadges";
 import DateFilter from "../../../components/DateFilter";
 import PageHeader from "../../../components/PageHeader";
+import StatCard from "../../../components/StatCard";
+import Pagination from "../../../components/Pagination";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
 
@@ -113,41 +115,6 @@ const savePdfFile = (blob, filename) => {
   window.setTimeout(() => URL.revokeObjectURL(url), 60000);
 };
 
-// Summary Card Component
-function SummaryCard({ title, value, icon, secondary, active = false, onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      className={`rounded-2xl border p-4 sm:p-5 shadow-xs transition-all duration-200 ${
-        onClick ? "cursor-pointer hover:shadow-md" : ""
-      } ${
-        active
-          ? "border-[#F5B716] bg-amber-50/50 dark:bg-amber-950/30 ring-2 ring-[#F5B716]/30"
-          : "border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917]"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-          {title}
-        </span>
-        <span className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-[#F5B716]">
-          {icon}
-        </span>
-      </div>
-      <div className="mt-2.5">
-        <div className="text-2xl sm:text-3xl font-extrabold text-stone-900 dark:text-stone-100">
-          {value}
-        </div>
-        {secondary && (
-          <p className="mt-1 text-xs font-medium text-stone-500 dark:text-stone-400">
-            {secondary}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Payment Method Badge Component
 function PaymentMethodBadge({ method }) {
   switch (method) {
@@ -207,6 +174,11 @@ export default function SpaInvoices() {
   const [transactionSearch, setTransactionSearch] = useState("");
   const [transactionMethodFilter, setTransactionMethodFilter] = useState("ALL");
   const [transactionStatusFilter, setTransactionStatusFilter] = useState("ALL");
+
+  // Pagination states
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const pageSize = 10;
 
   // Date Filter State
   const [dateFilter, setDateFilter] = useState({
@@ -764,7 +736,7 @@ export default function SpaInvoices() {
           <button
             type="button"
             onClick={openGenerateInvoiceModal}
-            className="flex items-center justify-center gap-2 rounded-xl bg-[#F5B716] px-4 py-2.5 text-xs sm:text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition self-start sm:self-auto"
+            className="flex items-center justify-center gap-2 rounded-xl bg-[#F59E0B] px-4 py-2.5 text-xs sm:text-sm font-bold text-stone-900 dark:text-stone-100 shadow-xs hover:bg-[#E5A910] cursor-pointer transition self-start sm:self-auto"
           >
             <Plus size={16} />
             <span>Generate Invoice</span>
@@ -783,26 +755,27 @@ export default function SpaInvoices() {
       </div>
 
       {/* 4 SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <SummaryCard
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+        <StatCard
           title="Total Invoices"
           value={invoices.length}
           icon={<Receipt size={20} />}
-          secondary={`${filteredInvoices.length} in current view`}
+          subtext={`${filteredInvoices.length} in current view`}
         />
 
-        <SummaryCard
+        <StatCard
           title="Total Amount"
           value={formatCurrency(totalAmount)}
           icon={<IndianRupee size={20} />}
-          secondary={`Collected: ${formatCurrency(totalPaid)}`}
+          subtext={`Collected: ${formatCurrency(totalPaid)}`}
         />
 
-        <SummaryCard
+        <StatCard
           title="Paid Invoices"
           value={paidInvoicesCount}
           icon={<CheckCircle2 size={20} />}
-          secondary="Fully settled"
+          subtext="Fully settled"
+          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={paymentStatusFilter === "PAID"}
           onClick={() => {
             setActiveTab("invoices");
@@ -810,11 +783,12 @@ export default function SpaInvoices() {
           }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Pending Invoices"
           value={pendingInvoicesCount}
           icon={<Clock size={20} />}
-          secondary={`Due: ${formatCurrency(totalDue)}`}
+          subtext={`Due: ${formatCurrency(totalDue)}`}
+          badgeColor="bg-amber-50 text-amber-800 border-amber-200"
           active={paymentStatusFilter === "PENDING"}
           onClick={() => {
             setActiveTab("invoices");
@@ -830,7 +804,7 @@ export default function SpaInvoices() {
           onClick={() => setActiveTab("invoices")}
           className={`border-b-2 px-5 py-3 text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeTab === "invoices"
-              ? "border-[#F5B716] text-stone-900 dark:text-white font-bold"
+              ? "border-[#F59E0B] text-stone-900 dark:text-white font-bold"
               : "border-transparent text-stone-500 hover:text-stone-900 dark:hover:text-stone-300"
           }`}
         >
@@ -841,7 +815,7 @@ export default function SpaInvoices() {
           onClick={() => setActiveTab("transactions")}
           className={`border-b-2 px-5 py-3 text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeTab === "transactions"
-              ? "border-[#F5B716] text-stone-900 dark:text-white font-bold"
+              ? "border-[#F59E0B] text-stone-900 dark:text-white font-bold"
               : "border-transparent text-stone-500 hover:text-stone-900 dark:hover:text-stone-300"
           }`}
         >
@@ -851,7 +825,7 @@ export default function SpaInvoices() {
 
       {/* TAB 1: INVOICES LIST */}
       {activeTab === "invoices" && (
-        <div className="overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] shadow-xs">
+        <div className="overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] shadow-xs">
           {/* Controls Bar */}
           <div className="flex flex-col justify-between gap-3 border-b border-stone-200/80 dark:border-stone-800 p-4 md:flex-row md:items-center">
             <div>
@@ -873,14 +847,14 @@ export default function SpaInvoices() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search invoice #, customer..."
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 py-2 pl-9 pr-3 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 py-2 pl-9 pr-3 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                 />
               </div>
 
               <select
                 value={paymentStatusFilter}
                 onChange={(e) => setPaymentStatusFilter(e.target.value)}
-                className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
               >
                 <option value="ALL">All Payment Statuses</option>
                 <option value="PENDING">Pending</option>
@@ -923,7 +897,7 @@ export default function SpaInvoices() {
                 {loading ? (
                   <tr>
                     <td colSpan="11" className="p-12 text-center text-xs sm:text-sm text-stone-400">
-                      <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#F5B716]" />
+                      <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#F59E0B]" />
                       Loading treatment invoices...
                     </td>
                   </tr>
@@ -935,7 +909,7 @@ export default function SpaInvoices() {
                     </td>
                   </tr>
                 ) : (
-                  filteredInvoices.map((inv) => {
+                  filteredInvoices.slice((invoicePage - 1) * pageSize, invoicePage * pageSize).map((inv) => {
                     const balance = Number(inv.balance_due || 0);
                     return (
                       <tr
@@ -1020,7 +994,7 @@ export default function SpaInvoices() {
                                 type="button"
                                 onClick={(e) => openRecordPaymentModal(inv, e)}
                                 title="Record Customer Payment"
-                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 dark:bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-700 dark:text-[#F5B716] hover:bg-amber-500/20 transition cursor-pointer"
+                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500/10 dark:bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-700 dark:text-[#F59E0B] hover:bg-amber-500/20 transition cursor-pointer"
                               >
                                 <CreditCard size={12} />
                                 <span>Pay</span>
@@ -1035,12 +1009,19 @@ export default function SpaInvoices() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={invoicePage}
+            totalPages={Math.ceil(filteredInvoices.length / pageSize) || 1}
+            onPageChange={setInvoicePage}
+            totalRecords={filteredInvoices.length}
+            limit={pageSize}
+          />
         </div>
       )}
 
       {/* TAB 2: PAYMENT TRANSACTIONS */}
       {activeTab === "transactions" && (
-        <div className="overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#1C1917] shadow-xs">
+        <div className="overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] shadow-xs">
           {/* Controls Bar */}
           <div className="flex flex-col justify-between gap-3 border-b border-stone-200/80 dark:border-stone-800 p-4 md:flex-row md:items-center">
             <div>
@@ -1062,14 +1043,14 @@ export default function SpaInvoices() {
                   value={transactionSearch}
                   onChange={(e) => setTransactionSearch(e.target.value)}
                   placeholder="Search ref #, invoice #, customer..."
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 py-2 pl-9 pr-3 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 py-2 pl-9 pr-3 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                 />
               </div>
 
               <select
                 value={transactionMethodFilter}
                 onChange={(e) => setTransactionMethodFilter(e.target.value)}
-                className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
               >
                 <option value="ALL">All Payment Methods</option>
                 {PAYMENT_METHODS.map((m) => (
@@ -1082,7 +1063,7 @@ export default function SpaInvoices() {
               <select
                 value={transactionStatusFilter}
                 onChange={(e) => setTransactionStatusFilter(e.target.value)}
-                className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="PAID">Paid</option>
@@ -1123,7 +1104,7 @@ export default function SpaInvoices() {
                 {loading ? (
                   <tr>
                     <td colSpan="10" className="p-12 text-center text-xs sm:text-sm text-stone-400">
-                      <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#F5B716]" />
+                      <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#F59E0B]" />
                       Loading payment transactions...
                     </td>
                   </tr>
@@ -1135,7 +1116,7 @@ export default function SpaInvoices() {
                     </td>
                   </tr>
                 ) : (
-                  filteredPayments.map((p) => (
+                  filteredPayments.slice((transactionPage - 1) * pageSize, transactionPage * pageSize).map((p) => (
                     <tr
                       key={p.id}
                       className="hover:bg-stone-50/60 dark:hover:bg-stone-800/30 transition-colors"
@@ -1159,7 +1140,7 @@ export default function SpaInvoices() {
                               handleViewInvoice(res.data);
                             });
                           }}
-                          className="font-bold text-[#D99A06] dark:text-[#F5B716] hover:underline cursor-pointer"
+                          className="font-bold text-[#9A3412] dark:text-[#FFB02E] hover:underline cursor-pointer"
                           title="View associated invoice"
                         >
                           {p.invoice_number || `INV #${p.invoice_id}`}
@@ -1217,16 +1198,23 @@ export default function SpaInvoices() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={transactionPage}
+            totalPages={Math.ceil(filteredPayments.length / pageSize) || 1}
+            onPageChange={setTransactionPage}
+            totalRecords={filteredPayments.length}
+            limit={pageSize}
+          />
         </div>
       )}
 
       {/* MODAL 1: GENERATE INVOICE */}
       {showGenerateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-2.5">
-                <div className="rounded-xl bg-[#F5B716]/10 p-2 text-[#D99A06] dark:text-[#F5B716]">
+                <div className="rounded-xl bg-[#F59E0B]/10 p-2 text-[#9A3412] dark:text-[#FFB02E]">
                   <Receipt size={20} />
                 </div>
                 <div>
@@ -1265,7 +1253,7 @@ export default function SpaInvoices() {
                     value={selectedBookingId}
                     onChange={(e) => setSelectedBookingId(e.target.value)}
                     required
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                   >
                     <option value="">-- Choose a completed booking --</option>
                     {completedBookings.map((b) => (
@@ -1328,7 +1316,7 @@ export default function SpaInvoices() {
                     value={gstRate}
                     onChange={(e) => setGstRate(e.target.value)}
                     required
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                   />
                 </div>
 
@@ -1342,7 +1330,7 @@ export default function SpaInvoices() {
                     step="0.01"
                     value={discountAmount}
                     onChange={(e) => setDiscountAmount(e.target.value)}
-                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                    className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                   />
                 </div>
               </div>
@@ -1369,7 +1357,7 @@ export default function SpaInvoices() {
                   )}
                   <div className="flex justify-between border-t border-stone-200 dark:border-stone-700 pt-1.5 font-bold text-sm text-stone-900 dark:text-white">
                     <span>Grand Total:</span>
-                    <span className="text-[#D99A06] dark:text-[#F5B716]">
+                    <span className="text-[#9A3412] dark:text-[#FFB02E]">
                       {formatCurrency(calculatedGrandTotal)}
                     </span>
                   </div>
@@ -1387,7 +1375,7 @@ export default function SpaInvoices() {
                 <button
                   type="submit"
                   disabled={saving || !selectedBookingId}
-                  className="rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] px-4 py-2 text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer transition flex items-center gap-1.5"
+                  className="rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 px-4 py-2 text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer transition flex items-center gap-1.5"
                 >
                   <Plus size={14} />
                   <span>{saving ? "Generating..." : "Generate Invoice"}</span>
@@ -1401,11 +1389,11 @@ export default function SpaInvoices() {
       {/* MODAL 2: INVOICE DETAILS MODAL (FOLLOWING RESTAURANT FLOW) */}
       {showDetailsModal && selectedInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#F5B716]/10 text-[#D99A06] dark:text-[#F5B716] flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-[#F59E0B]/10 text-[#9A3412] dark:text-[#FFB02E] flex items-center justify-center font-bold">
                   <FileText size={20} />
                 </div>
                 <div>
@@ -1641,7 +1629,7 @@ export default function SpaInvoices() {
                     <button
                       type="button"
                       onClick={(e) => openRecordPaymentModal(selectedInvoice, e)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#F5B716] px-4 py-2 text-xs font-bold text-[#1C1917] hover:bg-[#E5A910] transition cursor-pointer shadow-xs"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#F59E0B] px-4 py-2 text-xs font-bold text-stone-900 dark:text-stone-100 hover:bg-[#E5A910] transition cursor-pointer shadow-xs"
                     >
                       <CreditCard size={14} />
                       <span>Record Payment</span>
@@ -1664,10 +1652,10 @@ export default function SpaInvoices() {
       {/* MODAL 3: RECORD PAYMENT MODAL */}
       {showPaymentModal && selectedInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <h2 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                <CreditCard size={18} className="text-[#F5B716]" />
+                <CreditCard size={18} className="text-[#F59E0B]" />
                 <span>Record Customer Payment</span>
               </h2>
               <button
@@ -1701,7 +1689,7 @@ export default function SpaInvoices() {
               </div>
               <div className="flex justify-between border-t border-amber-200/80 dark:border-amber-800 pt-1 font-bold">
                 <span>Outstanding Balance:</span>
-                <span className="text-amber-700 dark:text-[#F5B716]">
+                <span className="text-amber-700 dark:text-[#F59E0B]">
                   {formatCurrency(selectedInvoice.balance_due)}
                 </span>
               </div>
@@ -1725,7 +1713,7 @@ export default function SpaInvoices() {
                     setPaymentForm({ ...paymentForm, payment_method: e.target.value })
                   }
                   required
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                 >
                   {PAYMENT_METHODS.map((m) => (
                     <option key={m} value={m}>
@@ -1747,7 +1735,7 @@ export default function SpaInvoices() {
                   value={paymentForm.amount}
                   onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                   required
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                 />
                 <span className="text-[11px] text-stone-400 mt-0.5 block">
                   Max payable: {formatCurrency(selectedInvoice.balance_due)}
@@ -1765,7 +1753,7 @@ export default function SpaInvoices() {
                   onChange={(e) =>
                     setPaymentForm({ ...paymentForm, transaction_reference: e.target.value })
                   }
-                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F5B716] focus:ring-1 focus:ring-[#F5B716]"
+                  className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-3 py-2 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                 />
               </div>
 
@@ -1780,7 +1768,7 @@ export default function SpaInvoices() {
                 <button
                   type="submit"
                   disabled={submittingPayment}
-                  className="rounded-xl bg-[#F5B716] hover:bg-[#E5A910] text-[#1C1917] px-4 py-2 text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer transition flex items-center gap-1.5"
+                  className="rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 px-4 py-2 text-xs font-bold shadow-xs disabled:opacity-50 cursor-pointer transition flex items-center gap-1.5"
                 >
                   <CreditCard size={14} />
                   <span>{submittingPayment ? "Recording..." : "Confirm & Settle"}</span>

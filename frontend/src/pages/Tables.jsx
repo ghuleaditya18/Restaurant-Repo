@@ -24,8 +24,9 @@ import {
 } from "../services/tableService";
 import { useNotification } from "../context/NotificationContext";
 import PageHeader from "../components/PageHeader";
-import AlertBanner from "../components/AlertBanner";
 import Modal from "../components/Modal";
+import StatCard from "../components/StatCard";
+import Pagination from "../components/Pagination";
 
 const EMPTY_FORM = {
   table_number: "",
@@ -48,7 +49,7 @@ const getErrorMessage = (error) => {
 };
 
 export default function Tables() {
-  const { showError, showInfo, confirm } = useNotification();
+  const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [tables, setTables] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -70,9 +71,9 @@ export default function Tables() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  // Notifications
-  const [pageError, setPageError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  // Pagination (10 records per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // ==========================================
   // LOAD TABLES
@@ -80,17 +81,16 @@ export default function Tables() {
 
   const loadTables = useCallback(async () => {
     setLoading(true);
-    setPageError("");
 
     try {
       const data = await getAllTables();
       setTables(data);
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Load Tables");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     loadTables();
@@ -135,6 +135,12 @@ export default function Tables() {
       return matchesSearch && matchesStatus;
     });
   }, [tables, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTables.length / pageSize));
+  const paginatedTables = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTables.slice(start, start + pageSize);
+  }, [filteredTables, currentPage, pageSize]);
 
   // ==========================================
   // ADD TABLE
@@ -199,10 +205,10 @@ export default function Tables() {
     try {
       if (editingTable) {
         await updateTable(editingTable.id, tableData);
-        setSuccessMessage("Table details updated successfully.");
+        showUpdate("Table details updated successfully.", "Table Updated");
       } else {
         await createTable(tableData);
-        setSuccessMessage("New table created successfully.");
+        showSuccess("New table created successfully.", "Table Created");
       }
 
       setShowModal(false);
@@ -260,9 +266,6 @@ export default function Tables() {
 
     if (!confirmed) return;
 
-    setPageError("");
-    setSuccessMessage("");
-
     try {
       const updatedTable = await updateTable(table.id, {
         is_active: !table.is_active,
@@ -272,13 +275,9 @@ export default function Tables() {
         previous.map((item) => (item.id === table.id ? updatedTable : item)),
       );
 
-      const msg = `Table ${table.table_number} ${action}d successfully.`;
-      setSuccessMessage(msg);
-      showInfo(msg, "Table Status Updated");
+      showUpdate(`Table ${table.table_number} ${action}d successfully.`, "Table Status Updated");
     } catch (error) {
-      const msg = getErrorMessage(error);
-      setPageError(msg);
-      showError(msg, "Update Failed");
+      showError(getErrorMessage(error), "Update Failed");
     }
   };
 
@@ -297,21 +296,13 @@ export default function Tables() {
 
     if (!confirmed) return;
 
-    setPageError("");
-    setSuccessMessage("");
-
     try {
       await deleteTable(table.id);
 
       setTables((previous) => previous.filter((item) => item.id !== table.id));
-
-      const msg = `Table ${table.table_number} deleted successfully.`;
-      setSuccessMessage(msg);
-      showError(msg, "Table Deleted");
+      showDelete(`Table ${table.table_number} deleted successfully.`, "Table Deleted");
     } catch (error) {
-      const msg = getErrorMessage(error);
-      setPageError(msg);
-      showError(msg, "Delete Failed");
+      showError(getErrorMessage(error), "Delete Failed");
     }
   };
 
@@ -328,7 +319,7 @@ export default function Tables() {
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
           >
             <Plus size={18} />
             <span>Add New Table</span>
@@ -336,59 +327,53 @@ export default function Tables() {
         }
       />
 
-      {/* SUCCESS MESSAGE */}
-      {successMessage && (
-        <AlertBanner
-          type="success"
-          message={successMessage}
-          onDismiss={() => setSuccessMessage("")}
-        />
-      )}
-
-      {/* ERROR MESSAGE */}
-      {pageError && (
-        <AlertBanner
-          type="error"
-          message={pageError}
-          onDismiss={() => setPageError("")}
-        />
-      )}
-
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryCard
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <StatCard
           title="Total Tables"
           value={tables.length}
           icon={<Armchair size={19} />}
           active={statusFilter === "ALL"}
-          onClick={() => setStatusFilter("ALL")}
+          onClick={() => {
+            setStatusFilter("ALL");
+            setCurrentPage(1);
+          }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Available"
           value={availableCount}
           icon={<CheckCircle2 size={19} />}
           badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={statusFilter === "AVAILABLE"}
-          onClick={() => setStatusFilter("AVAILABLE")}
+          onClick={() => {
+            setStatusFilter("AVAILABLE");
+            setCurrentPage(1);
+          }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Occupied"
           value={occupiedCount}
           icon={<Clock size={19} />}
           badgeColor="bg-amber-50 text-amber-800 border-amber-200"
           active={statusFilter === "OCCUPIED"}
-          onClick={() => setStatusFilter("OCCUPIED")}
+          onClick={() => {
+            setStatusFilter("OCCUPIED");
+            setCurrentPage(1);
+          }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Inactive"
           value={inactiveCount}
           icon={<Ban size={19} />}
           badgeColor="bg-stone-100 text-stone-600 border-stone-200"
           active={statusFilter === "INACTIVE"}
-          onClick={() => setStatusFilter("INACTIVE")}
+          onClick={() => {
+            setStatusFilter("INACTIVE");
+            setCurrentPage(1);
+          }}
         />
       </div>
 
@@ -397,7 +382,7 @@ export default function Tables() {
         {/* SEARCH AND FILTER */}
         <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-[#1C1917]">Restaurant Tables</h2>
+            <h2 className="font-bold text-stone-900 dark:text-stone-100">Restaurant Tables</h2>
             <p className="mt-0.5 text-xs text-stone-500">
               {filteredTables.length} {filteredTables.length === 1 ? "table" : "tables"} found
             </p>
@@ -413,15 +398,21 @@ export default function Tables() {
                 type="text"
                 placeholder="Search table number..."
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-60"
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
               />
             </div>
 
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Tables</option>
               <option value="AVAILABLE">Available</option>
@@ -474,7 +465,7 @@ export default function Tables() {
                   </td>
                 </tr>
               ) : (
-                filteredTables.map((table) => {
+                paginatedTables.map((table) => {
                   const isOccupied = table.status?.toLowerCase() === "occupied";
                   return (
                     <tr key={table.id} className="transition hover:bg-stone-50/70">
@@ -483,7 +474,7 @@ export default function Tables() {
                           <div className={`flex h-9 w-9 items-center justify-center rounded-lg border ${
                             isOccupied
                               ? "bg-amber-50 text-amber-800 border-amber-200"
-                              : "bg-[#FEF9C3] text-amber-900 border-yellow-200"
+                              : "bg-[#FFF7E8] text-[#9A3412] border-[#FFEDD5] dark:bg-[#30251C] dark:text-[#FFB02E] dark:border-[#9A3412]/40"
                           }`}>
                             <Armchair size={18} />
                           </div>
@@ -585,6 +576,17 @@ export default function Tables() {
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION (10 per page) */}
+        <div className="p-4 border-t border-stone-200/80 dark:border-stone-800">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalRecords={filteredTables.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setCurrentPage(p)}
+          />
+        </div>
       </div>
 
       {/* ADD / EDIT MODAL */}
@@ -627,7 +629,7 @@ export default function Tables() {
                   name="status"
                   value={form.status || "Available"}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 outline-none transition focus:border-[#F5B716]"
+                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B]"
                 >
                   <option value="Available">Available</option>
                   <option value="Occupied">Occupied</option>
@@ -650,7 +652,7 @@ export default function Tables() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-60 transition cursor-pointer shadow-xs"
+                className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2 text-sm font-bold text-[#0D1420] hover:opacity-95 disabled:opacity-60 transition cursor-pointer shadow-xs"
               >
                 {saving
                   ? "Saving..."
@@ -713,32 +715,6 @@ export default function Tables() {
 // REUSABLE COMPONENTS
 // ==========================================
 
-function SummaryCard({ title, value, icon, active, onClick, badgeColor }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`w-full rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer shadow-xs ${
-        active
-          ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
-          : "border-stone-200/90 bg-white hover:border-stone-300"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">{title}</p>
-          <h3 className="mt-1 text-2xl font-bold text-[#1C1917]">{value}</h3>
-        </div>
-
-        <div className={`rounded-xl p-2.5 ${badgeColor || "bg-[#FEF9C3] text-amber-900 border border-yellow-200"}`}>
-          {icon}
-        </div>
-      </div>
-    </button>
-  );
-}
-
 function ModalShell({ title, subtitle, onClose, children }) {
   return (
     <Modal
@@ -788,7 +764,7 @@ function FormField({
         maxLength={maxLength}
         min={min}
         step={type === "number" ? "1" : undefined}
-        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
       />
     </div>
   );
@@ -801,7 +777,7 @@ function DetailItem({ label, value }) {
         {label}
       </p>
 
-      <p className="break-words text-sm font-bold text-[#1C1917]">
+      <p className="break-words text-sm font-bold text-stone-900 dark:text-stone-100">
         {value ?? "—"}
       </p>
     </div>

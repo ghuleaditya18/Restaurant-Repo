@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -6,7 +6,14 @@ from app.db.session import get_db
 from app.models import Order, OrderStatusHistory, User, Staff
 
 from app.core.security import hash_password
-from app.api.deps import require_roles, require_restaurant_context
+from app.api.deps import require_roles, require_restaurant_context, require_restaurant_context_image
+from app.services.entity_image_service import (
+    validate_image_file,
+    save_or_replace_entity_image,
+    get_entity_image,
+    delete_entity_image,
+    build_image_response,
+)
 
 from app.schemas.staff import (
     StaffCreate,
@@ -19,7 +26,7 @@ from app.schemas.staff import (
 
 
 router = APIRouter(
-    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)]
+    tags=["Staff Management"]
 )
 
 
@@ -36,6 +43,7 @@ def staff_to_response(staff, user):
         designation=staff.designation,
         joining_date=staff.joining_date,
         is_active=user.is_active,
+        image_url=staff.image_url,
     )
 
 
@@ -110,7 +118,7 @@ def apply_staff_updates(staff, user, updates):
 
 
 # 1. CREATE STAFF
-@router.post("/", response_model=StaffResponse, status_code=201)
+@router.post("/", response_model=StaffResponse, status_code=201, dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def create_staff(
     data: StaffCreate,
     db: Session = Depends(get_db),
@@ -181,7 +189,7 @@ def create_staff(
 
 
 # 2. GET ALL STAFF
-@router.get("/", response_model=list[StaffResponse])
+@router.get("/", response_model=list[StaffResponse], dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def get_all_staff(db: Session = Depends(get_db)):
 
     records = (
@@ -198,7 +206,7 @@ def get_all_staff(db: Session = Depends(get_db)):
 
 
 # 3. GET SINGLE STAFF
-@router.get("/{staff_id}", response_model=StaffResponse)
+@router.get("/{staff_id}", response_model=StaffResponse, dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def get_staff(
     staff_id: int,
     db: Session = Depends(get_db),
@@ -210,7 +218,7 @@ def get_staff(
 
 
 # 4. PUT - COMPLETE STAFF UPDATE
-@router.put("/{staff_id}", response_model=StaffResponse)
+@router.put("/{staff_id}", response_model=StaffResponse, dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def replace_staff(
     staff_id: int,
     data: StaffPut,
@@ -247,7 +255,7 @@ def replace_staff(
 
 
 # 5. PATCH - PARTIAL STAFF UPDATE
-@router.patch("/{staff_id}", response_model=StaffResponse)
+@router.patch("/{staff_id}", response_model=StaffResponse, dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def update_staff(
     staff_id: int,
     data: StaffUpdate,
@@ -284,7 +292,7 @@ def update_staff(
 
 
 # 6. ACTIVATE / DEACTIVATE STAFF
-@router.patch("/{staff_id}/status", response_model=StaffResponse)
+@router.patch("/{staff_id}/status", response_model=StaffResponse, dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def update_staff_status(
     staff_id: int,
     data: StaffStatusUpdate,
@@ -303,7 +311,7 @@ def update_staff_status(
 
 
 # 7. DELETE STAFF
-@router.delete("/{staff_id}")
+@router.delete("/{staff_id}", dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def delete_staff(
     staff_id: int,
     db: Session = Depends(get_db),
@@ -324,6 +332,8 @@ def delete_staff(
         .first()
         is not None
     )
+
+    delete_entity_image(db, "restaurant_staff", staff.id, business_context="restaurant")
 
     try:
         db.delete(staff)
@@ -354,7 +364,7 @@ def delete_staff(
 
 
 # 8. RESET STAFF PASSWORD
-@router.patch("/{staff_id}/password")
+@router.patch("/{staff_id}/password", dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)])
 def reset_staff_password(
     staff_id: int,
     data: StaffPasswordReset,
@@ -369,3 +379,74 @@ def reset_staff_password(
     return {
         "message": f"Password for staff member '{user.full_name}' was reset successfully."
     }
+
+
+# ==========================================
+# 9. STAFF PROFILE IMAGE ENDPOINTS
+# ==========================================
+
+@router.post(
+    "/{staff_id}/image",
+    response_model=StaffResponse,
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
+)
+async def upload_staff_image(
+    staff_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    staff, user = get_staff_record(db, staff_id)
+    image_bytes, mime_type, file_size, checksum = await validate_image_file(file)
+
+    img_record = save_or_replace_entity_image(
+        db=db,
+        entity_type="restaurant_staff",
+        business_context="restaurant",
+        entity_id=staff.id,
+        image_data=image_bytes,
+        mime_type=mime_type,
+        file_size=file_size,
+        checksum=checksum,
+    )
+
+    v = int(img_record.updated_at.timestamp())
+    staff.image_url = f"/api/staff/{staff.id}/image?v={v}"
+    db.commit()
+    db.refresh(staff)
+    return staff_to_response(staff, user)
+
+
+@router.get("/{staff_id}/image")
+def get_staff_image_endpoint(
+    staff_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_restaurant_context_image),
+):
+    staff, user = get_staff_record(db, staff_id)
+    img_record = get_entity_image(db, "restaurant_staff", staff.id, business_context="restaurant")
+    if not img_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Staff photograph not found.",
+        )
+
+    if_none_match = request.headers.get("if-none-match")
+    return build_image_response(img_record, if_none_match)
+
+
+@router.delete(
+    "/{staff_id}/image",
+    response_model=StaffResponse,
+    dependencies=[Depends(require_roles("MANAGER")), Depends(require_restaurant_context)],
+)
+def delete_staff_image_endpoint(
+    staff_id: int,
+    db: Session = Depends(get_db),
+):
+    staff, user = get_staff_record(db, staff_id)
+    delete_entity_image(db, "restaurant_staff", staff.id, business_context="restaurant")
+    staff.image_url = None
+    db.commit()
+    db.refresh(staff)
+    return staff_to_response(staff, user)

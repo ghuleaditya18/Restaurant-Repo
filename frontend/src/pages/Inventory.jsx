@@ -50,13 +50,13 @@ export default function Inventory() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`group inline-flex items-center gap-2 border-b-2 py-3 px-3.5 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? "border-[#F5B716] text-[#F5B716] dark:text-[#F5B716]"
+                    ? "border-[#F59E0B] text-[#9A3412] dark:text-[#FFB02E]"
                     : "border-transparent text-stone-500 hover:border-stone-300 dark:hover:border-stone-700 hover:text-stone-700 dark:hover:text-stone-300"
                 }`}
               >
                 <Icon
                   size={16}
-                  className={isActive ? "text-[#F5B716]" : "text-stone-400 group-hover:text-stone-600 dark:group-hover:text-stone-300"}
+                  className={isActive ? "text-[#F59E0B]" : "text-stone-400 group-hover:text-stone-600 dark:group-hover:text-stone-300"}
                 />
                 <span>{tab.label}</span>
               </button>

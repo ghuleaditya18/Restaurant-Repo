@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import User, Staff
+from app.core.image_upload import save_profile_image, remove_profile_image
 
 from app.core.security import (
     verify_password,
@@ -100,6 +101,7 @@ def get_me(
         is_active=current_user.is_active,
         business_context=biz_context,
         phone=phone,
+        avatar_url=current_user.avatar_url,
     )
 
 
@@ -161,4 +163,86 @@ def update_profile(
         is_active=current_user.is_active,
         business_context=biz_context,
         phone=contact_phone,
+        avatar_url=current_user.avatar_url,
+    )
+
+
+# UPLOAD USER PROFILE IMAGE
+@router.post("/profile/image", response_model=UserResponse)
+async def upload_profile_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Save new image first
+    new_avatar_url = await save_profile_image(file)
+
+    # Safely delete previous image if existed
+    old_avatar_url = current_user.avatar_url
+    current_user.avatar_url = new_avatar_url
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+        if old_avatar_url and old_avatar_url != new_avatar_url:
+            remove_profile_image(old_avatar_url)
+    except Exception as exc:
+        db.rollback()
+        # Clean up newly uploaded image on DB error
+        remove_profile_image(new_avatar_url)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save profile picture."
+        ) from exc
+
+    role = getattr(current_user.role, "value", current_user.role)
+    phone = current_user.staff_profile.phone if current_user.staff_profile else None
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+
+    return UserResponse(
+        id=current_user.id,
+        full_name=current_user.full_name,
+        email=current_user.email,
+        role=str(role),
+        is_active=current_user.is_active,
+        business_context=biz_context,
+        phone=phone,
+        avatar_url=current_user.avatar_url,
+    )
+
+
+# REMOVE USER PROFILE IMAGE
+@router.delete("/profile/image", response_model=UserResponse)
+def delete_profile_image(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    old_avatar_url = current_user.avatar_url
+    current_user.avatar_url = None
+
+    try:
+        db.commit()
+        db.refresh(current_user)
+        if old_avatar_url:
+            remove_profile_image(old_avatar_url)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove profile picture."
+        ) from exc
+
+    role = getattr(current_user.role, "value", current_user.role)
+    phone = current_user.staff_profile.phone if current_user.staff_profile else None
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+
+    return UserResponse(
+        id=current_user.id,
+        full_name=current_user.full_name,
+        email=current_user.email,
+        role=str(role),
+        is_active=current_user.is_active,
+        business_context=biz_context,
+        phone=phone,
+        avatar_url=current_user.avatar_url,
     )

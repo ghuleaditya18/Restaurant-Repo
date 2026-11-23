@@ -18,10 +18,13 @@ import {
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { CARD_STYLES, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
+import Pagination from "../../../components/Pagination";
 
 export default function InventoryReports() {
   const [reportTab, setReportTab] = useState("valuation"); // 'valuation' | 'consumption' | 'wastage' | 'foodcost' | 'reconciliation'
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   // Report Data States
   const [valuationData, setValuationData] = useState(null);
@@ -83,10 +86,13 @@ export default function InventoryReports() {
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setReportTab(tab.key)}
+                onClick={() => {
+                  setReportTab(tab.key);
+                  setPage(1);
+                }}
                 className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition whitespace-nowrap ${
                   active
-                    ? "bg-white dark:bg-[#1C1917] text-stone-900 dark:text-stone-100 shadow-xs"
+                    ? "bg-white dark:bg-[#101722] text-stone-900 dark:text-stone-100 shadow-xs"
                     : "text-stone-500 hover:text-stone-900 dark:hover:text-stone-200"
                 }`}
               >
@@ -169,7 +175,7 @@ export default function InventoryReports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {valuationData?.items?.map((it) => (
+                  {valuationData?.items?.slice((page - 1) * pageSize, page * pageSize).map((it) => (
                     <tr key={it.item_id} className={TABLE_STYLES.tr}>
                       <td className={TABLE_STYLES.td}>
                         <span className="font-bold text-stone-900 dark:text-stone-100">{it.item_name}</span>
@@ -202,6 +208,15 @@ export default function InventoryReports() {
                 </tbody>
               </table>
             </div>
+            {valuationData?.items && (
+              <Pagination
+                currentPage={page}
+                totalPages={Math.ceil(valuationData.items.length / pageSize) || 1}
+                onPageChange={setPage}
+                totalRecords={valuationData.items.length}
+                limit={pageSize}
+              />
+            )}
           </div>
         </div>
       )}
@@ -241,7 +256,7 @@ export default function InventoryReports() {
                       </td>
                     </tr>
                   ) : (
-                    consumptionData?.items?.map((it) => (
+                    consumptionData?.items?.slice((page - 1) * pageSize, page * pageSize).map((it) => (
                       <tr key={it.item_id} className={TABLE_STYLES.tr}>
                         <td className={TABLE_STYLES.td}>
                           <span className="font-bold text-stone-900 dark:text-stone-100">{it.item_name}</span>
@@ -261,6 +276,15 @@ export default function InventoryReports() {
                 </tbody>
               </table>
             </div>
+            {consumptionData?.items && (
+              <Pagination
+                currentPage={page}
+                totalPages={Math.ceil(consumptionData.items.length / pageSize) || 1}
+                onPageChange={setPage}
+                totalRecords={consumptionData.items.length}
+                limit={pageSize}
+              />
+            )}
           </div>
         </div>
       )}
@@ -300,7 +324,7 @@ export default function InventoryReports() {
                       </td>
                     </tr>
                   ) : (
-                    wastageData?.items?.map((it) => (
+                    wastageData?.items?.slice((page - 1) * pageSize, page * pageSize).map((it) => (
                       <tr key={it.item_id} className={TABLE_STYLES.tr}>
                         <td className={TABLE_STYLES.td}>
                           <span className="font-bold text-stone-900 dark:text-stone-100">{it.item_name}</span>
@@ -320,6 +344,15 @@ export default function InventoryReports() {
                 </tbody>
               </table>
             </div>
+            {wastageData?.items && (
+              <Pagination
+                currentPage={page}
+                totalPages={Math.ceil(wastageData.items.length / pageSize) || 1}
+                onPageChange={setPage}
+                totalRecords={wastageData.items.length}
+                limit={pageSize}
+              />
+            )}
           </div>
         </div>
       )}
@@ -341,7 +374,7 @@ export default function InventoryReports() {
                 </tr>
               </thead>
               <tbody>
-                {foodCostData.map((d) => (
+                {foodCostData.slice((page - 1) * pageSize, page * pageSize).map((d) => (
                   <tr key={d.menu_item_id} className={TABLE_STYLES.tr}>
                     <td className={TABLE_STYLES.td}>
                       <span className="font-bold text-stone-900 dark:text-stone-100">{d.menu_item_name}</span>
@@ -373,6 +406,15 @@ export default function InventoryReports() {
               </tbody>
             </table>
           </div>
+          {foodCostData.length > 0 && (
+            <Pagination
+              currentPage={page}
+              totalPages={Math.ceil(foodCostData.length / pageSize) || 1}
+              onPageChange={setPage}
+              totalRecords={foodCostData.length}
+              limit={pageSize}
+            />
+          )}
         </div>
       )}
 
@@ -418,7 +460,7 @@ export default function InventoryReports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reconciliationData?.items?.map((it) => (
+                  {reconciliationData?.items?.slice((page - 1) * pageSize, page * pageSize).map((it) => (
                     <tr key={it.item_id} className={TABLE_STYLES.tr}>
                       <td className={TABLE_STYLES.td}>
                         <span className="font-bold text-stone-900 dark:text-stone-100">{it.item_name}</span>
@@ -451,6 +493,15 @@ export default function InventoryReports() {
                 </tbody>
               </table>
             </div>
+            {reconciliationData?.items && (
+              <Pagination
+                currentPage={page}
+                totalPages={Math.ceil(reconciliationData.items.length / pageSize) || 1}
+                onPageChange={setPage}
+                totalRecords={reconciliationData.items.length}
+                limit={pageSize}
+              />
+            )}
           </div>
         </div>
       )}

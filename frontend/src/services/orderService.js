@@ -80,3 +80,22 @@ export const updateOrderStatus = async (orderId, statusData) => {
 
   return response.data;
 };
+
+// ==========================================
+// ORDER PAYMENT & ARCHIVE SERVICES
+// ==========================================
+
+export const recordOrderPayment = async (orderId, paymentData) => {
+  const response = await api.post(`/api/orders/${orderId}/payments`, paymentData);
+  return response.data;
+};
+
+export const bulkArchiveOrders = async (archiveData) => {
+  const response = await api.post("/api/orders/bulk-archive", archiveData);
+  return response.data;
+};
+
+export const restoreOrder = async (orderId) => {
+  const response = await api.post(`/api/orders/${orderId}/restore`);
+  return response.data;
+};

@@ -9,7 +9,6 @@ import {
   CreditCard,
   CheckCircle2,
   Clock,
-  X,
   IndianRupee,
   Printer,
   Download,
@@ -34,6 +33,8 @@ import { getAllOrders } from "../services/orderService";
 import DateFilter from "../components/DateFilter";
 import PageHeader from "../components/PageHeader";
 import StandardModal from "../components/Modal";
+import StatCard from "../components/StatCard";
+import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
 
 // ==========================================
@@ -175,6 +176,11 @@ export default function Invoices() {
   const [transactionSearch, setTransactionSearch] = useState("");
   const [transactionStatusFilter, setTransactionStatusFilter] = useState("ALL");
 
+  // Pagination (10 per page)
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const pageSize = 10;
+
   // Modals
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -193,7 +199,7 @@ export default function Invoices() {
   const [pdfPreparing, setPdfPreparing] = useState(false);
   const [pdfError, setPdfError] = useState("");
 
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showInfo, showError, confirm } = useNotification();
 
   // Date Filter State
   const [dateFilter, setDateFilter] = useState({
@@ -202,8 +208,7 @@ export default function Invoices() {
     endDate: "",
   });
 
-  // Notifications
-  const [message, setMessage] = useState("");
+  // Errors
   const [error, setError] = useState("");
   const [generateError, setGenerateError] = useState("");
 
@@ -266,7 +271,6 @@ export default function Invoices() {
 
   const openGenerateInvoiceModal = async () => {
     setGenerateError("");
-    setMessage("");
     setSelectedOrder("");
     setShowGenerateModal(true);
     setRefreshingOrders(true);
@@ -334,6 +338,12 @@ export default function Invoices() {
     });
   }, [invoices, search, paymentStatusFilter]);
 
+  const totalInvoicePages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const paginatedInvoices = useMemo(() => {
+    const start = (invoicePage - 1) * pageSize;
+    return filteredInvoices.slice(start, start + pageSize);
+  }, [filteredInvoices, invoicePage, pageSize]);
+
   const invoiceMap = useMemo(() => {
     const map = {};
     invoices.forEach((inv) => {
@@ -364,6 +374,12 @@ export default function Invoices() {
       return matchesSearch && matchesStatus;
     });
   }, [payments, invoiceMap, transactionSearch, transactionStatusFilter]);
+
+  const totalPaymentPages = Math.max(1, Math.ceil(filteredPayments.length / pageSize));
+  const paginatedPayments = useMemo(() => {
+    const start = (transactionPage - 1) * pageSize;
+    return filteredPayments.slice(start, start + pageSize);
+  }, [filteredPayments, transactionPage, pageSize]);
 
   // ==========================================
   // IDENTIFY ELIGIBLE ORDERS
@@ -420,7 +436,6 @@ export default function Invoices() {
       setSelectedOrder("");
       setGstRate("5");
       const msg = "Invoice generated successfully.";
-      setMessage(msg);
       showSuccess(msg, "Invoice Generated");
 
       await loadData({ showLoader: false });
@@ -513,7 +528,6 @@ export default function Invoices() {
 
       savePdfFile(blob, getInvoiceFilename(invoice));
       const msg = "Invoice PDF downloaded successfully.";
-      setMessage(msg);
       showSuccess(msg, "PDF Downloaded");
     } catch (err) {
       setError(errorMessage(err));
@@ -541,12 +555,12 @@ export default function Invoices() {
 
       if (printWindow && !printWindow.closed) {
         printWindow.location.href = url;
-        setMessage("Invoice PDF opened. Use the PDF viewer's Print option.");
+        showInfo("Invoice PDF opened. Use the PDF viewer's Print option.");
 
         window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
       } else {
         savePdfFile(blob, getInvoiceFilename(invoice));
-        setMessage(
+        showInfo(
           "The PDF was downloaded because the browser blocked the new tab. Open it and select Print.",
         );
       }
@@ -576,7 +590,7 @@ export default function Invoices() {
     const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(getInvoiceShareText(invoice))}`;
 
     window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-    setMessage(
+    showInfo(
       `WhatsApp opened for ${invoice.customer_name} with the invoice details ready to send.`,
     );
   };
@@ -622,7 +636,7 @@ export default function Invoices() {
       try {
         navigator
           .share(shareData)
-          .then(() => setMessage("Invoice PDF sharing completed."))
+          .then(() => showSuccess("Invoice PDF sharing completed."))
           .catch((shareError) => {
             if (shareError?.name !== "AbortError") {
               setError("Could not share the PDF. Try Download PDF instead.");
@@ -640,7 +654,7 @@ export default function Invoices() {
       "_blank",
       "noopener,noreferrer",
     );
-    setMessage(
+    showInfo(
       "The PDF was downloaded and the customer’s WhatsApp chat was opened. Attach the PDF and tap Send.",
     );
   };
@@ -676,7 +690,6 @@ export default function Invoices() {
 
       setShowPaymentModal(false);
       const msg = "Payment record created successfully. Payment is currently Pending.";
-      setMessage(msg);
       showSuccess(msg, "Payment Recorded");
 
       await loadData({ showLoader: false });
@@ -709,7 +722,6 @@ export default function Invoices() {
       await updatePaymentStatus(payment.id, { status: "Paid" });
 
       const successText = "Payment marked as Paid successfully.";
-      setMessage(successText);
       showSuccess(successText, "Payment Settled");
 
       await loadData({ showLoader: false });
@@ -741,7 +753,7 @@ export default function Invoices() {
           <button
             type="button"
             onClick={openGenerateInvoiceModal}
-            className="flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition"
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer transition"
           >
             <Plus size={18} />
             <span>Generate Invoice</span>
@@ -749,53 +761,40 @@ export default function Invoices() {
         }
       />
 
-      {/* NOTIFICATIONS */}
-
-      {message && (
-        <Notification
-          message={message}
-          onClose={() => setMessage("")}
-          variant="success"
-        />
-      )}
-
-      {error && (
-        <Notification
-          message={error}
-          onClose={() => setError("")}
-          variant="error"
-        />
-      )}
-
       {/* DATE FILTER */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <DateFilter
           selectedPreset={dateFilter.preset}
           startDate={dateFilter.startDate}
           endDate={dateFilter.endDate}
-          onChange={(newFilter) => setDateFilter(newFilter)}
+          onChange={(newFilter) => {
+            setDateFilter(newFilter);
+            setInvoicePage(1);
+            setTransactionPage(1);
+          }}
         />
       </div>
 
       {/* SUMMARY CARDS */}
 
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
+      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <StatCard
           title="Total Invoices"
           value={invoices.length}
           icon={<Receipt size={20} />}
         />
 
-        <SummaryCard
+        <StatCard
           title="Total Amount"
           value={formatCurrency(totalAmount)}
           icon={<IndianRupee size={20} />}
         />
 
-        <SummaryCard
+        <StatCard
           title="Paid Invoices"
           value={paidInvoices}
           icon={<CheckCircle2 size={20} />}
+          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={paymentStatusFilter === "PAID"}
           onClick={() => {
             setActiveTab("invoices");
@@ -803,10 +802,11 @@ export default function Invoices() {
           }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Pending Invoices"
           value={pendingInvoices}
           icon={<Clock size={20} />}
+          badgeColor="bg-amber-50 text-amber-800 border-amber-200"
           active={paymentStatusFilter === "PENDING"}
           onClick={() => {
             setActiveTab("invoices");
@@ -816,14 +816,14 @@ export default function Invoices() {
       </div>
 
       {/* TABS */}
-      <div className="mb-4 flex border-b border-[#E7E5E4]">
+      <div className="mb-4 flex border-b border-[#E5E9F0] dark:border-[#1E293B]">
         <button
           type="button"
           onClick={() => setActiveTab("invoices")}
-          className={`border-b-2 px-5 py-3 text-sm font-semibold transition ${
+          className={`border-b-2 px-5 py-3 text-sm font-semibold transition cursor-pointer ${
             activeTab === "invoices"
-              ? "border-[#F5B716] text-[#1C1917] font-bold border-b-2"
-              : "border-transparent text-stone-500 hover:text-[#1C1917]"
+              ? "border-[#F59E0B] text-stone-900 dark:text-white font-bold"
+              : "border-transparent text-stone-500 hover:text-stone-900 dark:hover:text-stone-300"
           }`}
         >
           Invoices ({filteredInvoices.length})
@@ -831,10 +831,10 @@ export default function Invoices() {
         <button
           type="button"
           onClick={() => setActiveTab("transactions")}
-          className={`border-b-2 px-5 py-3 text-sm font-semibold transition ${
+          className={`border-b-2 px-5 py-3 text-sm font-semibold transition cursor-pointer ${
             activeTab === "transactions"
-              ? "border-[#F5B716] text-[#1C1917] font-bold border-b-2"
-              : "border-transparent text-stone-500 hover:text-[#1C1917]"
+              ? "border-[#F59E0B] text-stone-900 dark:text-white font-bold"
+              : "border-transparent text-stone-500 hover:text-stone-900 dark:hover:text-stone-300"
           }`}
         >
           Payment Transactions ({filteredPayments.length})
@@ -844,14 +844,14 @@ export default function Invoices() {
       {/* INVOICE TABLE */}
 
       {activeTab === "invoices" && (
-      <div className="overflow-hidden rounded-xl border border-[#E7E5E4] bg-white">
-        <div className="flex flex-col justify-between gap-4 border-b border-[#E7E5E4] p-4 md:flex-row md:items-center">
+      <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722]">
+        <div className="flex flex-col justify-between gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center">
           <div>
-            <h2 className="font-semibold text-[#1C1917]">
+            <h2 className="font-semibold text-stone-900 dark:text-white">
               Restaurant Invoices
             </h2>
 
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredInvoices.length} invoices found
             </p>
           </div>
@@ -860,21 +860,27 @@ export default function Invoices() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
 
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setInvoicePage(1);
+                }}
                 placeholder="Search invoice..."
-                className="w-full rounded-lg border border-[#E7E5E4] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-64"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-64"
               />
             </div>
 
             <select
               value={paymentStatusFilter}
-              onChange={(e) => setPaymentStatusFilter(e.target.value)}
-              className="rounded-lg border border-[#E7E5E4] px-3 py-2.5 text-sm outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+              onChange={(e) => {
+                setPaymentStatusFilter(e.target.value);
+                setInvoicePage(1);
+              }}
+              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-2.5 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Payment Statuses</option>
               <option value="PAID">Paid</option>
@@ -928,14 +934,14 @@ export default function Invoices() {
                   </td>
                 </tr>
               ) : (
-                filteredInvoices.map((invoice) => (
+                paginatedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-[#FAF9F6]">
                     <td className="px-4 py-4">
-                      <p className="font-semibold text-[#1C1917]">
+                      <p className="font-semibold text-stone-900 dark:text-stone-100">
                         {invoice.invoice_number}
                       </p>
 
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs text-stone-500">
                         ID: {invoice.id}
                       </p>
                     </td>
@@ -956,7 +962,7 @@ export default function Invoices() {
                       {Number(invoice.gst_rate)}%
                     </td>
 
-                    <td className="px-4 py-4 text-sm font-semibold text-[#1C1917]">
+                    <td className="px-4 py-4 text-sm font-semibold text-stone-900 dark:text-stone-100">
                       {formatCurrency(invoice.total_amount)}
                     </td>
 
@@ -998,18 +1004,29 @@ export default function Invoices() {
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION (10 per page) */}
+        <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
+          <Pagination
+            currentPage={invoicePage}
+            totalPages={totalInvoicePages}
+            totalRecords={filteredInvoices.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setInvoicePage(p)}
+          />
+        </div>
       </div>
       )}
 
       {/* PAYMENT TRANSACTIONS TABLE */}
       {activeTab === "transactions" && (
         <div className="overflow-hidden rounded-xl border border-[#E7E5E4] bg-white">
-          <div className="flex flex-col justify-between gap-4 border-b border-[#E7E5E4] p-4 md:flex-row md:items-center">
+          <div className="flex flex-col justify-between gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center">
             <div>
-              <h2 className="font-semibold text-[#1C1917]">
+              <h2 className="font-semibold text-stone-900 dark:text-white">
                 Payment Transactions
               </h2>
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-stone-500 dark:text-[#8A9AB2]">
                 {filteredPayments.length} transactions recorded
               </p>
             </div>
@@ -1018,20 +1035,26 @@ export default function Invoices() {
               <div className="relative">
                 <Search
                   size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
                 />
                 <input
                   value={transactionSearch}
-                  onChange={(event) => setTransactionSearch(event.target.value)}
+                  onChange={(event) => {
+                    setTransactionSearch(event.target.value);
+                    setTransactionPage(1);
+                  }}
                   placeholder="Search transaction or ref..."
-                  className="w-full rounded-lg border border-[#E7E5E4] py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-60"
+                  className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
                 />
               </div>
 
               <select
                 value={transactionStatusFilter}
-                onChange={(e) => setTransactionStatusFilter(e.target.value)}
-                className="rounded-lg border border-[#E7E5E4] px-3 py-2.5 text-sm outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+                onChange={(e) => {
+                  setTransactionStatusFilter(e.target.value);
+                  setTransactionPage(1);
+                }}
+                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-2.5 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="PAID">Paid</option>
@@ -1044,7 +1067,7 @@ export default function Invoices() {
                 onClick={() => loadData()}
                 disabled={loading}
                 title="Refresh payments"
-                className="rounded-lg border border-[#E7E5E4] px-3 py-2.5 text-gray-600 hover:bg-[#FAFAF9] disabled:opacity-50"
+                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2.5 text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#101722] disabled:opacity-50"
               >
                 <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
               </button>
@@ -1053,7 +1076,7 @@ export default function Invoices() {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[800px] text-left">
-              <thead className="bg-[#FAF9F6] text-xs uppercase text-gray-500">
+              <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-xs uppercase text-stone-500 dark:text-[#8A9AB2]">
                 <tr>
                   <th className="px-4 py-3">Txn ID</th>
                   <th className="px-4 py-3">Invoice Number</th>
@@ -1064,37 +1087,37 @@ export default function Invoices() {
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F0ECE6]">
+              <tbody className="divide-y divide-[#E5E9F0] dark:divide-[#1E293B]">
                 {loading ? (
                   <tr>
-                    <td colSpan="7" className="p-10 text-center text-sm text-gray-500">
+                    <td colSpan="7" className="p-10 text-center text-sm text-stone-500">
                       Loading payments...
                     </td>
                   </tr>
                 ) : filteredPayments.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="p-10 text-center text-sm text-gray-500">
+                    <td colSpan="7" className="p-10 text-center text-sm text-stone-500">
                       No payment transactions found.
                     </td>
                   </tr>
                 ) : (
-                  filteredPayments.map((payment) => {
+                  paginatedPayments.map((payment) => {
                     const inv = invoiceMap[payment.invoice_id];
                     return (
-                      <tr key={payment.id} className="hover:bg-[#FAF9F6]">
-                        <td className="px-4 py-4 text-sm font-medium text-[#1C1917]">
+                      <tr key={payment.id} className="hover:bg-stone-50 dark:hover:bg-[#151D29]">
+                        <td className="px-4 py-4 text-sm font-medium text-stone-900 dark:text-stone-100">
                           #{payment.id}
                         </td>
-                        <td className="px-4 py-4 text-sm text-stone-900 font-medium">
+                        <td className="px-4 py-4 text-sm text-stone-900 dark:text-stone-100 font-medium">
                           {inv?.invoice_number || `Invoice #${payment.invoice_id}`}
                         </td>
-                        <td className="px-4 py-4 text-sm text-[#1C1917]">
+                        <td className="px-4 py-4 text-sm text-stone-800 dark:text-stone-200">
                           {payment.payment_method}
                         </td>
-                        <td className="px-4 py-4 text-sm text-gray-500">
+                        <td className="px-4 py-4 text-sm text-stone-500 dark:text-[#8A9AB2]">
                           {payment.reference_number || "—"}
                         </td>
-                        <td className="px-4 py-4 text-sm font-semibold text-[#1C1917]">
+                        <td className="px-4 py-4 text-sm font-semibold text-stone-900 dark:text-stone-100">
                           {formatCurrency(payment.amount)}
                         </td>
                         <td className="px-4 py-4 text-sm text-gray-500">
@@ -1124,6 +1147,17 @@ export default function Invoices() {
               </tbody>
             </table>
           </div>
+
+          {/* PAGINATION (10 per page) */}
+          <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
+            <Pagination
+              currentPage={transactionPage}
+              totalPages={totalPaymentPages}
+              totalRecords={filteredPayments.length}
+              pageSize={pageSize}
+              onPageChange={(p) => setTransactionPage(p)}
+            />
+          </div>
         </div>
       )}
 
@@ -1140,7 +1174,7 @@ export default function Invoices() {
             {generateError && <ErrorBox message={generateError} />}
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#1C1917]">
+              <label className="mb-2 block text-sm font-medium text-stone-900 dark:text-stone-100">
                 Select Served Order
               </label>
 
@@ -1149,7 +1183,7 @@ export default function Invoices() {
                 onChange={(event) => setSelectedOrder(event.target.value)}
                 disabled={refreshingOrders}
                 required
-                className="w-full rounded-lg border border-[#E7E5E4] px-3 py-3 text-sm outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 disabled:bg-gray-50"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 disabled:bg-gray-50"
               >
                 <option value="">
                   {refreshingOrders ? "Refreshing orders..." : "Choose order"}
@@ -1185,7 +1219,7 @@ export default function Invoices() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#1C1917]">
+              <label className="mb-2 block text-sm font-medium text-stone-900 dark:text-stone-100">
                 GST Rate (%)
               </label>
 
@@ -1197,19 +1231,19 @@ export default function Invoices() {
                 value={gstRate}
                 onChange={(event) => setGstRate(event.target.value)}
                 required
-                className="w-full rounded-lg border border-[#E7E5E4] px-3 py-3 text-sm outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               />
 
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-stone-500">
                 Enter the GST rate applicable to this invoice.
               </p>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[#E7E5E4] pt-4">
+            <div className="flex justify-end gap-3 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-4">
               <button
                 type="button"
                 onClick={() => setShowGenerateModal(false)}
-                className="rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm"
+                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] px-4 py-2.5 text-sm"
               >
                 Cancel
               </button>
@@ -1219,7 +1253,7 @@ export default function Invoices() {
                 disabled={
                   saving || refreshingOrders || eligibleOrders.length === 0
                 }
-                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-50 shadow-xs cursor-pointer transition"
+                className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2 text-sm font-bold text-[#0D1420] hover:opacity-95 disabled:opacity-50 shadow-xs cursor-pointer transition"
               >
                 {saving ? "Generating..." : "Generate Invoice"}
               </button>
@@ -1240,22 +1274,22 @@ export default function Invoices() {
           <form onSubmit={handleRecordPayment} className="space-y-4">
             {error && <ErrorBox message={error} />}
 
-            <div className="rounded-lg bg-[#FAFAF9] p-4">
-              <p className="text-xs text-gray-500">Invoice Number</p>
+            <div className="rounded-lg bg-stone-50 dark:bg-[#151D29] p-4">
+              <p className="text-xs text-stone-500">Invoice Number</p>
 
-              <p className="mt-1 font-semibold text-[#1C1917]">
+              <p className="mt-1 font-semibold text-stone-900 dark:text-stone-100">
                 {selectedInvoice.invoice_number}
               </p>
 
-              <p className="mt-3 text-xs text-gray-500">Amount Payable</p>
+              <p className="mt-3 text-xs text-stone-500">Amount Payable</p>
 
-              <p className="mt-1 text-xl font-semibold text-stone-900">
+              <p className="mt-1 text-xl font-semibold text-stone-900 dark:text-white">
                 {formatCurrency(selectedInvoice.total_amount)}
               </p>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#1C1917]">
+              <label className="mb-2 block text-sm font-medium text-stone-900 dark:text-stone-100">
                 Payment Method
               </label>
 
@@ -1267,7 +1301,7 @@ export default function Invoices() {
                     payment_method: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-[#E7E5E4] px-3 py-3 text-sm"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm"
               >
                 {PAYMENT_METHODS.map((method) => (
                   <option key={method} value={method}>
@@ -1278,7 +1312,7 @@ export default function Invoices() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-[#1C1917]">
+              <label className="mb-2 block text-sm font-medium text-stone-900 dark:text-stone-100">
                 Reference Number (Optional)
               </label>
 
@@ -1292,20 +1326,20 @@ export default function Invoices() {
                 }
                 maxLength={100}
                 placeholder="Enter transaction reference"
-                className="w-full rounded-lg border border-[#E7E5E4] px-3 py-3 text-sm"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm"
               />
             </div>
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            <div className="rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-800 dark:text-amber-300">
               Creating a payment record will initially set its status to
               Pending. Mark it Paid only after confirming receipt.
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-[#E7E5E4] pt-4">
+            <div className="flex justify-end gap-3 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-4">
               <button
                 type="button"
                 onClick={() => setShowPaymentModal(false)}
-                className="rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm"
+                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] px-4 py-2.5 text-sm"
               >
                 Cancel
               </button>
@@ -1313,7 +1347,7 @@ export default function Invoices() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-50 shadow-xs cursor-pointer transition"
+                className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2 text-sm font-bold text-[#0D1420] hover:opacity-95 disabled:opacity-50 shadow-xs cursor-pointer transition"
               >
                 {saving ? "Saving..." : "Record Payment"}
               </button>
@@ -1335,11 +1369,11 @@ export default function Invoices() {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-[#1C1917]">
+                <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
                   {selectedInvoice.invoice_number}
                 </h3>
 
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-stone-500">
                   Order: {selectedInvoice.order_number}
                 </p>
               </div>
@@ -1412,12 +1446,12 @@ export default function Invoices() {
                 value={selectedInvoice.gst_amount}
               />
 
-              <div className="flex justify-between border-t border-[#DED6CA] pt-3">
-                <span className="font-semibold text-[#1C1917]">
+              <div className="flex justify-between border-t border-[#E5E9F0] dark:border-[#1E293B] pt-3">
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
                   Total Amount
                 </span>
 
-                <span className="text-xl font-bold text-stone-900">
+                <span className="text-xl font-bold text-stone-900 dark:text-white">
                   {formatCurrency(selectedInvoice.total_amount)}
                 </span>
               </div>
@@ -1426,7 +1460,7 @@ export default function Invoices() {
             {/* PAYMENT HISTORY */}
 
             <div>
-              <h3 className="mb-3 font-semibold text-[#1C1917]">
+              <h3 className="mb-3 font-semibold text-stone-900 dark:text-stone-100">
                 Payment History
               </h3>
 
@@ -1434,7 +1468,7 @@ export default function Invoices() {
                 (payment) =>
                   Number(payment.invoice_id) === Number(selectedInvoice.id),
               ).length === 0 ? (
-                <p className="rounded-lg bg-[#FAF9F6] p-4 text-sm text-gray-500">
+                <p className="rounded-lg bg-[#FAF9F6] dark:bg-[#151D29] p-4 text-sm text-stone-500">
                   No payment records available.
                 </p>
               ) : (
@@ -1448,23 +1482,23 @@ export default function Invoices() {
                     .map((payment) => (
                       <div
                         key={payment.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E7E5E4] p-4"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] p-4"
                       >
                         <div>
-                          <p className="text-sm font-medium text-[#1C1917]">
+                          <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                             {payment.payment_method}
                           </p>
 
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 text-xs text-stone-500">
                             Reference: {payment.reference_number || "—"}
                           </p>
 
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 text-xs text-stone-500">
                             {formatCurrency(payment.amount)}
                           </p>
 
                           {payment.paid_at && (
-                            <p className="mt-1 text-xs text-gray-400">
+                            <p className="mt-1 text-xs text-stone-400">
                               Paid: {formatDate(payment.paid_at)}
                             </p>
                           )}
@@ -1483,7 +1517,7 @@ export default function Invoices() {
                               type="button"
                               onClick={() => handleMarkPaid(payment)}
                               disabled={saving}
-                              className="rounded-lg bg-[#F5B716] px-3 py-1.5 text-xs font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-50 shadow-xs cursor-pointer transition"
+                              className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-3 py-1.5 text-xs font-bold text-[#0D1420] hover:opacity-95 disabled:opacity-50 shadow-xs cursor-pointer transition"
                             >
                               Mark Paid
                             </button>
@@ -1497,12 +1531,12 @@ export default function Invoices() {
 
             {/* PDF ACTIONS */}
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-[#E7E5E4] pt-4">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-4">
               <button
                 type="button"
                 onClick={() => handleDownloadPdf(selectedInvoice)}
                 disabled={saving || pdfPreparing}
-                className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] px-4 py-2.5 text-sm text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#151D29] disabled:opacity-50"
               >
                 <Download size={16} />
                 Download PDF
@@ -1512,7 +1546,7 @@ export default function Invoices() {
                 type="button"
                 onClick={() => handlePrint(selectedInvoice)}
                 disabled={saving || pdfPreparing}
-                className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] px-4 py-2.5 text-sm text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#151D29] disabled:opacity-50"
               >
                 <Printer size={16} />
                 Print PDF
@@ -1566,37 +1600,6 @@ export default function Invoices() {
 // REUSABLE COMPONENTS
 // ==========================================
 
-function SummaryCard({ title, value, icon, active = false, onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      className={`rounded-xl border p-4 transition ${
-        onClick ? "cursor-pointer" : ""
-      } ${
-        active
-          ? "border-[#F5B716] bg-[#FEF9C3]/40 shadow-xs ring-1 ring-[#F5B716]"
-          : "border-stone-200/90 bg-white hover:border-stone-300"
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-
-          <h3 className="mt-1 text-xl font-semibold text-[#1C1917]">{value}</h3>
-        </div>
-
-        <div
-          className={`rounded-lg p-2.5 transition ${
-            active ? "bg-[#F5B716] text-[#1C1917] font-bold" : "bg-[#FEF9C3] text-amber-900 border border-yellow-200"
-          }`}
-        >
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Modal({ title, onClose, children, wide = false }) {
   return (
     <StandardModal
@@ -1613,9 +1616,9 @@ function Modal({ title, onClose, children, wide = false }) {
 function Detail({ label, value }) {
   return (
     <div>
-      <p className="text-xs uppercase text-gray-500">{label}</p>
+      <p className="text-xs uppercase text-stone-500">{label}</p>
 
-      <p className="mt-1 text-sm font-medium text-[#1C1917]">{value ?? "—"}</p>
+      <p className="mt-1 text-sm font-medium text-stone-900 dark:text-stone-100">{value ?? "—"}</p>
     </div>
   );
 }
@@ -1623,9 +1626,9 @@ function Detail({ label, value }) {
 function AmountRow({ label, value }) {
   return (
     <div className="flex justify-between gap-4 text-sm">
-      <span className="text-gray-600">{label}</span>
+      <span className="text-stone-500">{label}</span>
 
-      <span className="font-medium text-[#1C1917]">
+      <span className="font-medium text-stone-900 dark:text-stone-100">
         {formatCurrency(value)}
       </span>
     </div>
@@ -1636,25 +1639,6 @@ function ErrorBox({ message }) {
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
       {message}
-    </div>
-  );
-}
-
-function Notification({ message, onClose, variant = "success" }) {
-  const className =
-    variant === "error"
-      ? "border-red-200 bg-red-50 text-red-700"
-      : "border-green-200 bg-green-50 text-green-700";
-
-  return (
-    <div
-      className={`mb-4 flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${className}`}
-    >
-      <span>{message}</span>
-
-      <button type="button" onClick={onClose} aria-label="Dismiss notification">
-        <X size={16} />
-      </button>
     </div>
   );
 }

@@ -1,15 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.db.session import get_db
-from app.api.deps import require_spa_context
+from app.api.deps import require_spa_context, require_spa_context_image
 from app.models.entities import User
 from app.models.spa import (
     SpaStaff,
     SpaStaffAvailability,
     SpaBooking,
     SpaBookingStatus,
+)
+from app.services.entity_image_service import (
+    validate_image_file,
+    save_or_replace_entity_image,
+    get_entity_image,
+    delete_entity_image,
+    build_image_response,
 )
 from app.schemas.spa import (
     SpaStaffCreate,
@@ -21,7 +28,7 @@ from app.schemas.spa import (
 )
 from app.services.spa_service import parse_time_string
 
-router = APIRouter(dependencies=[Depends(require_spa_context)])
+router = APIRouter()
 
 
 def build_staff_response(st: SpaStaff, db: Session) -> SpaStaffResponse:
@@ -63,6 +70,7 @@ def build_staff_response(st: SpaStaff, db: Session) -> SpaStaffResponse:
         specialization=st.specialization,
         is_therapist=st.is_therapist,
         is_active=st.is_active,
+        image_url=st.image_url,
         created_at=st.created_at,
         updated_at=st.updated_at,
         availabilities=availabilities,
@@ -291,6 +299,7 @@ def delete_staff(
         }
 
     # Delete unreferenced staff member and cascade availability
+    delete_entity_image(db, "spa_staff", staff_id, business_context="spa")
     db.delete(staff)
     db.commit()
 
@@ -298,3 +307,75 @@ def delete_staff(
         "message": f"Staff member '{staff.full_name}' deleted successfully.",
         "deactivated": False,
     }
+
+
+@router.post("/staff/{staff_id}/image", response_model=SpaStaffResponse)
+async def upload_spa_staff_image(
+    staff_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    staff = db.get(SpaStaff, staff_id)
+    if not staff:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff member not found.")
+
+    image_bytes, mime_type, file_size, checksum = await validate_image_file(file)
+
+    img_record = save_or_replace_entity_image(
+        db=db,
+        entity_type="spa_staff",
+        business_context="spa",
+        entity_id=staff.id,
+        image_data=image_bytes,
+        mime_type=mime_type,
+        file_size=file_size,
+        checksum=checksum,
+    )
+
+    v = int(img_record.updated_at.timestamp())
+    staff.image_url = f"/api/spa/staff/{staff.id}/image?v={v}"
+    db.commit()
+    db.refresh(staff)
+
+    return build_staff_response(staff, db)
+
+
+@router.get("/staff/{staff_id}/image")
+def get_spa_staff_image_endpoint(
+    staff_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context_image),
+):
+    staff = db.get(SpaStaff, staff_id)
+    if not staff:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff member not found.")
+
+    img_record = get_entity_image(db, "spa_staff", staff.id, business_context="spa")
+    if not img_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Spa staff photograph not found.",
+        )
+
+    if_none_match = request.headers.get("if-none-match")
+    return build_image_response(img_record, if_none_match)
+
+
+@router.delete("/staff/{staff_id}/image", response_model=SpaStaffResponse)
+def delete_spa_staff_image_endpoint(
+    staff_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    staff = db.get(SpaStaff, staff_id)
+    if not staff:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff member not found.")
+
+    delete_entity_image(db, "spa_staff", staff.id, business_context="spa")
+    staff.image_url = None
+    db.commit()
+    db.refresh(staff)
+
+    return build_staff_response(staff, db)

@@ -121,6 +121,11 @@ export const createOrUpdateRecipe = async (menuItemId, data) => {
   return response.data;
 };
 
+export const deleteRecipe = async (menuItemId) => {
+  const response = await api.delete(`/api/inventory/recipes/menu/${menuItemId}`);
+  return response.data;
+};
+
 // ==========================================
 // 5. PURCHASES & GOODS RECEIPTS (GRN)
 // ==========================================
@@ -140,6 +145,16 @@ export const getPurchaseOrder = async (id) => {
   return response.data;
 };
 
+export const updatePurchaseOrder = async (id, data) => {
+  const response = await api.put(`/api/inventory/purchase-orders/${id}`, data);
+  return response.data;
+};
+
+export const deletePurchaseOrder = async (id) => {
+  const response = await api.delete(`/api/inventory/purchase-orders/${id}`);
+  return response.data;
+};
+
 export const updatePOStatus = async (id, status, notes = null) => {
   const response = await api.patch(`/api/inventory/purchase-orders/${id}/status`, { status, notes });
   return response.data;
@@ -152,6 +167,11 @@ export const receiveGoods = async (poId, data) => {
 
 export const getGoodsReceipts = async () => {
   const response = await api.get("/api/inventory/goods-receipts");
+  return response.data;
+};
+
+export const getGoodsReceipt = async (id) => {
+  const response = await api.get(`/api/inventory/goods-receipts/${id}`);
   return response.data;
 };
 
@@ -180,6 +200,11 @@ export const recordAdjustment = async (data) => {
 
 export const getAllMovements = async (params = {}) => {
   const response = await api.get("/api/inventory/movements", { params });
+  return response.data;
+};
+
+export const reverseStockMovement = async (movementId, reason) => {
+  const response = await api.post(`/api/inventory/movements/${movementId}/reverse`, { reason });
   return response.data;
 };
 

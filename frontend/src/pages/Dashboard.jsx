@@ -119,7 +119,7 @@ function Dashboard() {
 
             <Link
               to="/orders"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 text-xs font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 text-xs font-bold text-[#0D1420] shadow-xs transition hover:brightness-105 cursor-pointer"
             >
               <Plus size={16} />
               <span>Create Order</span>
@@ -129,7 +129,7 @@ function Dashboard() {
               type="button"
               onClick={loadDashboard}
               disabled={loading}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] text-stone-700 dark:text-stone-300 shadow-xs transition hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-60 cursor-pointer"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] shadow-xs transition hover:bg-stone-50 dark:hover:bg-[#151D29] disabled:opacity-60 cursor-pointer"
               title="Refresh Dashboard Data"
               aria-label="Refresh Dashboard Data"
             >
@@ -184,7 +184,7 @@ function Dashboard() {
             <button
               type="button"
               onClick={loadDashboard}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#F5B716] px-5 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] transition cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 transition cursor-pointer"
             >
               <RotateCcw size={16} />
               <span>Retry Request</span>
@@ -201,11 +201,11 @@ function Dashboard() {
             {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
-                className="h-28 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs animate-pulse"
+                className="h-28 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs animate-pulse"
               />
             ))}
           </div>
-          <div className="h-44 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs animate-pulse" />
+          <div className="h-44 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs animate-pulse" />
         </div>
       )}
 
@@ -233,7 +233,7 @@ function Dashboard() {
                     : "Total orders recorded"
                 }
                 icon={ShoppingBag}
-                color="bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800"
+                color="bg-[#FFF7E8] dark:bg-[#30251C] text-[#9A3412] dark:text-[#FFB02E] border border-[#FFEDD5] dark:border-[#9A3412]/40"
               />
 
               <StatCard
@@ -273,45 +273,37 @@ function Dashboard() {
             </h2>
 
             <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-[#FEF9C3] dark:bg-[#713F12]/40 text-amber-900 dark:text-amber-200 border border-yellow-200 dark:border-amber-800">
-                  <Users size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Customers</p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_customers}</p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Customers"
+                value={stats.total_customers}
+                icon={Users}
+                color="bg-[#FFF7E8] dark:bg-[#30251C] text-[#9A3412] dark:text-[#FFB02E] border border-[#FFEDD5] dark:border-[#9A3412]/40"
+              />
 
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
-                  <UserCheck size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Staff Members</p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_staff}</p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Staff Members"
+                value={stats.total_staff}
+                icon={UserCheck}
+                color="bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700"
+              />
 
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
-                  <UtensilsCrossed size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Menu Items</p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_menu_items}</p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Menu Items"
+                value={stats.total_menu_items}
+                icon={UtensilsCrossed}
+                color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
+              />
 
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800">
-                  <Grid3X3 size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Dining Tables</p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_tables}</p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Dining Tables"
+                value={stats.total_tables}
+                icon={Grid3X3}
+                color="bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800"
+              />
             </section>
           </div>
 
@@ -331,51 +323,37 @@ function Dashboard() {
             </div>
 
             <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  <Package size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Stock Items</p>
-                  <p className="text-lg sm:text-xl md:text-2xl font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">{stats.total_inventory_items || 0}</p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Stock Items"
+                value={stats.total_inventory_items || 0}
+                icon={Package}
+                color="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+              />
 
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                  <AlertTriangle size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Low Stock</p>
-                  <p className={`text-lg sm:text-xl md:text-2xl font-semibold tabular-nums truncate ${stats.low_stock_items_count > 0 ? "text-amber-600 dark:text-amber-400" : "text-stone-900 dark:text-stone-100"}`}>
-                    {stats.low_stock_items_count || 0}
-                  </p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Low Stock"
+                value={stats.low_stock_items_count || 0}
+                icon={AlertTriangle}
+                color="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
+              />
 
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
-                  <AlertCircle size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Out of Stock</p>
-                  <p className={`text-lg sm:text-xl md:text-2xl font-semibold tabular-nums truncate ${stats.out_of_stock_items_count > 0 ? "text-rose-600 dark:text-rose-400" : "text-stone-900 dark:text-stone-100"}`}>
-                    {stats.out_of_stock_items_count || 0}
-                  </p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Out of Stock"
+                value={stats.out_of_stock_items_count || 0}
+                icon={AlertCircle}
+                color="bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+              />
 
-              <div className="flex items-center gap-2.5 sm:gap-3.5 rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-2.5 sm:p-3.5 md:p-4 shadow-xs min-h-[82px] sm:min-h-[88px]">
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800">
-                  <IndianRupee size={16} className="sm:w-[18px] sm:h-[18px]" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 font-medium truncate">Valuation</p>
-                  <p className="text-sm sm:text-base md:text-lg font-semibold tabular-nums text-stone-900 dark:text-stone-100 truncate">
-                    {formatCurrency(stats.total_inventory_valuation || 0)}
-                  </p>
-                </div>
-              </div>
+              <StatCard
+                layout="horizontal"
+                title="Valuation"
+                value={formatCurrency(stats.total_inventory_valuation || 0)}
+                icon={IndianRupee}
+                color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
+              />
             </section>
           </div>
 
@@ -386,21 +364,21 @@ function Dashboard() {
             </div>
 
             {/* Live Table Status */}
-            <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-5 shadow-xs">
+            <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-[#1C1917] dark:text-stone-100">Live Table Status</h2>
+                    <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">Live Table Status</h2>
                     <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                       Live
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
                     Seating occupancy & active orders
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-850 px-2.5 py-1 text-[11px]">
+                <div className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50 dark:bg-[#151D29] px-2.5 py-1 text-[11px]">
                   <span className="font-semibold text-emerald-700 dark:text-emerald-400">
                     {stats.available_tables} Available
                   </span>
@@ -425,7 +403,7 @@ function Dashboard() {
                         className={`rounded-lg border p-3 transition ${
                           isOccupied
                             ? "border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/40"
-                            : "border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-850/50"
+                            : "border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50/50 dark:bg-[#151D29]/50"
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -445,7 +423,7 @@ function Dashboard() {
                           />
                         </div>
 
-                        <h3 className="mt-2.5 text-sm font-bold text-[#1C1917] dark:text-stone-100">
+                        <h3 className="mt-2.5 text-sm font-bold text-stone-900 dark:text-stone-100">
                           {table.number}
                         </h3>
 

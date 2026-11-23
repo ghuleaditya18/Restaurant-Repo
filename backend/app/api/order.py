@@ -1,9 +1,11 @@
-from datetime import date
-from decimal import Decimal
+import math
+from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_, func
 
 from app.core.date_utils import get_date_range, get_kolkata_now
 
@@ -25,6 +27,9 @@ from app.models.entities import (
     OrderStatus,
     TableStatus,
     PaymentStatus,
+    PaymentMethod,
+    Invoice,
+    Payment,
 )
 from app.api.deps import require_roles, get_current_user, require_restaurant_context
 from app.schemas.order import (
@@ -36,6 +41,10 @@ from app.schemas.order import (
     OrderResponse,
     OrderItemResponse,
     OrderStatusHistoryResponse,
+    OrderPaymentCreate,
+    BulkArchiveRequest,
+    BulkArchiveResponse,
+    PaginatedOrdersResponse,
 )
 
 # ==========================================
@@ -61,14 +70,16 @@ EDITABLE_STATUSES = {
 ALLOWED_TRANSITIONS = {
     OrderStatus.PENDING: {
         OrderStatus.CONFIRMED,
-        OrderStatus.PREPARING,
+        OrderStatus.READY,
+        OrderStatus.PREPARING,  # legacy compatibility
         OrderStatus.CANCELLED,
     },
     OrderStatus.CONFIRMED: {
-        OrderStatus.PREPARING,
+        OrderStatus.READY,
+        OrderStatus.PREPARING,  # legacy compatibility
         OrderStatus.CANCELLED,
     },
-    OrderStatus.PREPARING: {
+    OrderStatus.PREPARING: {  # legacy compatibility
         OrderStatus.READY,
         OrderStatus.SERVED,
         OrderStatus.CANCELLED,
@@ -94,7 +105,7 @@ def get_order_record(db: Session, order_id: int):
         .options(
             joinedload(Order.customer),
             joinedload(Order.table),
-            joinedload(Order.invoice),
+            joinedload(Order.invoice).selectinload(Invoice.payments),
             selectinload(Order.items),
             selectinload(Order.status_history),
         )
@@ -118,13 +129,48 @@ def build_order_response(order):
     invoice_number = order.invoice.invoice_number if order.invoice else None
     payment_status = order.invoice.payment_status if order.invoice else None
 
+    if order.invoice:
+        tax_amount = order.invoice.gst_amount
+        total_amount = order.invoice.total_amount
+        payments_list = [
+            {
+                "id": p.id,
+                "payment_method": getattr(p.payment_method, "value", str(p.payment_method)),
+                "amount": p.amount,
+                "status": getattr(p.status, "value", str(p.status)),
+                "reference_number": p.reference_number,
+                "paid_at": p.paid_at,
+            }
+            for p in (order.invoice.payments or [])
+        ]
+        amount_paid = sum(
+            (
+                p.amount
+                for p in (order.invoice.payments or [])
+                if (
+                    p.status == PaymentStatus.PAID
+                    or str(getattr(p.status, "value", p.status)).upper() == "PAID"
+                )
+            ),
+            Decimal("0.00"),
+        )
+        outstanding_balance = max(Decimal("0.00"), total_amount - amount_paid)
+    else:
+        tax_amount = (subtotal * Decimal("5.00") / Decimal("100")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        total_amount = subtotal + tax_amount
+        payments_list = []
+        amount_paid = Decimal("0.00")
+        outstanding_balance = total_amount
+
     return OrderResponse(
         id=order.id,
         order_number=order.order_number,
         customer_id=order.customer_id,
-        customer_name=order.customer.full_name,
+        customer_name=order.customer.full_name if order.customer else "Guest",
         table_id=order.table_id,
-        table_number=order.table.table_number,
+        table_number=order.table.table_number if order.table else "N/A",
         created_by_user_id=order.created_by_user_id,
         status=order.status,
         special_instructions=order.special_instructions,
@@ -141,6 +187,14 @@ def build_order_response(order):
         invoice_id=invoice_id,
         invoice_number=invoice_number,
         payment_status=payment_status,
+        tax_amount=tax_amount,
+        total_amount=total_amount,
+        amount_paid=amount_paid,
+        outstanding_balance=outstanding_balance,
+        payments=payments_list,
+        archived_at=order.archived_at,
+        archived_by=order.archived_by,
+        archive_reason=order.archive_reason,
     )
 
 
@@ -307,32 +361,107 @@ def create_order(
 # ==========================================
 
 
-@router.get("/", response_model=list[OrderResponse])
+@router.get("/")
 def get_all_orders(
     status: OrderStatus | None = None,
     table_id: int | None = None,
     customer_id: int | None = None,
     view: str | None = None,
+    tab: str | None = None,
     preset: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    search: str | None = None,
+    payment_status: str | None = None,
+    payment_method: str | None = None,
+    sort_by: str | None = "newest",
+    page: int | None = None,
+    page_size: int = 10,
+    paginate: bool = False,
     db: Session = Depends(get_db),
 ):
     # Automatically evaluate and cancel stale orders exceeding inactivity timeout
     cancel_stale_orders(db)
 
-    query = db.query(Order).options(
-        joinedload(Order.customer),
-        joinedload(Order.table),
-        joinedload(Order.invoice),
-        selectinload(Order.items),
-        selectinload(Order.status_history),
+    # Summary counts across non-archived orders for the lifecycle badges
+    summary_counts = {
+        "all_active": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status.notin_(TERMINAL_STATUSES))
+            .scalar()
+            or 0
+        ),
+        "ordered": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status == OrderStatus.PENDING)
+            .scalar()
+            or 0
+        ),
+        "confirmed": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status == OrderStatus.CONFIRMED)
+            .scalar()
+            or 0
+        ),
+        "ready": (
+            db.query(func.count(Order.id))
+            .filter(
+                Order.archived_at.is_(None),
+                Order.status.in_([OrderStatus.READY, OrderStatus.PREPARING]),
+            )
+            .scalar()
+            or 0
+        ),
+        "served": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status == OrderStatus.SERVED)
+            .scalar()
+            or 0
+        ),
+        "completed": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status == OrderStatus.COMPLETED)
+            .scalar()
+            or 0
+        ),
+        "cancelled": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status == OrderStatus.CANCELLED)
+            .scalar()
+            or 0
+        ),
+        "archived": (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.isnot(None))
+            .scalar()
+            or 0
+        ),
+    }
+
+    query = (
+        db.query(Order)
+        .join(Customer, Order.customer_id == Customer.id)
+        .join(RestaurantTable, Order.table_id == RestaurantTable.id)
+        .outerjoin(Invoice, Order.id == Invoice.order_id)
+        .options(
+            joinedload(Order.customer),
+            joinedload(Order.table),
+            joinedload(Order.invoice).selectinload(Invoice.payments),
+            selectinload(Order.items),
+            selectinload(Order.status_history),
+        )
     )
 
-    if view == "active":
-        query = query.filter(Order.status.notin_(TERMINAL_STATUSES))
-    elif view == "history":
-        query = query.filter(Order.status.in_(TERMINAL_STATUSES))
+    effective_tab = tab or view or "active"
+
+    if effective_tab == "archived":
+        query = query.filter(Order.archived_at.isnot(None))
+    else:
+        query = query.filter(Order.archived_at.is_(None))
+        if effective_tab == "active":
+            query = query.filter(Order.status.notin_(TERMINAL_STATUSES))
+        elif effective_tab == "history":
+            query = query.filter(Order.status.in_(TERMINAL_STATUSES))
 
     if status is not None:
         query = query.filter(Order.status == status)
@@ -347,8 +476,64 @@ def get_all_orders(
     if start_dt is not None and end_dt is not None:
         query = query.filter(Order.created_at >= start_dt, Order.created_at <= end_dt)
 
-    orders = query.order_by(Order.id.desc()).all()
+    if payment_status:
+        norm_ps = payment_status.strip().upper()
+        if norm_ps in ("PAID",):
+            query = query.filter(Invoice.payment_status == PaymentStatus.PAID)
+        elif norm_ps in ("PARTIALLY_PAID", "PARTIAL", "PARTIALLY PAID"):
+            query = query.filter(Invoice.payment_status == PaymentStatus.PARTIALLY_PAID)
+        elif norm_ps in ("PENDING", "UNPAID"):
+            query = query.filter(
+                or_(
+                    Invoice.id.is_(None),
+                    Invoice.payment_status == PaymentStatus.PENDING,
+                )
+            )
 
+    if payment_method:
+        query = query.join(Payment, Invoice.id == Payment.invoice_id).filter(
+            Payment.payment_method == payment_method
+        )
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Order.order_number.ilike(term),
+                Customer.full_name.ilike(term),
+                Customer.phone.ilike(term),
+                RestaurantTable.table_number.ilike(term),
+                Order.items.any(OrderItem.item_name.ilike(term)),
+            )
+        )
+
+    if sort_by == "oldest":
+        query = query.order_by(Order.id.asc())
+    elif sort_by == "highest_amount":
+        query = query.order_by(func.coalesce(Invoice.total_amount, 0).desc(), Order.id.desc())
+    elif sort_by == "lowest_amount":
+        query = query.order_by(func.coalesce(Invoice.total_amount, 0).asc(), Order.id.desc())
+    else:
+        query = query.order_by(Order.id.desc())
+
+    if page is not None or paginate:
+        cur_page = max(1, page or 1)
+        p_size = max(1, page_size)
+        total = query.count()
+        total_pages = max(1, math.ceil(total / p_size))
+        items = query.offset((cur_page - 1) * p_size).limit(p_size).all()
+        order_responses = [build_order_response(order) for order in items]
+
+        return {
+            "items": order_responses,
+            "total": total,
+            "page": cur_page,
+            "page_size": p_size,
+            "total_pages": total_pages,
+            "summary_counts": summary_counts,
+        }
+
+    orders = query.all()
     return [build_order_response(order) for order in orders]
 
 
@@ -652,25 +837,54 @@ def update_order_status(
         )
 
     if data.status == OrderStatus.COMPLETED:
+        # If no invoice exists, auto-generate invoice
         if order.invoice is None:
+            subtotal = sum((item.line_total for item in order.items), Decimal("0.00"))
+            gst_rate = Decimal("5.00")
+            gst_amount = (subtotal * gst_rate / Decimal("100")).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            total_amount = subtotal + gst_amount
+            order.invoice = Invoice(
+                order_id=order.id,
+                subtotal=subtotal,
+                gst_rate=gst_rate,
+                gst_amount=gst_amount,
+                total_amount=total_amount,
+                payment_status=PaymentStatus.PENDING,
+            )
+            db.add(order.invoice)
+            db.flush()
+
+        amount_paid = sum(
+            (
+                p.amount
+                for p in (order.invoice.payments or [])
+                if (
+                    p.status == PaymentStatus.PAID
+                    or str(getattr(p.status, "value", p.status)).upper() == "PAID"
+                )
+            ),
+            Decimal("0.00"),
+        )
+        if amount_paid < order.invoice.total_amount and order.invoice.total_amount > Decimal("0.00"):
             raise HTTPException(
                 status_code=400,
-                detail="Generate the invoice before completing the order.",
+                detail=(
+                    f"Cannot complete order with an outstanding balance of ₹{order.invoice.total_amount - amount_paid:.2f}. "
+                    "Invoice must be paid in full before completion."
+                ),
             )
-        if order.invoice.payment_status != PaymentStatus.PAID:
-            raise HTTPException(
-                status_code=400,
-                detail="Invoice must be paid before completing the order.",
-            )
+        order.invoice.payment_status = PaymentStatus.PAID
 
     previous_status = order.status
 
     try:
-        # Trigger atomic stock deduction when transitioning to PREPARING
-        if data.status == OrderStatus.PREPARING:
+        # Trigger atomic stock deduction when transitioning to READY or PREPARING
+        if data.status in {OrderStatus.READY, OrderStatus.PREPARING}:
             deduct_inventory_for_order(db=db, order=order, user_id=current_user.id)
 
-        # Trigger atomic stock restoration if cancelling an order that reached PREPARING or beyond
+        # Trigger atomic stock restoration if cancelling an order that reached READY, PREPARING, or SERVED
         if data.status == OrderStatus.CANCELLED and previous_status in {
             OrderStatus.PREPARING,
             OrderStatus.READY,
@@ -680,13 +894,22 @@ def update_order_status(
 
         order.status = data.status
 
+        # Clean normalized transition note
+        display_from = "Ordered" if previous_status == OrderStatus.PENDING else previous_status.value
+        display_to = "Ordered" if data.status == OrderStatus.PENDING else data.status.value
+        clean_note = (
+            data.note
+            if (data.note and "→" not in data.note)
+            else f"{display_from} → {display_to}"
+        )
+
         db.add(
             OrderStatusHistory(
                 order_id=order.id,
                 previous_status=previous_status,
                 new_status=data.status,
                 changed_by_user_id=current_user.id,
-                note=data.note,
+                note=clean_note,
                 changed_at=get_kolkata_now(),
             )
         )
@@ -703,3 +926,252 @@ def update_order_status(
     except Exception:
         db.rollback()
         raise
+
+
+# ==========================================
+# 9. RECORD PAYMENT DIRECTLY FROM ORDER
+# ==========================================
+
+
+@router.post("/{order_id}/payments", response_model=OrderResponse)
+def record_order_payment(
+    order_id: int,
+    data: OrderPaymentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    order = get_order_record(db, order_id)
+
+    if order.status != OrderStatus.SERVED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payments can only be collected for orders in Served status (current: {order.status.value}).",
+        )
+
+    if data.amount <= Decimal("0.00"):
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero.")
+
+    # Auto-create invoice if missing
+    if order.invoice is None:
+        subtotal = sum((item.line_total for item in order.items), Decimal("0.00"))
+        gst_rate = Decimal("5.00")
+        gst_amount = (subtotal * gst_rate / Decimal("100")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        total_amount = subtotal + gst_amount
+        invoice = Invoice(
+            order_id=order.id,
+            subtotal=subtotal,
+            gst_rate=gst_rate,
+            gst_amount=gst_amount,
+            total_amount=total_amount,
+            payment_status=PaymentStatus.PENDING,
+        )
+        db.add(invoice)
+        db.flush()
+        order.invoice = invoice
+
+    invoice = order.invoice
+    amount_paid_so_far = sum(
+        (
+            p.amount
+            for p in (invoice.payments or [])
+            if (
+                p.status == PaymentStatus.PAID
+                or str(getattr(p.status, "value", p.status)).upper() == "PAID"
+            )
+        ),
+        Decimal("0.00"),
+    )
+    outstanding = max(Decimal("0.00"), invoice.total_amount - amount_paid_so_far)
+
+    if outstanding <= Decimal("0.00"):
+        raise HTTPException(
+            status_code=400,
+            detail="This order is already fully paid.",
+        )
+
+    if data.amount > outstanding:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payment amount (₹{data.amount:.2f}) cannot exceed the outstanding balance (₹{outstanding:.2f}).",
+        )
+
+    now = get_kolkata_now()
+    new_payment = Payment(
+        invoice_id=invoice.id,
+        payment_method=data.payment_method,
+        amount=data.amount,
+        status=PaymentStatus.PAID,
+        paid_at=now,
+        reference_number=data.reference_number,
+    )
+    db.add(new_payment)
+    db.flush()
+
+    new_total_paid = amount_paid_so_far + data.amount
+    new_outstanding = max(Decimal("0.00"), invoice.total_amount - new_total_paid)
+
+    # If fully settled:
+    if new_outstanding == Decimal("0.00"):
+        invoice.payment_status = PaymentStatus.PAID
+        previous_status = order.status
+        order.status = OrderStatus.COMPLETED
+
+        db.add(
+            OrderStatusHistory(
+                order_id=order.id,
+                previous_status=previous_status,
+                new_status=OrderStatus.COMPLETED,
+                changed_by_user_id=current_user.id,
+                note=f"Full payment of ₹{data.amount:.2f} received via {data.payment_method.value}. Order completed automatically.",
+                changed_at=now,
+            )
+        )
+        refresh_table_status(db, order.table_id)
+    else:
+        invoice.payment_status = PaymentStatus.PARTIALLY_PAID
+        db.add(
+            OrderStatusHistory(
+                order_id=order.id,
+                previous_status=order.status,
+                new_status=order.status,
+                changed_by_user_id=current_user.id,
+                note=f"Partial payment of ₹{data.amount:.2f} received via {data.payment_method.value}. Remaining balance: ₹{new_outstanding:.2f}.",
+                changed_at=now,
+            )
+        )
+
+    try:
+        db.commit()
+        return build_order_response(get_order_record(db, order_id))
+    except Exception:
+        db.rollback()
+        raise
+
+
+# ==========================================
+# 10. BULK ARCHIVE ORDERS (CLEAR OLD ORDERS)
+# ==========================================
+
+
+@router.post("/bulk-archive", response_model=BulkArchiveResponse)
+def bulk_archive_orders(
+    data: BulkArchiveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only managers or administrators are authorized to clear orders.",
+        )
+
+    now = get_kolkata_now()
+    days = max(1, data.older_than_days)
+    cutoff = now - timedelta(days=days)
+
+    query = (
+        db.query(Order)
+        .options(
+            joinedload(Order.invoice).selectinload(Invoice.payments),
+        )
+        .filter(Order.archived_at.is_(None))
+    )
+
+    if data.order_ids is not None:
+        query = query.filter(Order.id.in_(data.order_ids))
+    else:
+        query = query.filter(Order.created_at <= cutoff)
+
+    orders = query.all()
+
+    archived_ids = []
+    excluded_details = []
+
+    for order in orders:
+        # Rule 1: Active orders must NEVER be cleared
+        if order.status not in TERMINAL_STATUSES:
+            excluded_details.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "reason": f"Active order in '{order.status.value}' stage cannot be cleared.",
+            })
+            continue
+
+        # Rule 2: Must be older than retention days
+        order_time = order.created_at
+        if order_time > cutoff:
+            excluded_details.append({
+                "order_id": order.id,
+                "order_number": order.order_number,
+                "reason": f"Order is from the last {days} days (retention rule requires older than {days} days).",
+            })
+            continue
+
+        # Rule 3: If COMPLETED, must be fully settled financially
+        if order.status == OrderStatus.COMPLETED and order.invoice:
+            paid = sum(
+                (
+                    p.amount
+                    for p in (order.invoice.payments or [])
+                    if (
+                        p.status == PaymentStatus.PAID
+                        or str(getattr(p.status, "value", p.status)).upper() == "PAID"
+                    )
+                ),
+                Decimal("0.00"),
+            )
+            if paid < order.invoice.total_amount:
+                excluded_details.append({
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                    "reason": f"Completed order has an unsettled financial balance of ₹{order.invoice.total_amount - paid:.2f}.",
+                })
+                continue
+
+        order.archived_at = now
+        order.archived_by = current_user.id
+        order.archive_reason = data.reason
+        archived_ids.append(order.id)
+
+    if archived_ids:
+        db.commit()
+
+    return BulkArchiveResponse(
+        archived_count=len(archived_ids),
+        excluded_count=len(excluded_details),
+        archived_ids=archived_ids,
+        excluded_details=excluded_details,
+    )
+
+
+# ==========================================
+# 11. RESTORE ARCHIVED ORDER
+# ==========================================
+
+
+@router.post("/{order_id}/restore", response_model=OrderResponse)
+def restore_archived_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only managers or administrators are authorized to restore orders.",
+        )
+
+    order = get_order_record(db, order_id)
+    if not order.archived_at:
+        raise HTTPException(status_code=400, detail="This order is not archived.")
+
+    order.archived_at = None
+    order.archived_by = None
+    order.archive_reason = None
+
+    db.commit()
+    return build_order_response(get_order_record(db, order_id))

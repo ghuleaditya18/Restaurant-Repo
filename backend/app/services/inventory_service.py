@@ -202,6 +202,12 @@ def process_goods_receipt(
     if po is None:
         raise HTTPException(status_code=404, detail="Purchase order not found.")
 
+    if not data.supplier_bill_number or not data.supplier_bill_number.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Supplier bill number is mandatory for Goods Receipt.",
+        )
+
     if po.status in {POStatus.DRAFT, POStatus.CANCELLED}:
         raise HTTPException(
             status_code=400,
@@ -602,6 +608,63 @@ def record_stock_adjustment(
         reference_id=0,
         user_id=user_id,
         notes=combined_notes,
+        allow_negative=False,
+    )
+
+
+def reverse_wastage_or_adjustment_movement(
+    db: Session,
+    movement_id: int,
+    reason: str,
+    user_id: int,
+) -> StockMovement:
+    """
+    Safely reverses an eligible manual adjustment or wastage record by posting
+    an opposite compensating movement. Guards against double reversal and checks
+    that the movement is not an immutable order-linked or system-deducted movement.
+    """
+    target = db.query(StockMovement).filter(StockMovement.id == movement_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Stock movement not found.")
+
+    if target.movement_type not in {MovementType.WASTAGE, MovementType.ADJUSTMENT}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only manual adjustment or wastage movements can be reversed. Cannot reverse '{target.movement_type.value}'.",
+        )
+
+    # Check if already reversed
+    existing_reversal = (
+        db.query(StockMovement)
+        .filter(
+            StockMovement.reference_type == "REVERSAL",
+            StockMovement.reference_id == target.id,
+        )
+        .first()
+    )
+    if existing_reversal:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Movement #{target.id} has already been reversed by Movement #{existing_reversal.id}.",
+        )
+
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=400, detail="Reversal reason is mandatory.")
+
+    # Opposite compensating quantity
+    compensating_qty = -target.quantity
+
+    reversal_notes = f"Reversal of Movement #{target.id} ({target.movement_type.value}): {reason.strip()}"
+
+    return record_stock_movement(
+        db=db,
+        inventory_item_id=target.inventory_item_id,
+        movement_type=MovementType.ADJUSTMENT,
+        quantity=compensating_qty,
+        reference_type="REVERSAL",
+        reference_id=target.id,
+        user_id=user_id,
+        notes=reversal_notes,
         allow_negative=False,
     )
 

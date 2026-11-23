@@ -52,3 +52,19 @@ export const resetStaffPassword = async (staffId, password) => {
   });
   return response.data;
 };
+
+// Upload staff profile image
+export const uploadStaffImage = async (staffId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await api.post(`/api/staff/${staffId}/image`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
+// Delete staff profile image
+export const deleteStaffImage = async (staffId) => {
+  const response = await api.delete(`/api/staff/${staffId}/image`);
+  return response.data;
+};

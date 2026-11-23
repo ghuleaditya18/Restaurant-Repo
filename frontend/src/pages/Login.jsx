@@ -219,7 +219,7 @@ function Login() {
   // ---------- Styling helpers ----------
 
   const getInputClass = (hasError) =>
-    `w-full outline-none text-sm text-[#1C1917] bg-transparent ${
+    `w-full outline-none text-sm text-stone-900 bg-transparent ${
       hasError ? "placeholder:text-red-300" : "placeholder:text-stone-400"
     }`;
 
@@ -227,24 +227,24 @@ function Login() {
     `flex items-center gap-3 mt-2 border rounded-xl px-4 py-3 transition ${
       hasError
         ? "border-red-400 focus-within:ring-2 focus-within:ring-red-100"
-        : "border-stone-300 focus-within:border-[#F5B716] focus-within:ring-2 focus-within:ring-[#F5B716]/30"
+        : "border-[#E5E9F0] focus-within:border-[#F59E0B] focus-within:ring-2 focus-within:ring-[#F59E0B]/30"
     }`;
 
 
   return (
-    <div className="min-h-screen bg-[#FAFAF9] flex items-center justify-center p-5">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-stone-200/90 p-8 sm:p-10">
+    <div className="min-h-screen bg-[#F0F2F7] flex items-center justify-center p-5">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-[#E5E9F0] p-8 sm:p-10">
 
         {/* Branding */}
         <div className="flex justify-center mb-7">
-          <div className="bg-[#F5B716] text-[#1C1917] p-4 rounded-2xl shadow-xs">
+          <div className="bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold p-4 rounded-2xl shadow-xs">
             <ChefHat size={30} />
           </div>
         </div>
 
         {/* Application Name */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-[#1C1917]">DineFlow</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">DineFlow</h1>
           <p className="text-xs text-stone-500 mt-1 font-medium">
             Restaurant Management System
           </p>
@@ -252,7 +252,7 @@ function Login() {
 
         {/* Welcome Message */}
         <div className="mb-7">
-          <h2 className="text-xl font-bold text-[#1C1917]">Welcome Back</h2>
+          <h2 className="text-xl font-bold text-stone-900">Welcome Back</h2>
           <p className="text-xs text-stone-500 mt-1 font-medium">
             Sign in to access your operations dashboard.
           </p>
@@ -363,7 +363,7 @@ function Login() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 bg-[#F5B716] hover:bg-[#E5A910] disabled:opacity-60 text-[#1C1917] font-bold py-3.5 rounded-xl transition shadow-xs cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] hover:brightness-105 disabled:opacity-60 text-[#0D1420] font-bold py-3.5 rounded-xl transition shadow-xs cursor-pointer"
           >
             {submitting ? "Signing in..." : "Sign In"}
             {!submitting && <ArrowRight size={18} />}

@@ -173,8 +173,8 @@ export default function GlobalSearch({
   const renderResultsContent = () => {
     if (loading) {
       return (
-        <div className="flex items-center justify-center gap-2 py-8 text-xs text-stone-500 dark:text-stone-400">
-          <Loader2 size={16} className="animate-spin text-[#F5B716]" />
+        <div className="flex items-center justify-center gap-2 py-8 text-xs text-stone-500 dark:text-[#8A9AB2]">
+          <Loader2 size={16} className="animate-spin text-[#F59E0B]" />
           <span>Searching records...</span>
         </div>
       );
@@ -191,13 +191,13 @@ export default function GlobalSearch({
     if (results && results.total_matches === 0) {
       return (
         <div className="py-8 text-center px-4">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-400 mb-2">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-stone-100 dark:bg-[#151D29] text-stone-400 dark:text-[#8A9AB2] mb-2">
             <Search size={18} />
           </div>
           <p className="text-xs font-semibold text-stone-800 dark:text-stone-200">
             No matching records found
           </p>
-          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+          <p className="text-[11px] text-stone-500 dark:text-[#8A9AB2] mt-0.5">
             No results for &ldquo;{results.query}&rdquo; in current business context
           </p>
         </div>
@@ -211,17 +211,17 @@ export default function GlobalSearch({
     let globalItemIndex = -1;
 
     return (
-      <div className="max-h-[360px] overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800 p-1.5">
+      <div className="max-h-[360px] overflow-y-auto divide-y divide-stone-100 dark:divide-[#1E293B] p-1.5">
         {results.groups.map((group) => {
           const CategoryIcon = CATEGORY_ICONS[group.entity_type] || Search;
           return (
             <div key={group.category} className="py-2 first:pt-1 last:pb-1">
-              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+              <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
                 <span className="flex items-center gap-1.5">
-                  <CategoryIcon size={12} className="text-stone-400 dark:text-stone-500" />
+                  <CategoryIcon size={12} className="text-stone-400 dark:text-[#8A9AB2]" />
                   <span>{group.category}</span>
                 </span>
-                <span className="text-[10px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 px-1.5 py-0.2 rounded-full tabular-nums">
+                <span className="text-[10px] font-semibold bg-stone-100 dark:bg-[#151D29] text-stone-600 dark:text-[#8A9AB2] px-1.5 py-0.2 rounded-full tabular-nums">
                   {group.items.length}
                 </span>
               </div>
@@ -239,15 +239,15 @@ export default function GlobalSearch({
                       onMouseEnter={() => setSelectedIndex(globalItemIndex)}
                       className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-left transition cursor-pointer ${
                         isSelected
-                          ? "bg-amber-50 dark:bg-amber-950/40 text-stone-900 dark:text-stone-100 ring-1 ring-amber-300 dark:ring-amber-800"
-                          : "hover:bg-stone-50 dark:hover:bg-stone-800/60 text-stone-800 dark:text-stone-200"
+                          ? "bg-[#FFF7E8] dark:bg-[#30251C] text-stone-900 dark:text-white ring-1 ring-[#F59E0B]/40"
+                          : "hover:bg-stone-50 dark:hover:bg-[#151D29] text-stone-800 dark:text-stone-200"
                       }`}
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold leading-tight truncate">
                           {item.title}
                         </p>
-                        <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate mt-0.5">
+                        <p className="text-[11px] text-stone-500 dark:text-[#8A9AB2] truncate mt-0.5">
                           {item.subtitle}
                         </p>
                       </div>
@@ -256,7 +256,7 @@ export default function GlobalSearch({
                         {item.status && (
                           <StatusBadge status={item.status} size="sm" />
                         )}
-                        <ArrowRight size={13} className="text-stone-400" />
+                        <ArrowRight size={13} className="text-stone-400 dark:text-[#8A9AB2]" />
                       </div>
                     </button>
                   );
@@ -283,11 +283,11 @@ export default function GlobalSearch({
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="w-full max-w-lg mx-auto rounded-2xl bg-white dark:bg-[#1C1917] border border-stone-200 dark:border-stone-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150"
+          className="w-full max-w-lg mx-auto rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-[#1E293B] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150"
         >
           {/* Search Header */}
-          <div className="flex items-center gap-2.5 p-3.5 border-b border-stone-200/80 dark:border-stone-800">
-            <Search size={18} className="text-[#F5B716] shrink-0 ml-1" />
+          <div className="flex items-center gap-2.5 p-3.5 border-b border-stone-200/80 dark:border-[#1E293B]">
+            <Search size={18} className="text-[#F59E0B] shrink-0 ml-1" />
             <input
               ref={inputRef}
               type="text"
@@ -310,7 +310,7 @@ export default function GlobalSearch({
             <button
               type="button"
               onClick={onClose}
-              className="px-2.5 py-1 text-xs font-semibold rounded-lg text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition min-h-[36px] flex items-center"
+              className="px-2.5 py-1 text-xs font-semibold rounded-lg text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-100 dark:hover:bg-[#151D29] transition min-h-[36px] flex items-center"
             >
               Cancel
             </button>
@@ -331,7 +331,7 @@ export default function GlobalSearch({
       <div className="relative w-full">
         <Search
           size={15}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 pointer-events-none"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9AB2] pointer-events-none"
         />
         <input
           ref={inputRef}
@@ -346,14 +346,14 @@ export default function GlobalSearch({
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full rounded-xl border border-stone-200/90 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-900/60 pl-9 pr-8 py-1.5 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F5B716] focus:bg-white dark:focus:bg-[#201D1B] focus:ring-2 focus:ring-[#F5B716]/20 h-9"
+          className="w-full rounded-xl border border-[#1E293B] bg-[#151D29] pl-9 pr-8 py-1.5 text-xs text-white placeholder-[#8A9AB2] outline-none transition focus:border-[#F59E0B] focus:bg-[#151D29] focus:ring-2 focus:ring-[#F59E0B]/20 h-9"
         />
 
         {query && (
           <button
             type="button"
             onClick={clearSearch}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-0.5 rounded cursor-pointer transition"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8A9AB2] hover:text-white p-0.5 rounded cursor-pointer transition"
             aria-label="Clear search query"
           >
             <X size={14} />
@@ -363,7 +363,7 @@ export default function GlobalSearch({
 
       {/* Floating Dropdown */}
       {dropdownOpen && (query.trim().length > 0 || loading) && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 w-full min-w-[340px] max-w-lg rounded-2xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] shadow-2xl z-50 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100">
+        <div className="absolute left-0 right-0 top-full mt-1.5 w-full min-w-[340px] max-w-lg rounded-2xl border border-stone-200/90 dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-2xl z-50 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100">
           {renderResultsContent()}
         </div>
       )}

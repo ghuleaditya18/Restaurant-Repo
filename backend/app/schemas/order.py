@@ -9,7 +9,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.entities import OrderStatus, PaymentStatus
+from app.models.entities import OrderStatus, PaymentStatus, PaymentMethod
 
 # ==========================================
 # 1. CREATE ORDER ITEM
@@ -146,6 +146,14 @@ class OrderItemResponse(BaseModel):
 
     line_total: Decimal
 
+    price_at_order: Decimal | None = None
+
+    @model_validator(mode="after")
+    def set_price_at_order(self):
+        if self.price_at_order is None:
+            self.price_at_order = self.unit_price
+        return self
+
 
 # ==========================================
 # 7. ORDER STATUS HISTORY RESPONSE
@@ -207,3 +215,68 @@ class OrderResponse(BaseModel):
     invoice_number: str | None = None
 
     payment_status: PaymentStatus | None = None
+
+    tax_amount: Decimal = Decimal("0.00")
+
+    total_amount: Decimal = Decimal("0.00")
+
+    amount_paid: Decimal = Decimal("0.00")
+
+    outstanding_balance: Decimal = Decimal("0.00")
+
+    payments: list[dict] = Field(default_factory=list)
+
+    archived_at: datetime | None = None
+
+    archived_by: int | None = None
+
+    archive_reason: str | None = None
+
+
+# ==========================================
+# 9. ORDER PAYMENT & BULK ARCHIVE SCHEMAS
+# ==========================================
+
+
+class OrderPaymentCreate(BaseModel):
+
+    payment_method: PaymentMethod
+
+    amount: Decimal = Field(gt=0)
+
+    reference_number: str | None = None
+
+
+class BulkArchiveRequest(BaseModel):
+
+    order_ids: list[int] | None = None
+
+    older_than_days: int = 3
+
+    reason: str | None = "Cleared old orders"
+
+
+class BulkArchiveResponse(BaseModel):
+
+    archived_count: int
+
+    excluded_count: int
+
+    archived_ids: list[int]
+
+    excluded_details: list[dict] = Field(default_factory=list)
+
+
+class PaginatedOrdersResponse(BaseModel):
+
+    items: list[OrderResponse]
+
+    total: int
+
+    page: int
+
+    page_size: int
+
+    total_pages: int
+
+    summary_counts: dict[str, int] = Field(default_factory=dict)

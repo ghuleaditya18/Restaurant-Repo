@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Plus, Search, Pencil, Eye, Trash2, RefreshCw, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Search, Pencil, Eye, Trash2, RefreshCw, Mail, Phone, MapPin, Users } from "lucide-react";
 
 import {
   getAllCustomers,
@@ -8,11 +8,16 @@ import {
   createCustomer,
   updateCustomer,
   deleteCustomer,
+  uploadCustomerImage,
+  deleteCustomerImage,
 } from "../services/customerService";
+import ProfilePhotoUpload from "../components/ProfilePhotoUpload";
+import AuthenticatedImage from "../components/AuthenticatedImage";
 import { useNotification } from "../context/NotificationContext";
 import PageHeader from "../components/PageHeader";
-import AlertBanner from "../components/AlertBanner";
 import Modal from "../components/Modal";
+import StatCard from "../components/StatCard";
+import Pagination from "../components/Pagination";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -44,7 +49,7 @@ const getErrorMessage = (error) => {
 // ==========================================
 
 export default function Customers() {
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [customers, setCustomers] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -55,6 +60,8 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [isImageRemoved, setIsImageRemoved] = useState(false);
 
   // View modal
   const [showViewModal, setShowViewModal] = useState(false);
@@ -65,9 +72,9 @@ export default function Customers() {
   // Search
   const [search, setSearch] = useState("");
 
-  // Notifications
-  const [pageError, setPageError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  // Pagination (10 per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // ==========================================
   // LOAD CUSTOMER RECORDS
@@ -75,17 +82,16 @@ export default function Customers() {
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
-    setPageError("");
 
     try {
       const data = await getAllCustomers();
       setCustomers(data);
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Load Customers");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     loadCustomers();
@@ -108,6 +114,12 @@ export default function Customers() {
     });
   }, [customers, search]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const paginatedCustomers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize);
+  }, [filteredCustomers, currentPage, pageSize]);
+
   // ==========================================
   // OPEN ADD CUSTOMER MODAL
   // ==========================================
@@ -116,6 +128,8 @@ export default function Customers() {
     setEditingCustomer(null);
     setForm(EMPTY_FORM);
     setFormError("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
     setShowModal(true);
   };
 
@@ -134,6 +148,8 @@ export default function Customers() {
     });
 
     setFormError("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
     setShowModal(true);
   };
 
@@ -182,21 +198,34 @@ export default function Customers() {
     };
 
     try {
+      let customerId;
       if (editingCustomer) {
         await updateCustomer(editingCustomer.id, customerData);
-        const msg = "Customer details updated successfully.";
-        setSuccessMessage(msg);
-        showSuccess(msg, "Customer Updated");
+        customerId = editingCustomer.id;
+
+        if (selectedImageFile) {
+          await uploadCustomerImage(customerId, selectedImageFile);
+        } else if (isImageRemoved) {
+          await deleteCustomerImage(customerId);
+        }
+
+        showUpdate("Customer details updated successfully.", "Customer Updated");
       } else {
-        await createCustomer(customerData);
-        const msg = "Customer registered successfully.";
-        setSuccessMessage(msg);
-        showSuccess(msg, "Customer Created");
+        const created = await createCustomer(customerData);
+        customerId = created?.id;
+
+        if (selectedImageFile && customerId) {
+          await uploadCustomerImage(customerId, selectedImageFile);
+        }
+
+        showSuccess("Customer registered successfully.", "Customer Created");
       }
 
       setShowModal(false);
       setEditingCustomer(null);
       setForm(EMPTY_FORM);
+      setSelectedImageFile(null);
+      setIsImageRemoved(false);
 
       await loadCustomers();
     } catch (error) {
@@ -247,9 +276,6 @@ export default function Customers() {
 
     if (!confirmed) return;
 
-    setPageError("");
-    setSuccessMessage("");
-
     try {
       await deleteCustomer(customer.id);
 
@@ -257,13 +283,9 @@ export default function Customers() {
         previous.filter((item) => item.id !== customer.id),
       );
 
-      const msg = `${customer.full_name} deleted successfully.`;
-      setSuccessMessage(msg);
-      showError(msg, "Customer Deleted");
+      showDelete(`${customer.full_name} deleted successfully.`, "Customer Deleted");
     } catch (error) {
-      const msg = getErrorMessage(error);
-      setPageError(msg);
-      showError(msg, "Delete Failed");
+      showError(getErrorMessage(error), "Delete Failed");
     }
   };
 
@@ -276,7 +298,7 @@ export default function Customers() {
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
           >
             <Plus size={18} />
             <span>Add Customer</span>
@@ -284,53 +306,36 @@ export default function Customers() {
         }
       />
 
-      {/* SUCCESS MESSAGE */}
-      {successMessage && (
-        <AlertBanner
-          type="success"
-          message={successMessage}
-          onDismiss={() => setSuccessMessage("")}
-        />
-      )}
-
-      {/* ERROR MESSAGE */}
-      {pageError && (
-        <AlertBanner
-          type="error"
-          message={pageError}
-          onDismiss={() => setPageError("")}
-        />
-      )}
-
       {/* METRIC OVERVIEW */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">Registered Guests</p>
-          <p className="mt-1 text-2xl font-bold text-[#1C1917] dark:text-stone-100 tabular-nums">{customers.length}</p>
-        </div>
+      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-3.5">
+        <StatCard
+          title="Registered Guests"
+          value={customers.length}
+          icon={<Users size={18} />}
+        />
 
-        <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">With Email On File</p>
-          <p className="mt-1 text-2xl font-bold text-stone-800 dark:text-stone-200 tabular-nums">
-            {customers.filter((c) => Boolean(c.email)).length}
-          </p>
-        </div>
+        <StatCard
+          title="With Email"
+          value={customers.filter((c) => Boolean(c.email)).length}
+          icon={<Mail size={18} />}
+          badgeColor="bg-blue-50 text-blue-700 border-blue-200"
+        />
 
-        <div className="rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#1C1917] p-4 shadow-xs">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">With Address Records</p>
-          <p className="mt-1 text-2xl font-bold text-stone-800 dark:text-stone-200 tabular-nums">
-            {customers.filter((c) => Boolean(c.address)).length}
-          </p>
-        </div>
+        <StatCard
+          title="With Address"
+          value={customers.filter((c) => Boolean(c.address)).length}
+          icon={<MapPin size={18} />}
+          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+        />
       </div>
 
       {/* TABLE CONTAINER */}
-      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
+      <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND REFRESH */}
-        <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-[#1C1917]">Registered Customers</h2>
-            <p className="mt-0.5 text-xs text-stone-500">
+            <h2 className="font-bold text-stone-900 dark:text-white">Registered Customers</h2>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredCustomers.length} {filteredCustomers.length === 1 ? "record" : "records"} found
             </p>
           </div>
@@ -339,14 +344,17 @@ export default function Customers() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
               <input
                 type="text"
                 placeholder="Search name, phone, email..."
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-72"
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-72"
               />
             </div>
 
@@ -355,7 +363,7 @@ export default function Customers() {
               onClick={loadCustomers}
               disabled={loading}
               title="Refresh customers"
-              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white p-2 text-stone-600 hover:bg-stone-50 transition cursor-pointer"
+              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-2 text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#101722] transition cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -365,7 +373,7 @@ export default function Customers() {
         {/* TABLE */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
+            <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Phone Number</th>
@@ -375,12 +383,12 @@ export default function Customers() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-stone-100 text-sm">
+            <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-sm">
               {loading ? (
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-12 text-center text-sm text-stone-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     Loading customer records...
                   </td>
@@ -389,26 +397,30 @@ export default function Customers() {
                 <tr>
                   <td
                     colSpan="5"
-                    className="px-4 py-12 text-center text-sm text-stone-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     No customers found.
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((customer) => (
+                paginatedCustomers.map((customer) => (
                   <tr
                     key={customer.id}
-                    className="transition hover:bg-stone-50/70"
+                    className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40"
                   >
                     {/* CUSTOMER */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] font-bold text-[#854D0E] shadow-2xs">
-                          {customer.full_name.charAt(0).toUpperCase()}
+                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 shadow-2xs">
+                          <AuthenticatedImage
+                            src={customer.image_url}
+                            alt={customer.full_name}
+                            fallback={customer.full_name.charAt(0).toUpperCase()}
+                          />
                         </div>
 
                         <div className="min-w-0">
-                          <p className="font-semibold text-stone-900">
+                          <p className="font-semibold text-stone-900 dark:text-white">
                             {customer.full_name}
                           </p>
                           <p className="text-xs text-stone-400">
@@ -419,17 +431,17 @@ export default function Customers() {
                     </td>
 
                     {/* PHONE */}
-                    <td className="px-4 py-3 text-sm font-medium text-stone-700">
+                    <td className="px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-300">
                       {customer.phone}
                     </td>
 
                     {/* EMAIL */}
-                    <td className="max-w-[200px] truncate px-4 py-3 text-sm text-stone-600">
+                    <td className="max-w-[200px] truncate px-4 py-3 text-sm text-stone-600 dark:text-stone-400">
                       {customer.email || "—"}
                     </td>
 
                     {/* ADDRESS */}
-                    <td className="max-w-[220px] truncate px-4 py-3 text-sm text-stone-600">
+                    <td className="max-w-[220px] truncate px-4 py-3 text-sm text-stone-600 dark:text-stone-400">
                       {customer.address || "—"}
                     </td>
 
@@ -440,7 +452,7 @@ export default function Customers() {
                           type="button"
                           onClick={() => openViewModal(customer)}
                           title="View customer"
-                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
                           <Eye size={16} />
                         </button>
@@ -449,7 +461,7 @@ export default function Customers() {
                           type="button"
                           onClick={() => openEditModal(customer)}
                           title="Edit customer"
-                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
                           <Pencil size={16} />
                         </button>
@@ -458,7 +470,7 @@ export default function Customers() {
                           type="button"
                           onClick={() => handleDelete(customer)}
                           title="Delete customer"
-                          className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
+                          className="rounded-lg p-2 text-stone-400 dark:text-stone-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-400 transition cursor-pointer"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -469,6 +481,17 @@ export default function Customers() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* PAGINATION (10 per page) */}
+        <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalRecords={filteredCustomers.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setCurrentPage(p)}
+          />
         </div>
       </div>
 
@@ -481,6 +504,25 @@ export default function Customers() {
         >
           <form onSubmit={handleSubmit} className="space-y-4">
             {formError && <ErrorBox message={formError} />}
+
+            <div className="flex justify-center pb-2">
+              <ProfilePhotoUpload
+                currentImageUrl={editingCustomer?.image_url}
+                name={form.full_name}
+                selectedFile={selectedImageFile}
+                onImageSelected={(file) => {
+                  setSelectedImageFile(file);
+                  setIsImageRemoved(false);
+                }}
+                onImageRemoved={() => {
+                  setSelectedImageFile(null);
+                  setIsImageRemoved(true);
+                }}
+                isRemoved={isImageRemoved}
+                disabled={saving}
+                onError={(msg) => showError(msg, "Invalid Photo")}
+              />
+            </div>
 
             <FormField
               label="Full Name"
@@ -525,7 +567,7 @@ export default function Customers() {
                 onChange={handleChange}
                 rows={3}
                 placeholder="Enter postal address or landmark..."
-                className="w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+                className="w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               />
             </div>
 
@@ -541,7 +583,7 @@ export default function Customers() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-60 transition cursor-pointer shadow-xs"
+                className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2 text-sm font-bold text-[#0D1420] hover:opacity-95 disabled:opacity-60 transition cursor-pointer shadow-xs"
               >
                 {saving
                   ? "Saving..."
@@ -571,12 +613,16 @@ export default function Customers() {
             viewingCustomer && (
               <div className="space-y-5">
                 <div className="flex items-center gap-4 rounded-xl border border-stone-200 bg-stone-50/70 p-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] text-xl font-bold text-[#854D0E] shadow-2xs">
-                    {viewingCustomer.full_name.charAt(0).toUpperCase()}
+                  <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-xl shadow-2xs">
+                    <AuthenticatedImage
+                      src={viewingCustomer.image_url}
+                      alt={viewingCustomer.full_name}
+                      fallback={viewingCustomer.full_name.charAt(0).toUpperCase()}
+                    />
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-[#1C1917]">
+                    <h3 className="font-bold text-stone-900">
                       {viewingCustomer.full_name}
                     </h3>
                     <p className="text-xs text-stone-500">
@@ -667,7 +713,7 @@ function FormField({
         required={required}
         minLength={minLength}
         maxLength={maxLength}
-        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
       />
     </div>
   );
@@ -681,7 +727,7 @@ function DetailItem({ label, value, icon }) {
         <span>{label}</span>
       </div>
 
-      <p className="break-words text-sm font-semibold text-[#1C1917]">
+      <p className="break-words text-sm font-semibold text-stone-900">
         {value || "—"}
       </p>
     </div>

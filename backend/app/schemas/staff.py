@@ -214,3 +214,5 @@ class StaffResponse(BaseModel):
     joining_date: date | None
 
     is_active: bool
+
+    image_url: str | None = None

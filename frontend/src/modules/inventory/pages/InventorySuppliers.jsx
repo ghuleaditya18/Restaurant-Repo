@@ -20,12 +20,17 @@ import {
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
+import Pagination from "../../../components/Pagination";
 
 export default function InventorySuppliers() {
   const [suppliers, setSuppliers] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const [catalogPage, setCatalogPage] = useState(1);
+  const catalogPageSize = 10;
 
   // Modals
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
@@ -137,6 +142,7 @@ export default function InventorySuppliers() {
 
   const handleOpenItemsModal = async (sup) => {
     setActiveSupplier(sup);
+    setCatalogPage(1);
     setItemsModalOpen(true);
     try {
       const items = await getSupplierItems(sup.id);
@@ -193,7 +199,10 @@ export default function InventorySuppliers() {
             type="text"
             placeholder="Search supplier name, contact or phone..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className={`${INPUT_STYLES.base} pl-9`}
           />
         </div>
@@ -242,7 +251,7 @@ export default function InventorySuppliers() {
                   </td>
                 </tr>
               ) : (
-                suppliers.map((sup) => (
+                suppliers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((sup) => (
                   <tr key={sup.id} className={TABLE_STYLES.tr}>
                     <td className={TABLE_STYLES.td}>
                       <div className="font-bold text-stone-900 dark:text-stone-100">{sup.name}</div>
@@ -313,12 +322,19 @@ export default function InventorySuppliers() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(suppliers.length / pageSize) || 1}
+          onPageChange={setCurrentPage}
+          totalRecords={suppliers.length}
+          limit={pageSize}
+        />
       </div>
 
       {/* CREATE / EDIT SUPPLIER MODAL */}
       {supplierModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+          <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 {editingSupplier ? "Edit Supplier" : "Add New Supplier"}
@@ -430,7 +446,7 @@ export default function InventorySuppliers() {
       {/* SUPPLIED ITEMS MODAL */}
       {itemsModalOpen && activeSupplier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-xl bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -494,33 +510,47 @@ export default function InventorySuppliers() {
               {supplierItemsList.length === 0 ? (
                 <p className="p-4 text-center text-xs text-stone-400">No items linked yet.</p>
               ) : (
-                supplierItemsList.map((l) => (
-                  <div key={l.id} className="pt-2 flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-sm text-stone-900 dark:text-stone-100">
-                        {l.inventory_item_name}
-                      </span>
-                      {l.is_preferred && (
-                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200">
-                          Preferred
+                supplierItemsList
+                  .slice((catalogPage - 1) * catalogPageSize, catalogPage * catalogPageSize)
+                  .map((l) => (
+                    <div key={l.id} className="pt-2 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-sm text-stone-900 dark:text-stone-100">
+                          {l.inventory_item_name}
                         </span>
-                      )}
-                      <div className="text-xs text-stone-400">
-                        {l.last_purchase_price ? `Last price: ₹${l.last_purchase_price} / ${l.inventory_item_unit}` : "No price recorded"}
+                        {l.is_preferred && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200">
+                            Preferred
+                          </span>
+                        )}
+                        <div className="text-xs text-stone-400">
+                          {l.last_purchase_price ? `Last price: ₹${l.last_purchase_price} / ${l.inventory_item_unit}` : "No price recorded"}
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSupplierItem(l.id)}
+                        className="p-1 text-rose-500 hover:bg-rose-50 rounded"
+                        title="Unlink Item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSupplierItem(l.id)}
-                      className="p-1 text-rose-500 hover:bg-rose-50 rounded"
-                      title="Unlink Item"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))
+                  ))
               )}
             </div>
+
+            {supplierItemsList.length > catalogPageSize && (
+              <div className="pt-3 border-t border-stone-100 dark:border-stone-800">
+                <Pagination
+                  currentPage={catalogPage}
+                  totalPages={Math.max(1, Math.ceil(supplierItemsList.length / catalogPageSize))}
+                  totalRecords={supplierItemsList.length}
+                  pageSize={catalogPageSize}
+                  onPageChange={(p) => setCatalogPage(p)}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

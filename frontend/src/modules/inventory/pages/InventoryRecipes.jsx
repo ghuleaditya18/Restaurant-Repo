@@ -7,15 +7,18 @@ import {
   X,
   AlertCircle,
   CheckCircle2,
+  Eye,
 } from "lucide-react";
 import {
   getRecipes,
   createOrUpdateRecipe,
+  deleteRecipe,
   getInventoryItems,
 } from "../../../services/inventoryService";
 import { getMenuItems } from "../../../services/menuService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
+import Pagination from "../../../components/Pagination";
 
 export default function InventoryRecipes() {
   const [menuItems, setMenuItems] = useState([]);
@@ -23,9 +26,12 @@ export default function InventoryRecipes() {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
-  // Editor Modal
+  // Modals
   const [editorOpen, setEditorOpen] = useState(false);
+  const [viewingRecipe, setViewingRecipe] = useState(null);
   const [selectedMenuItem, setSelectedMenuItem] = useState(null);
   const [recipeForm, setRecipeForm] = useState({
     yield_servings: 1,
@@ -33,7 +39,7 @@ export default function InventoryRecipes() {
     items: [],
   });
 
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -84,6 +90,32 @@ export default function InventoryRecipes() {
       });
     }
     setEditorOpen(true);
+  };
+
+  const handleOpenView = (menuItem) => {
+    setSelectedMenuItem(menuItem);
+    setViewingRecipe(recipeMap[menuItem.id] || null);
+  };
+
+  const handleDeleteRecipe = async (menuItem) => {
+    const existingRecipe = recipeMap[menuItem.id];
+    if (!existingRecipe) return;
+
+    const ok = await confirm({
+      title: `Delete Recipe BOM: ${menuItem.name}`,
+      message: `Delete the Bill of Materials for '${menuItem.name}' (${existingRecipe.items.length} ingredients)? The menu item itself will remain intact and historical inventory movements will not be altered.`,
+      confirmText: "Delete Recipe BOM",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    try {
+      await deleteRecipe(menuItem.id);
+      showDelete(`Recipe BOM for '${menuItem.name}' deleted successfully`);
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to delete recipe BOM");
+    }
   };
 
   const addIngredientRow = () => {
@@ -145,6 +177,7 @@ export default function InventoryRecipes() {
       showError("Recipe must contain at least one ingredient");
       return;
     }
+    const isUpdate = !!recipeMap[selectedMenuItem.id];
     try {
       await createOrUpdateRecipe(selectedMenuItem.id, {
         yield_servings: Number(recipeForm.yield_servings),
@@ -154,7 +187,11 @@ export default function InventoryRecipes() {
           quantity: Number(it.quantity),
         })),
       });
-      showSuccess(`Recipe saved for '${selectedMenuItem.name}'`);
+      if (isUpdate) {
+        showUpdate(`Recipe updated for '${selectedMenuItem.name}'`);
+      } else {
+        showSuccess(`Recipe BOM created for '${selectedMenuItem.name}'`);
+      }
       setEditorOpen(false);
       loadData();
     } catch (err) {
@@ -166,6 +203,9 @@ export default function InventoryRecipes() {
     m.name.toLowerCase().includes(search.toLowerCase()) ||
     m.category_name?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.ceil(filteredMenuItems.length / pageSize) || 1;
+  const paginatedItems = filteredMenuItems.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const live = selectedMenuItem ? computeLiveCost() : null;
 
@@ -179,7 +219,10 @@ export default function InventoryRecipes() {
             type="text"
             placeholder="Search dish or category..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className={`${INPUT_STYLES.base} pl-9`}
           />
         </div>
@@ -211,14 +254,14 @@ export default function InventoryRecipes() {
               </tr>
             </thead>
             <tbody>
-              {filteredMenuItems.length === 0 ? (
+              {paginatedItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
                     {loading ? "Loading menu items..." : "No menu items found."}
                   </td>
                 </tr>
               ) : (
-                filteredMenuItems.map((item) => {
+                paginatedItems.map((item) => {
                   const recipe = recipeMap[item.id];
                   const hasRecipe = !!recipe && recipe.items.length > 0;
 
@@ -264,14 +307,37 @@ export default function InventoryRecipes() {
                         )}
                       </td>
                       <td className={`${TABLE_STYLES.td} text-right`}>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditor(item)}
-                          className={BUTTON_VARIANTS.secondary}
-                        >
-                          <Pencil size={13} />
-                          <span>{hasRecipe ? "Edit Recipe" : "Build Recipe"}</span>
-                        </button>
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          {hasRecipe && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenView(item)}
+                              className="p-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded transition"
+                              title="View Recipe Details"
+                            >
+                              <Eye size={15} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditor(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 transition"
+                            title={hasRecipe ? "Edit Recipe" : "Build Recipe"}
+                          >
+                            <Pencil size={13} />
+                            <span>{hasRecipe ? "Edit" : "Build"}</span>
+                          </button>
+                          {hasRecipe && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRecipe(item)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
+                              title="Delete Recipe BOM"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -280,12 +346,125 @@ export default function InventoryRecipes() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalRecords={filteredMenuItems.length}
+          limit={pageSize}
+        />
       </div>
+
+      {/* VIEW RECIPE MODAL */}
+      {viewingRecipe && selectedMenuItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+                  Recipe BOM: {selectedMenuItem.name}
+                </h3>
+                <p className="text-xs text-stone-400">
+                  Category: {selectedMenuItem.category_name} | Selling Price: ₹{Number(selectedMenuItem.price).toFixed(2)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingRecipe(null)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-stone-50 dark:bg-stone-900/50 rounded-xl text-xs">
+              <div>
+                <span className="text-stone-500 block">Yield:</span>
+                <span className="font-semibold">{viewingRecipe.yield_servings} serving(s)</span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Total BOM Cost:</span>
+                <span className="font-bold text-stone-900 dark:text-stone-100">
+                  ₹{Number(viewingRecipe.total_estimated_cost).toFixed(2)}
+                </span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Food Cost:</span>
+                <span className={`font-semibold ${Number(viewingRecipe.food_cost_percentage) > 35 ? "text-rose-600" : "text-emerald-600"}`}>
+                  {Number(viewingRecipe.food_cost_percentage).toFixed(1)}%
+                </span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Gross Margin:</span>
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
+                  {Number(viewingRecipe.gross_margin_percentage).toFixed(1)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-stone-600 dark:text-stone-400">
+                Ingredients & Portions
+              </h4>
+              <div className="overflow-x-auto border border-stone-200 dark:border-stone-800 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-stone-50 dark:bg-stone-900/60 border-b border-stone-200 dark:border-stone-800">
+                    <tr>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Ingredient</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Portion Quantity</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Average Unit Cost</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400 text-right">Line Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingRecipe.items.map((it) => (
+                      <tr key={it.id} className="border-b border-stone-100 dark:border-stone-800/60">
+                        <td className="p-2.5 font-medium">{it.inventory_item_name}</td>
+                        <td className="p-2.5">{it.quantity} {it.inventory_item_unit}</td>
+                        <td className="p-2.5">₹{Number(it.average_cost).toFixed(2)} / {it.inventory_item_unit}</td>
+                        <td className="p-2.5 text-right font-medium">₹{Number(it.line_cost).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {viewingRecipe.preparation_notes && (
+              <div className="text-xs p-3 bg-stone-50 dark:bg-stone-900/40 rounded-xl">
+                <span className="font-semibold block text-stone-600 dark:text-stone-400 mb-1">Preparation Notes:</span>
+                <p className="text-stone-700 dark:text-stone-300">{viewingRecipe.preparation_notes}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingRecipe(null);
+                  handleOpenEditor(selectedMenuItem);
+                }}
+                className={BUTTON_VARIANTS.secondary}
+              >
+                <Pencil size={13} className="mr-1" />
+                Edit Recipe
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingRecipe(null)}
+                className={BUTTON_VARIANTS.primary}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* RECIPE BOM EDITOR MODAL */}
       {editorOpen && selectedMenuItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -306,7 +485,7 @@ export default function InventoryRecipes() {
 
             {/* LIVE COST & MARGIN PREVIEW CARDS */}
             {live && (
-              <div className="grid grid-cols-3 gap-3 p-3 bg-stone-50 dark:bg-stone-900/50 rounded-xl border border-stone-200 dark:border-stone-800">
+              <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2.5 sm:gap-3 p-3 bg-stone-50 dark:bg-stone-900/50 rounded-xl border border-stone-200 dark:border-stone-800">
                 <div>
                   <div className="text-[11px] text-stone-500 uppercase font-bold">Estimated Cost</div>
                   <div className="text-base font-extrabold text-stone-900 dark:text-stone-100">
@@ -329,7 +508,7 @@ export default function InventoryRecipes() {
             )}
 
             <form onSubmit={handleSaveRecipe} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
                     Yield Servings
@@ -377,12 +556,12 @@ export default function InventoryRecipes() {
                   const lineCost = inv ? (Number(row.quantity || 0) * Number(inv.average_cost || 0)).toFixed(2) : "0.00";
 
                   return (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 sm:p-0 bg-stone-50 sm:bg-transparent rounded-lg">
                       <select
                         required
                         value={row.inventory_item_id}
                         onChange={(e) => updateIngredientRow(idx, "inventory_item_id", e.target.value)}
-                        className={`${INPUT_STYLES.select} flex-2`}
+                        className={`${INPUT_STYLES.select} flex-1`}
                       >
                         {inventoryItems.map((inv) => (
                           <option key={inv.id} value={inv.id}>
@@ -391,7 +570,7 @@ export default function InventoryRecipes() {
                         ))}
                       </select>
 
-                      <div className="relative w-32">
+                      <div className="relative w-full sm:w-32">
                         <input
                           type="number"
                           required
@@ -407,7 +586,7 @@ export default function InventoryRecipes() {
                         </span>
                       </div>
 
-                      <div className="w-20 text-xs font-bold text-stone-500 text-right">
+                      <div className="w-20 text-xs font-bold text-stone-500 text-right self-end sm:self-center">
                         ₹{lineCost}
                       </div>
 
@@ -415,7 +594,8 @@ export default function InventoryRecipes() {
                         <button
                           type="button"
                           onClick={() => removeIngredientRow(idx)}
-                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded"
+                          className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded self-end sm:self-center"
+                          title="Remove ingredient"
                         >
                           <Trash2 size={16} />
                         </button>

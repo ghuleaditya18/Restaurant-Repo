@@ -23,6 +23,7 @@ import {
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
+import Pagination from "../../../components/Pagination";
 
 const UNITS = ["g", "kg", "ml", "L", "pcs", "pack"];
 
@@ -33,6 +34,8 @@ export default function InventoryStock() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   // Modals
   const [itemModalOpen, setItemModalOpen] = useState(false);
@@ -58,7 +61,7 @@ export default function InventoryStock() {
   const [newCatDesc, setNewCatDesc] = useState("");
   const [editingCategory, setEditingCategory] = useState(null);
 
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showUpdate, showError, confirm } = useNotification();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -122,7 +125,7 @@ export default function InventoryStock() {
           base_unit: formData.base_unit,
           reorder_level: Number(formData.reorder_level),
         });
-        showSuccess("Item updated successfully");
+        showUpdate("Item updated successfully");
       } else {
         await createInventoryItem({
           category_id: Number(formData.category_id),
@@ -292,7 +295,7 @@ export default function InventoryStock() {
                   </td>
                 </tr>
               ) : (
-                items.map((item) => (
+                items.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
                   <tr key={item.id} className={TABLE_STYLES.tr}>
                     <td className={TABLE_STYLES.td}>
                       <div className="font-semibold text-stone-900 dark:text-stone-100">{item.name}</div>
@@ -364,12 +367,19 @@ export default function InventoryStock() {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={Math.ceil(items.length / pageSize) || 1}
+          onPageChange={setCurrentPage}
+          totalRecords={items.length}
+          limit={pageSize}
+        />
       </div>
 
       {/* CREATE / EDIT ITEM MODAL */}
       {itemModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+          <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 {editingItem ? "Edit Inventory Item" : "New Inventory Item"}
@@ -518,7 +528,7 @@ export default function InventoryStock() {
       {/* CATEGORIES MANAGEMENT MODAL */}
       {categoryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+          <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 Manage Inventory Categories
@@ -576,7 +586,7 @@ export default function InventoryStock() {
       {/* MOVEMENTS AUDIT MODAL */}
       {movementsModalOpen && activeItemMovements && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">

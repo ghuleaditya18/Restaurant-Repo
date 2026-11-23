@@ -139,16 +139,16 @@ export default function Modal({
       <div
         ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
-        className={`relative w-full ${widthClass} my-8 rounded-2xl bg-white dark:bg-[#1C1917] shadow-2xl border border-stone-200/90 dark:border-stone-800 transition-all text-stone-900 dark:text-stone-100 flex flex-col max-h-[90vh]`}
+        className={`relative w-full ${widthClass} my-8 rounded-2xl bg-white dark:bg-[#101722] shadow-2xl border border-[#E5E9F0] dark:border-[#1E293B] transition-all text-stone-900 dark:text-stone-100 flex flex-col max-h-[90vh]`}
       >
         {/* Modal Header */}
-        <div className="flex items-start justify-between border-b border-stone-200/80 dark:border-stone-800 px-6 py-4.5 shrink-0">
+        <div className="flex items-start justify-between border-b border-[#E5E9F0] dark:border-[#1E293B] px-6 py-4.5 shrink-0">
           <div>
             <h3 id={ariaLabelledBy} className="text-lg font-semibold leading-6 text-stone-900 dark:text-stone-100">
               {title}
             </h3>
             {subtitle && (
-              <p className="mt-1 text-xs font-normal leading-4 text-stone-500 dark:text-stone-400">
+              <p className="mt-1 text-xs font-normal leading-4 text-stone-500 dark:text-[#8A9AB2]">
                 {subtitle}
               </p>
             )}
@@ -157,7 +157,7 @@ export default function Modal({
           <button
             type="button"
             onClick={handleRequestClose}
-            className="rounded-lg p-1.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+            className="rounded-lg p-1.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#151D29] transition cursor-pointer"
             aria-label="Close dialog"
           >
             <X size={18} />
@@ -171,7 +171,7 @@ export default function Modal({
 
         {/* Modal Footer (Optional) */}
         {footer && (
-          <div className="border-t border-stone-200/80 dark:border-stone-800 px-6 py-4 bg-stone-50/70 dark:bg-stone-900/50 rounded-b-2xl flex items-center justify-end gap-3 shrink-0">
+          <div className="border-t border-[#E5E9F0] dark:border-[#1E293B] px-6 py-4 bg-stone-50/70 dark:bg-[#151D29]/50 rounded-b-2xl flex items-center justify-end gap-3 shrink-0">
             {footer}
           </div>
         )}

@@ -35,8 +35,10 @@ import {
 // import of a missing export would).
 import * as menuService from "../services/menuService";
 import PageHeader from "../components/PageHeader";
-import AlertBanner from "../components/AlertBanner";
 import Modal from "../components/Modal";
+import StatCard from "../components/StatCard";
+import Pagination from "../components/Pagination";
+import { useNotification } from "../context/NotificationContext";
 
 // ==========================================
 // CONSTANTS
@@ -166,6 +168,7 @@ const validateCategoryForm = (form) => {
 // ==========================================
 
 export default function Menu() {
+  const { showSuccess, showUpdate, showDelete, showError } = useNotification();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
 
@@ -210,9 +213,11 @@ export default function Menu() {
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [availabilityFilter, setAvailabilityFilter] = useState("ALL");
 
-  // Notifications
-  const [pageError, setPageError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  // Pagination (10 per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const [categoryPage, setCategoryPage] = useState(1);
+  const categoryPageSize = 10;
 
   // ==========================================
   // LOAD MENU DATA
@@ -221,7 +226,6 @@ export default function Menu() {
   // "silent" refreshes data without showing the table loading state
   const loadMenu = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
-    setPageError("");
 
     try {
       const [categoryData, itemData] = await Promise.all([
@@ -232,23 +236,15 @@ export default function Menu() {
       setCategories(Array.isArray(categoryData) ? categoryData : []);
       setItems(Array.isArray(itemData) ? itemData : []);
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Load Menu");
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     loadMenu();
   }, [loadMenu]);
-
-  // Auto-dismiss the success message
-  useEffect(() => {
-    if (!successMessage) return undefined;
-
-    const timer = setTimeout(() => setSuccessMessage(""), 4000);
-    return () => clearTimeout(timer);
-  }, [successMessage]);
 
   // Release the temporary preview URL when it changes or on unmount
   useEffect(() => {
@@ -296,6 +292,18 @@ export default function Menu() {
     });
   }, [items, search, selectedCategory, availabilityFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredItems.slice(start, start + pageSize);
+  }, [filteredItems, currentPage, pageSize]);
+
+  const totalCategoryPages = Math.max(1, Math.ceil(categories.length / categoryPageSize));
+  const paginatedCategories = useMemo(() => {
+    const start = (categoryPage - 1) * categoryPageSize;
+    return categories.slice(start, start + categoryPageSize);
+  }, [categories, categoryPage, categoryPageSize]);
+
   const hasActiveFilters =
     Boolean(search.trim()) ||
     selectedCategory !== "ALL" ||
@@ -305,6 +313,7 @@ export default function Menu() {
     setSearch("");
     setSelectedCategory("ALL");
     setAvailabilityFilter("ALL");
+    setCurrentPage(1);
   };
 
   // ==========================================
@@ -375,7 +384,6 @@ export default function Menu() {
     setItemErrors({});
     setItemError("");
     resetImageState();
-    setSuccessMessage("");
     setShowItemModal(true);
   };
 
@@ -392,7 +400,6 @@ export default function Menu() {
     setItemErrors({});
     setItemError("");
     resetImageState();
-    setSuccessMessage("");
     setShowItemModal(true);
   };
 
@@ -517,15 +524,16 @@ export default function Menu() {
     resetImageState();
 
     if (imageWarning) {
-      setPageError(
+      showError(
         `Menu item saved, but the image was not saved: ${imageWarning} Edit the item to try again.`,
+        "Image Warning"
       );
     } else {
-      setSuccessMessage(
-        wasEditing
-          ? "Menu item updated successfully."
-          : "Menu item created successfully.",
-      );
+      if (wasEditing) {
+        showUpdate("Menu item updated successfully.", "Item Updated");
+      } else {
+        showSuccess("Menu item created successfully.", "Item Created");
+      }
     }
 
     await loadMenu({ silent: true });
@@ -539,9 +547,6 @@ export default function Menu() {
     if (availabilityUpdatingId) return;
 
     const newStatus = !item.is_available;
-
-    setPageError("");
-    setSuccessMessage("");
     setAvailabilityUpdatingId(item.id);
 
     try {
@@ -559,11 +564,12 @@ export default function Menu() {
         ),
       );
 
-      setSuccessMessage(
+      showUpdate(
         `${item.name} is now ${newStatus ? "available" : "unavailable"}.`,
+        "Availability Updated"
       );
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Update Failed");
     } finally {
       setAvailabilityUpdatingId(null);
     }
@@ -588,9 +594,9 @@ export default function Menu() {
 
           if (viewingItemId === item.id) setViewingItemId(null);
 
-          setSuccessMessage("Menu item deleted successfully.");
+          showDelete("Menu item deleted successfully.", "Item Deleted");
         } catch (error) {
-          setPageError(getErrorMessage(error));
+          showError(getErrorMessage(error), "Delete Failed");
         }
       },
     });
@@ -677,10 +683,10 @@ export default function Menu() {
     try {
       if (editingCategory) {
         await updateMenuCategory(editingCategory.id, categoryData);
-        setSuccessMessage("Category updated successfully.");
+        showUpdate("Category updated successfully.", "Category Updated");
       } else {
         await createMenuCategory(categoryData);
-        setSuccessMessage("Category created successfully.");
+        showSuccess("Category created successfully.", "Category Created");
       }
 
       setShowCategoryForm(false);
@@ -710,8 +716,9 @@ export default function Menu() {
     try {
       await updateMenuCategory(category.id, { is_active: newStatus });
 
-      setSuccessMessage(
+      showUpdate(
         `Category ${newStatus ? "activated" : "deactivated"} successfully.`,
+        "Category Status Updated"
       );
 
       await loadMenu({ silent: true });
@@ -737,7 +744,7 @@ export default function Menu() {
         try {
           await deleteMenuCategory(category.id);
 
-          setSuccessMessage("Category deleted successfully.");
+          showDelete("Category deleted successfully.", "Category Deleted");
 
           // Reset the category filter if it pointed at the deleted category
           if (selectedCategory === String(category.id)) {
@@ -784,7 +791,7 @@ export default function Menu() {
             <button
               type="button"
               onClick={openCategoryManager}
-              className="flex items-center gap-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#1C1917] px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer transition shadow-2xs"
+              className="flex items-center gap-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer transition shadow-2xs"
             >
               <Tags size={17} />
               <span>Manage Categories</span>
@@ -793,7 +800,7 @@ export default function Menu() {
             <button
               type="button"
               onClick={openAddItemModal}
-              className="flex items-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer transition"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer transition"
             >
               <Plus size={17} />
               <span>Add Menu Item</span>
@@ -802,49 +809,42 @@ export default function Menu() {
         }
       />
 
-      {/* SUCCESS MESSAGE */}
-      {successMessage && (
-        <AlertBanner
-          type="success"
-          message={successMessage}
-          onDismiss={() => setSuccessMessage("")}
-        />
-      )}
-
-      {/* ERROR MESSAGE */}
-      {pageError && (
-        <AlertBanner
-          type="error"
-          message={pageError}
-          onDismiss={() => setPageError("")}
-        />
-      )}
-
       {/* SUMMARY CARDS */}
 
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <SummaryCard
+      <div className="mb-4 grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-3.5">
+        <StatCard
           title="Total Menu Items"
           value={items.length}
           icon={<Utensils size={16} />}
           active={availabilityFilter === "ALL"}
-          onClick={() => setAvailabilityFilter("ALL")}
+          onClick={() => {
+            setAvailabilityFilter("ALL");
+            setCurrentPage(1);
+          }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Available Items"
           value={availableCount}
           icon={<ChefHat size={16} />}
+          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={availabilityFilter === "AVAILABLE"}
-          onClick={() => setAvailabilityFilter("AVAILABLE")}
+          onClick={() => {
+            setAvailabilityFilter("AVAILABLE");
+            setCurrentPage(1);
+          }}
         />
 
-        <SummaryCard
+        <StatCard
           title="Unavailable Items"
           value={unavailableCount}
           icon={<Power size={16} />}
+          badgeColor="bg-stone-100 text-stone-600 border-stone-200"
           active={availabilityFilter === "UNAVAILABLE"}
-          onClick={() => setAvailabilityFilter("UNAVAILABLE")}
+          onClick={() => {
+            setAvailabilityFilter("UNAVAILABLE");
+            setCurrentPage(1);
+          }}
         />
       </div>
 
@@ -855,7 +855,7 @@ export default function Menu() {
 
         <div className="flex flex-col gap-3 border-b border-[#E7E5E4] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-[#1C1917]">
+            <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
               Restaurant Menu
             </h2>
 
@@ -877,16 +877,22 @@ export default function Menu() {
                 placeholder="Search menu items..."
                 aria-label="Search menu items"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-[#E7E5E4] bg-white py-2 pl-9 pr-8 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-60"
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full rounded-lg border border-[#E7E5E4] bg-white py-2 pl-9 pr-8 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
               />
 
               {search && (
                 <button
                   type="button"
-                  onClick={() => setSearch("")}
+                  onClick={() => {
+                    setSearch("");
+                    setCurrentPage(1);
+                  }}
                   aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-[#1C1917]"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-stone-900 dark:text-stone-100"
                 >
                   <X size={15} />
                 </button>
@@ -896,8 +902,11 @@ export default function Menu() {
             <select
               value={selectedCategory}
               aria-label="Filter by category"
-              onChange={(event) => setSelectedCategory(event.target.value)}
-              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+              onChange={(event) => {
+                setSelectedCategory(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Categories</option>
 
@@ -911,8 +920,11 @@ export default function Menu() {
             <select
               value={availabilityFilter}
               aria-label="Filter by availability"
-              onChange={(event) => setAvailabilityFilter(event.target.value)}
-              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+              onChange={(event) => {
+                setAvailabilityFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Items</option>
               <option value="AVAILABLE">Available</option>
@@ -925,7 +937,7 @@ export default function Menu() {
               disabled={loading}
               title="Refresh menu"
               aria-label="Refresh menu"
-              className="flex items-center justify-center rounded-lg border border-[#E7E5E4] px-3 py-2 text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
+              className="flex items-center justify-center rounded-lg border border-[#E7E5E4] px-3 py-2 text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] disabled:opacity-60"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -980,7 +992,7 @@ export default function Menu() {
                   </td>
                 </tr>
               ) : (
-                filteredItems.map((item) => (
+                paginatedItems.map((item) => (
                   <tr key={item.id} className="transition hover:bg-[#FAF9F6]">
                     {/* ITEM (image + name + description) */}
                     <td className="px-4 py-3">
@@ -993,7 +1005,7 @@ export default function Menu() {
                         />
 
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-[#1C1917]">
+                          <p className="truncate text-sm font-medium text-stone-900 dark:text-stone-100">
                             {item.name}
                           </p>
 
@@ -1009,12 +1021,12 @@ export default function Menu() {
                       </div>
                     </td>
 
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-[#1C1917] md:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-stone-900 dark:text-stone-100 md:table-cell">
                       {item.category_name || "—"}
                     </td>
 
                     <td className="whitespace-nowrap px-4 py-3">
-                      <span className="inline-flex items-center text-sm font-semibold text-[#1C1917]">
+                      <span className="inline-flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                         <IndianRupee size={13} />
                         {formatPrice(item.price)}
                       </span>
@@ -1034,7 +1046,7 @@ export default function Menu() {
                           onClick={() => setViewingItemId(item.id)}
                           title="View details"
                           aria-label={`View ${item.name}`}
-                          className="rounded-lg p-2 text-[#1C1917] hover:bg-stone-100 hover:text-stone-900"
+                          className="rounded-lg p-2 text-stone-900 dark:text-stone-100 hover:bg-stone-100 hover:text-stone-900"
                         >
                           <Eye size={16} />
                         </button>
@@ -1044,7 +1056,7 @@ export default function Menu() {
                           onClick={() => openEditItemModal(item)}
                           title="Edit menu item"
                           aria-label={`Edit ${item.name}`}
-                          className="rounded-lg p-2 text-[#1C1917] hover:bg-stone-100 hover:text-stone-900"
+                          className="rounded-lg p-2 text-stone-900 dark:text-stone-100 hover:bg-stone-100 hover:text-stone-900"
                         >
                           <Pencil size={16} />
                         </button>
@@ -1065,7 +1077,7 @@ export default function Menu() {
                           }: ${item.name}`}
                           className={`rounded-lg p-2 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 ${
                             item.is_available
-                              ? "text-[#1C1917]"
+                              ? "text-stone-900 dark:text-stone-100"
                               : "text-[#78716C]"
                           }`}
                         >
@@ -1096,6 +1108,17 @@ export default function Menu() {
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION (10 per page) */}
+        <div className="p-4 border-t border-[#E7E5E4] dark:border-stone-800">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalRecords={filteredItems.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setCurrentPage(p)}
+          />
+        </div>
       </div>
 
       {/* ==================================
@@ -1119,7 +1142,7 @@ export default function Menu() {
 
           <div className="mb-4 flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="break-words text-lg font-semibold text-[#1C1917]">
+              <h3 className="break-words text-lg font-semibold text-stone-900 dark:text-stone-100">
                 {viewingItem.name}
               </h3>
 
@@ -1139,7 +1162,7 @@ export default function Menu() {
               Description
             </p>
 
-            <p className="whitespace-pre-line break-words text-sm text-[#1C1917]">
+            <p className="whitespace-pre-line break-words text-sm text-stone-900 dark:text-stone-100">
               {viewingItem.description || "No description provided."}
             </p>
           </div>
@@ -1180,7 +1203,7 @@ export default function Menu() {
                 setViewingItemId(null);
                 openEditItemModal(item);
               }}
-              className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-4 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9]"
+              className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-4 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9]"
             >
               <Pencil size={15} />
               Edit
@@ -1189,7 +1212,7 @@ export default function Menu() {
             <button
               type="button"
               onClick={() => setViewingItemId(null)}
-              className="rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer"
+              className="rounded-lg bg-[#F59E0B] px-5 py-2 text-sm font-bold text-stone-900 dark:text-stone-100 shadow-xs hover:bg-[#E5A910] cursor-pointer"
             >
               Close
             </button>
@@ -1214,7 +1237,7 @@ export default function Menu() {
             {/* FOOD IMAGE */}
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-[#1C1917]">
+              <label className="mb-1.5 block text-sm font-medium text-stone-900 dark:text-stone-100">
                 Food Image
                 <span className="ml-1 text-xs font-normal text-[#78716C]">
                   (optional)
@@ -1234,7 +1257,7 @@ export default function Menu() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-3 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9]"
+                      className="flex items-center gap-2 rounded-lg border border-[#E7E5E4] px-3 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9]"
                     >
                       <ImagePlus size={15} />
                       {formImagePreview ? "Change Image" : "Choose Image"}
@@ -1286,7 +1309,7 @@ export default function Menu() {
             <div>
               <label
                 htmlFor="item-category_id"
-                className="mb-1.5 block text-sm font-medium text-[#1C1917]"
+                className="mb-1.5 block text-sm font-medium text-stone-900 dark:text-stone-100"
               >
                 Category
               </label>
@@ -1297,10 +1320,10 @@ export default function Menu() {
                 value={itemForm.category_id}
                 onChange={handleItemChange}
                 aria-invalid={Boolean(itemErrors.category_id)}
-                className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none ${
+                className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none ${
                   itemErrors.category_id
                     ? "border-red-400"
-                    : "border-[#E7E5E4] focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+                    : "border-[#E7E5E4] focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
                 }`}
               >
                 <option value="">Select category</option>
@@ -1350,7 +1373,7 @@ export default function Menu() {
             <div>
               <label
                 htmlFor="item-description"
-                className="mb-1.5 block text-sm font-medium text-[#1C1917]"
+                className="mb-1.5 block text-sm font-medium text-stone-900 dark:text-stone-100"
               >
                 Description
                 <span className="ml-1 text-xs font-normal text-[#78716C]">
@@ -1365,7 +1388,7 @@ export default function Menu() {
                 onChange={handleItemChange}
                 rows={3}
                 placeholder="Enter item description"
-                className="w-full resize-none rounded-lg border border-[#E7E5E4] px-3 py-2.5 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+                className="w-full resize-none rounded-lg border border-[#E7E5E4] px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               />
             </div>
 
@@ -1374,7 +1397,7 @@ export default function Menu() {
                 type="button"
                 onClick={closeItemModal}
                 disabled={saving}
-                className="rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
+                className="rounded-lg border border-[#E7E5E4] px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -1384,7 +1407,7 @@ export default function Menu() {
                 disabled={
                   saving || !categories.some((category) => category.is_active)
                 }
-                className="rounded-lg bg-[#F5B716] px-5 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving
                   ? "Saving..."
@@ -1418,7 +1441,7 @@ export default function Menu() {
             <button
               type="button"
               onClick={openAddCategoryForm}
-              className="flex items-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer"
             >
               <FolderPlus size={16} />
               Add Category
@@ -1431,13 +1454,13 @@ export default function Menu() {
                 No categories available. Create your first category.
               </p>
             ) : (
-              categories.map((category) => (
+              paginatedCategories.map((category) => (
                 <div
                   key={category.id}
                   className="flex items-center justify-between gap-3 rounded-lg border border-[#E7E5E4] p-4"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium text-[#1C1917]">
+                    <p className="font-medium text-stone-900 dark:text-stone-100">
                       {category.name}
                     </p>
 
@@ -1462,7 +1485,7 @@ export default function Menu() {
                       onClick={() => openEditCategoryForm(category)}
                       title="Edit category"
                       aria-label={`Edit ${category.name}`}
-                      className="rounded-lg p-2 text-[#1C1917] hover:bg-stone-100 hover:text-stone-900"
+                      className="rounded-lg p-2 text-stone-900 dark:text-stone-100 hover:bg-stone-100 hover:text-stone-900"
                     >
                       <Pencil size={16} />
                     </button>
@@ -1480,7 +1503,7 @@ export default function Menu() {
                         category.is_active ? "Deactivate" : "Activate"
                       } ${category.name}`}
                       className={`rounded-lg p-2 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 ${
-                        category.is_active ? "text-[#1C1917]" : "text-[#78716C]"
+                        category.is_active ? "text-stone-900 dark:text-stone-100" : "text-[#78716C]"
                       }`}
                     >
                       <Power size={16} />
@@ -1501,11 +1524,23 @@ export default function Menu() {
             )}
           </div>
 
+          {categories.length > categoryPageSize && (
+            <div className="pt-3 border-t border-[#E7E5E4] dark:border-stone-800">
+              <Pagination
+                currentPage={categoryPage}
+                totalPages={totalCategoryPages}
+                totalRecords={categories.length}
+                pageSize={categoryPageSize}
+                onPageChange={(p) => setCategoryPage(p)}
+              />
+            </div>
+          )}
+
           {/* CATEGORY FORM */}
 
           {showCategoryForm && (
             <div className="mt-5 rounded-lg border border-[#E7E5E4] bg-[#FAF9F6] p-4">
-              <h3 className="mb-4 font-semibold text-[#1C1917]">
+              <h3 className="mb-4 font-semibold text-stone-900 dark:text-stone-100">
                 {editingCategory ? "Edit Category" : "Create Category"}
               </h3>
 
@@ -1530,7 +1565,7 @@ export default function Menu() {
                 <div>
                   <label
                     htmlFor="category-description"
-                    className="mb-1.5 block text-sm font-medium text-[#1C1917]"
+                    className="mb-1.5 block text-sm font-medium text-stone-900 dark:text-stone-100"
                   >
                     Description
                     <span className="ml-1 text-xs font-normal text-[#78716C]">
@@ -1545,7 +1580,7 @@ export default function Menu() {
                     onChange={handleCategoryChange}
                     placeholder="Category description"
                     rows={2}
-                    className="w-full resize-none rounded-lg border border-[#E7E5E4] bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+                    className="w-full resize-none rounded-lg border border-[#E7E5E4] bg-white px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
                   />
                 </div>
 
@@ -1557,7 +1592,7 @@ export default function Menu() {
                       setEditingCategory(null);
                     }}
                     disabled={categorySaving}
-                    className="rounded-lg border border-[#E7E5E4] bg-white px-4 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
+                    className="rounded-lg border border-[#E7E5E4] bg-white px-4 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] disabled:opacity-60"
                   >
                     Cancel
                   </button>
@@ -1565,7 +1600,7 @@ export default function Menu() {
                   <button
                     type="submit"
                     disabled={categorySaving}
-                    className="rounded-lg bg-[#F5B716] px-4 py-2 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer disabled:opacity-60"
+                    className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer disabled:opacity-60"
                   >
                     {categorySaving
                       ? "Saving..."
@@ -1593,14 +1628,14 @@ export default function Menu() {
           maxWidth="max-w-md"
           layer="z-[60]"
         >
-          <p className="text-sm text-[#1C1917]">{confirmState.message}</p>
+          <p className="text-sm text-stone-900 dark:text-stone-100">{confirmState.message}</p>
 
           <div className="mt-6 flex justify-end gap-3">
             <button
               type="button"
               onClick={() => setConfirmState(null)}
               disabled={confirmBusy}
-              className="rounded-lg border border-[#E7E5E4] px-4 py-2 text-sm font-medium text-[#1C1917] hover:bg-[#FAFAF9] disabled:opacity-60"
+              className="rounded-lg border border-[#E7E5E4] px-4 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] disabled:opacity-60"
             >
               Cancel
             </button>
@@ -1609,7 +1644,7 @@ export default function Menu() {
               type="button"
               onClick={runConfirmedAction}
               disabled={confirmBusy}
-              className="rounded-lg bg-[#F5B716] px-4 py-2 text-sm font-bold text-[#1C1917] shadow-xs hover:bg-[#E5A910] cursor-pointer disabled:opacity-60"
+              className="rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer disabled:opacity-60"
             >
               {confirmBusy ? "Please wait..." : confirmState.confirmLabel}
             </button>
@@ -1717,36 +1752,10 @@ function DetailItem({ label, value }) {
         {label}
       </p>
 
-      <p className="break-words text-sm font-medium text-[#1C1917]">
+      <p className="break-words text-sm font-medium text-stone-900 dark:text-stone-100">
         {value ?? "—"}
       </p>
     </div>
-  );
-}
-
-function SummaryCard({ title, value, icon, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={`Show ${title.toLowerCase()}`}
-      className={`flex w-full items-center justify-between gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
-        active
-          ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
-          : "border-stone-200/90 bg-white hover:border-stone-300"
-      }`}
-    >
-      <div>
-        <p className="text-xs font-medium text-[#78716C]">{title}</p>
-
-        <p className="mt-0.5 text-xl font-semibold leading-tight text-[#1C1917]">
-          {value}
-        </p>
-      </div>
-
-      <div className="rounded-xl bg-[#FEF9C3] p-2 text-amber-900 border border-yellow-200">{icon}</div>
-    </button>
   );
 }
 
@@ -1799,7 +1808,7 @@ function FormField({
     <div>
       <label
         htmlFor={id}
-        className="mb-1.5 block text-sm font-medium text-[#1C1917]"
+        className="mb-1.5 block text-sm font-medium text-stone-900 dark:text-stone-100"
       >
         {label}
       </label>
@@ -1816,8 +1825,8 @@ function FormField({
         step={step}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none ${
-          error ? "border-red-400" : "border-[#E7E5E4] focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30"
+        className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none ${
+          error ? "border-red-400" : "border-[#E7E5E4] focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
         }`}
       />
 

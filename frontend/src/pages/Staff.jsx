@@ -8,7 +8,6 @@ import {
   Pencil,
   Power,
   Trash2,
-  X,
   RefreshCw,
   Mail,
   Phone,
@@ -25,10 +24,16 @@ import {
   updateStaff,
   updateStaffStatus,
   deleteStaff,
+  uploadStaffImage,
+  deleteStaffImage,
 } from "../services/staffService";
+import ProfilePhotoUpload from "../components/ProfilePhotoUpload";
+import AuthenticatedImage from "../components/AuthenticatedImage";
 import { useNotification } from "../context/NotificationContext";
 import PageHeader from "../components/PageHeader";
-import AlertBanner from "../components/AlertBanner";
+import Modal from "../components/Modal";
+import StatCard from "../components/StatCard";
+import Pagination from "../components/Pagination";
 
 // Initial state for add/edit form
 const EMPTY_FORM = {
@@ -111,7 +116,7 @@ const toDateInputValue = (isoString) => {
 };
 
 export default function Staff() {
-  const { showError, showInfo, confirm } = useNotification();
+  const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -130,37 +135,34 @@ export default function Staff() {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [isImageRemoved, setIsImageRemoved] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const [pageError, setPageError] = useState("");
+  // Pagination (10 per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
   const [formError, setFormError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
 
   const loadStaff = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
-    setPageError("");
 
     try {
       const data = await getAllStaff();
       setStaff(Array.isArray(data) ? data : []);
     } catch (error) {
-      setPageError(getErrorMessage(error));
+      showError(getErrorMessage(error), "Failed to Load Staff");
     } finally {
       if (!silent) setLoading(false);
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     loadStaff();
   }, [loadStaff]);
-
-  useEffect(() => {
-    if (!successMessage) return undefined;
-    const timer = setTimeout(() => setSuccessMessage(""), 4000);
-    return () => clearTimeout(timer);
-  }, [successMessage]);
 
   const closeModal = useCallback(() => {
     if (saving) return;
@@ -169,6 +171,8 @@ export default function Staff() {
     setForm(EMPTY_FORM);
     setFieldErrors({});
     setFormError("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
   }, [saving]);
 
   const modalOpen = showModal || showViewModal;
@@ -218,11 +222,18 @@ export default function Staff() {
     });
   }, [staff, search, statusFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / pageSize));
+  const paginatedStaff = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredStaff.slice(start, start + pageSize);
+  }, [filteredStaff, currentPage, pageSize]);
+
   const hasActiveFilters = Boolean(search.trim()) || statusFilter !== "ALL";
 
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("ALL");
+    setCurrentPage(1);
   };
 
   const openAddModal = () => {
@@ -230,7 +241,8 @@ export default function Staff() {
     setForm(EMPTY_FORM);
     setFieldErrors({});
     setFormError("");
-    setSuccessMessage("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
     setShowModal(true);
   };
 
@@ -249,7 +261,8 @@ export default function Staff() {
 
     setFieldErrors({});
     setFormError("");
-    setSuccessMessage("");
+    setSelectedImageFile(null);
+    setIsImageRemoved(false);
     setShowModal(true);
   };
 
@@ -318,12 +331,27 @@ export default function Staff() {
     };
 
     try {
+      let staffId;
       if (editingStaff) {
         await updateStaff(editingStaff.id, staffData);
-        setSuccessMessage(`${staffData.full_name}'s details updated successfully.`);
+        staffId = editingStaff.id;
+
+        if (selectedImageFile) {
+          await uploadStaffImage(staffId, selectedImageFile);
+        } else if (isImageRemoved) {
+          await deleteStaffImage(staffId);
+        }
+
+        showUpdate(`${staffData.full_name}'s details updated successfully.`, "Staff Updated");
       } else {
-        await createStaff(staffData);
-        setSuccessMessage(`Staff member ${staffData.full_name} registered successfully.`);
+        const created = await createStaff(staffData);
+        staffId = created?.id;
+
+        if (selectedImageFile && staffId) {
+          await uploadStaffImage(staffId, selectedImageFile);
+        }
+
+        showSuccess(`Staff member ${staffData.full_name} registered successfully.`, "Staff Created");
       }
 
       closeModal();
@@ -350,8 +378,6 @@ export default function Staff() {
 
     if (!confirmed) return;
 
-    setPageError("");
-    setSuccessMessage("");
     setStatusUpdatingId(member.id);
 
     try {
@@ -366,13 +392,9 @@ export default function Staff() {
         previous.map((item) => (item.id === member.id ? updatedMember : item)),
       );
 
-      const msg = `${member.full_name} has been ${action}d successfully.`;
-      setSuccessMessage(msg);
-      showInfo(msg, "Staff Status Updated");
+      showUpdate(`${member.full_name} has been ${action}d successfully.`, "Staff Status Updated");
     } catch (error) {
-      const msg = getErrorMessage(error);
-      setPageError(msg);
-      showError(msg, "Status Update Failed");
+      showError(getErrorMessage(error), "Status Update Failed");
     } finally {
       setStatusUpdatingId(null);
     }
@@ -391,20 +413,15 @@ export default function Staff() {
 
     if (!confirmed) return;
 
-    setPageError("");
-    setSuccessMessage("");
     setDeletingId(member.id);
 
     try {
       const result = await deleteStaff(member.id);
       setStaff((previous) => previous.filter((item) => item.id !== member.id));
       const msg = result?.message || `${member.full_name} was deleted successfully.`;
-      setSuccessMessage(msg);
-      showError(msg, "Staff Member Deleted");
+      showDelete(msg, "Staff Member Deleted");
     } catch (error) {
-      const msg = getErrorMessage(error);
-      setPageError(msg);
-      showError(msg, "Delete Failed");
+      showError(getErrorMessage(error), "Delete Failed");
     } finally {
       setDeletingId(null);
     }
@@ -419,7 +436,7 @@ export default function Staff() {
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-4 py-2.5 text-sm font-bold text-[#1C1917] shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
           >
             <Plus size={17} />
             <span>Add New Staff</span>
@@ -427,26 +444,8 @@ export default function Staff() {
         }
       />
 
-      {/* Success Message */}
-      {successMessage && (
-        <AlertBanner
-          type="success"
-          message={successMessage}
-          onDismiss={() => setSuccessMessage("")}
-        />
-      )}
-
-      {/* Error Message */}
-      {pageError && (
-        <AlertBanner
-          type="error"
-          message={pageError}
-          onDismiss={() => setPageError("")}
-        />
-      )}
-
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-3.5">
         <StatCard
           title="Total Staff"
           value={staff.length}
@@ -475,11 +474,11 @@ export default function Staff() {
       </div>
 
       {/* Staff Table Container */}
-      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
-        <div className="flex flex-col gap-3 border-b border-stone-200/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
+        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-bold text-[#1C1917]">Staff Directory</h2>
-            <p className="mt-0.5 text-xs text-stone-500">
+            <h2 className="font-bold text-stone-900 dark:text-white">Staff Directory</h2>
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredStaff.length} {filteredStaff.length === 1 ? "employee" : "employees"} listed
             </p>
           </div>
@@ -488,15 +487,18 @@ export default function Staff() {
             <div className="relative">
               <Search
                 size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
                 placeholder="Search name, code, designation..."
                 aria-label="Search staff"
-                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F5B716] focus:ring-2 focus:ring-[#F5B716]/30 sm:w-64"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-64"
               />
             </div>
 
@@ -506,7 +508,7 @@ export default function Staff() {
               disabled={loading}
               title="Refresh staff list"
               aria-label="Refresh staff list"
-              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white p-2 text-stone-600 transition hover:bg-stone-50 disabled:opacity-60 cursor-pointer"
+              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-2 text-stone-600 dark:text-[#8A9AB2] transition hover:bg-stone-50 dark:hover:bg-[#101722] disabled:opacity-60 cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -516,7 +518,7 @@ export default function Staff() {
         {/* Staff Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
+            <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
                 <th className="px-4 py-3">Employee</th>
                 <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Code</th>
@@ -527,12 +529,12 @@ export default function Staff() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-stone-100 text-sm">
+            <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-sm">
               {loading ? (
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     Loading staff records...
                   </td>
@@ -541,14 +543,14 @@ export default function Staff() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     <p>No staff members found.</p>
                     {hasActiveFilters && (
                       <button
                         type="button"
                         onClick={clearFilters}
-                        className="mt-2 font-semibold text-amber-800 hover:underline cursor-pointer"
+                        className="mt-2 font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
                       >
                         Clear search and filters
                       </button>
@@ -556,23 +558,27 @@ export default function Staff() {
                   </td>
                 </tr>
               ) : (
-                filteredStaff.map((member) => (
-                  <tr key={member.id} className="transition hover:bg-stone-50/70">
+                paginatedStaff.map((member) => (
+                  <tr key={member.id} className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40">
                     {/* Employee Details */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] text-sm font-bold text-[#854D0E] shadow-2xs">
-                          {(member.full_name || "?").charAt(0).toUpperCase()}
+                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-sm shadow-2xs">
+                          <AuthenticatedImage
+                            src={member.image_url}
+                            alt={member.full_name}
+                            fallback={(member.full_name || "?").charAt(0).toUpperCase()}
+                          />
                         </div>
 
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-stone-900">
+                          <p className="truncate font-semibold text-stone-900 dark:text-white">
                             {member.full_name}
                           </p>
-                          <p className="truncate text-xs text-stone-500">
+                          <p className="truncate text-xs text-stone-500 dark:text-stone-400">
                             {member.email}
                           </p>
-                          <p className="truncate text-xs text-stone-400 md:hidden">
+                          <p className="truncate text-xs text-stone-400 dark:text-stone-500 md:hidden">
                             {[member.employee_code, member.designation]
                               .filter(Boolean)
                               .join(" • ")}
@@ -582,17 +588,17 @@ export default function Staff() {
                     </td>
 
                     {/* Employee Code */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 font-mono text-xs text-stone-700 md:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 font-mono text-xs text-stone-700 dark:text-stone-300 md:table-cell">
                       {member.employee_code || "—"}
                     </td>
 
                     {/* Designation */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm font-medium text-stone-700 md:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-300 md:table-cell">
                       {member.designation || "—"}
                     </td>
 
                     {/* Joining Date */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-stone-500 lg:table-cell">
+                    <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-stone-500 dark:text-stone-400 lg:table-cell">
                       {formatDate(member.joining_date)}
                     </td>
 
@@ -601,8 +607,8 @@ export default function Staff() {
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           member.is_active
-                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            : "bg-stone-100 text-stone-500 border border-stone-200"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+                            : "bg-stone-100 text-stone-500 border border-stone-200 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-400"
                         }`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${member.is_active ? "bg-emerald-600" : "bg-stone-400"}`} />
@@ -618,7 +624,7 @@ export default function Staff() {
                           onClick={() => openViewModal(member)}
                           title="View staff details"
                           aria-label={`View ${member.full_name}`}
-                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
                           <Eye size={16} />
                         </button>
@@ -628,7 +634,7 @@ export default function Staff() {
                           onClick={() => openEditModal(member)}
                           title="Edit staff"
                           aria-label={`Edit ${member.full_name}`}
-                          className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
                           <Pencil size={16} />
                         </button>
@@ -664,294 +670,235 @@ export default function Staff() {
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION (10 per page) */}
+        <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalRecords={filteredStaff.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setCurrentPage(p)}
+          />
+        </div>
       </div>
 
       {/* Add / Edit Staff Modal */}
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !saving) closeModal();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="staff-modal-title"
-            className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-          >
-            {/* Modal Header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
-              <div>
-                <h2
-                  id="staff-modal-title"
-                  className="text-lg font-bold text-[#1C1917]"
-                >
-                  {editingStaff ? "Edit Staff Details" : "Add New Staff"}
-                </h2>
-
-                <p className="mt-0.5 text-xs text-stone-500">
-                  {editingStaff
-                    ? "Update employee information."
-                    : "Register a new restaurant staff account."}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                disabled={saving}
-                aria-label="Close"
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
-              >
-                <X size={18} />
-              </button>
+      <Modal
+        isOpen={showModal}
+        onClose={closeModal}
+        title={editingStaff ? "Edit Staff Details" : "Add New Staff"}
+        subtitle={
+          editingStaff
+            ? "Update employee information."
+            : "Register a new restaurant staff account."
+        }
+        size="md"
+      >
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {formError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300"
+            >
+              {formError}
             </div>
+          )}
 
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit} noValidate className="space-y-4 p-6">
-              {formError && (
-                <div
-                  role="alert"
-                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-medium text-red-700"
-                >
-                  {formError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormField
-                  label="Full Name"
-                  icon={<Users size={16} />}
-                  name="full_name"
-                  value={form.full_name}
-                  onChange={handleChange}
-                  placeholder="e.g. Amit Kumar"
-                  error={fieldErrors.full_name}
-                  maxLength={100}
-                  autoComplete="name"
-                />
-
-                <FormField
-                  label="Email Address"
-                  icon={<Mail size={16} />}
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  onChange={handleChange}
-                  placeholder="employee@dineflow.com"
-                  error={fieldErrors.email}
-                  autoComplete="off"
-                />
-
-                <FormField
-                  label="Employee Code"
-                  icon={<Hash size={16} />}
-                  name="employee_code"
-                  value={form.employee_code}
-                  onChange={handleChange}
-                  placeholder="e.g. EMP-101"
-                  error={fieldErrors.employee_code}
-                  autoComplete="off"
-                />
-
-                <FormField
-                  label="Phone Number"
-                  icon={<Phone size={16} />}
-                  name="phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={handleChange}
-                  placeholder="e.g. 9876543210"
-                  error={fieldErrors.phone}
-                  autoComplete="tel"
-                  maxLength={10}
-                  inputMode="numeric"
-                />
-
-                <FormField
-                  label="Designation"
-                  icon={<Briefcase size={16} />}
-                  name="designation"
-                  value={form.designation}
-                  onChange={handleChange}
-                  placeholder="e.g. Server, Chef, Bartender"
-                  error={fieldErrors.designation}
-                  autoComplete="off"
-                />
-
-                <FormField
-                  label="Joining Date"
-                  icon={<CalendarDays size={16} />}
-                  name="joining_date"
-                  type="date"
-                  value={form.joining_date}
-                  onChange={handleChange}
-                  error={fieldErrors.joining_date}
-                  optional
-                />
-              </div>
-
-              <div className="flex flex-col-reverse justify-end gap-3 border-t border-stone-100 pt-4 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  disabled={saving}
-                  className="rounded-lg border border-stone-300 bg-white px-5 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-[#F5B716] px-5 py-2 text-sm font-bold text-[#1C1917] hover:bg-[#E5A910] disabled:opacity-60 transition cursor-pointer shadow-xs"
-                >
-                  {saving
-                    ? "Saving..."
-                    : editingStaff
-                      ? "Save Changes"
-                      : "Create Staff"}
-                </button>
-              </div>
-            </form>
+          <div className="flex justify-center pb-2">
+            <ProfilePhotoUpload
+              currentImageUrl={editingStaff?.image_url}
+              name={form.full_name}
+              selectedFile={selectedImageFile}
+              onImageSelected={(file) => {
+                setSelectedImageFile(file);
+                setIsImageRemoved(false);
+              }}
+              onImageRemoved={() => {
+                setSelectedImageFile(null);
+                setIsImageRemoved(true);
+              }}
+              isRemoved={isImageRemoved}
+              disabled={saving}
+              onError={(msg) => showError(msg, "Invalid Photo")}
+            />
           </div>
-        </div>
-      )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField
+              label="Full Name"
+              icon={<Users size={16} />}
+              name="full_name"
+              value={form.full_name}
+              onChange={handleChange}
+              placeholder="e.g. Amit Kumar"
+              error={fieldErrors.full_name}
+              maxLength={100}
+              autoComplete="name"
+            />
+
+            <FormField
+              label="Email Address"
+              icon={<Mail size={16} />}
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={handleChange}
+              placeholder="employee@dineflow.com"
+              error={fieldErrors.email}
+              autoComplete="off"
+            />
+
+            <FormField
+              label="Employee Code"
+              icon={<Hash size={16} />}
+              name="employee_code"
+              value={form.employee_code}
+              onChange={handleChange}
+              placeholder="e.g. EMP-101"
+              error={fieldErrors.employee_code}
+              autoComplete="off"
+            />
+
+            <FormField
+              label="Phone Number"
+              icon={<Phone size={16} />}
+              name="phone"
+              type="tel"
+              value={form.phone}
+              onChange={handleChange}
+              placeholder="e.g. 9876543210"
+              error={fieldErrors.phone}
+              autoComplete="tel"
+              maxLength={10}
+              inputMode="numeric"
+            />
+
+            <FormField
+              label="Designation"
+              icon={<Briefcase size={16} />}
+              name="designation"
+              value={form.designation}
+              onChange={handleChange}
+              placeholder="e.g. Server, Chef, Bartender"
+              error={fieldErrors.designation}
+              autoComplete="off"
+            />
+
+            <FormField
+              label="Joining Date"
+              icon={<CalendarDays size={16} />}
+              name="joining_date"
+              type="date"
+              value={form.joining_date}
+              onChange={handleChange}
+              error={fieldErrors.joining_date}
+              optional
+            />
+          </div>
+
+          <div className="flex flex-col-reverse justify-end gap-3 border-t border-stone-100 dark:border-stone-800 pt-4 sm:flex-row">
+            <button
+              type="button"
+              onClick={closeModal}
+              disabled={saving}
+              className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#29231F] px-5 py-2 text-sm font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-5 py-2 text-sm font-bold text-[#0D1420] hover:opacity-95 disabled:opacity-60 transition cursor-pointer shadow-xs"
+            >
+              {saving
+                ? "Saving..."
+                : editingStaff
+                  ? "Save Changes"
+                  : "Create Staff"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* View Staff Modal */}
-      {showViewModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-2xs"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeViewModal();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="view-modal-title"
-            className="my-auto w-full max-w-lg rounded-2xl border border-stone-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
-              <div>
-                <h2
-                  id="view-modal-title"
-                  className="text-lg font-bold text-[#1C1917]"
-                >
-                  Staff Member Details
-                </h2>
-                <p className="mt-0.5 text-xs text-stone-500">
-                  Profile information and employment credentials
-                </p>
+      <Modal
+        isOpen={showViewModal}
+        onClose={closeViewModal}
+        title="Staff Member Details"
+        subtitle="Profile information and employment credentials"
+        size="md"
+      >
+        <div>
+          {viewLoading ? (
+            <p className="py-10 text-center text-sm text-stone-500 dark:text-stone-400">
+              Loading staff details...
+            </p>
+          ) : viewError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:border-red-900 dark:text-red-300"
+            >
+              {viewError}
+            </p>
+          ) : viewingStaff ? (
+            <div className="space-y-5">
+              {/* Employee Profile Header */}
+              <div className="flex items-center gap-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-900/40 p-4">
+                <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-xl shadow-2xs">
+                  <AuthenticatedImage
+                    src={viewingStaff.image_url}
+                    alt={viewingStaff.full_name}
+                    fallback={viewingStaff.full_name?.charAt(0)?.toUpperCase() || "—"}
+                  />
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-stone-900 dark:text-white">
+                    {viewingStaff.full_name}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                    {viewingStaff.designation || "Staff"}
+                  </p>
+
+                  <span
+                    className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      viewingStaff.is_active
+                        ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300"
+                        : "bg-stone-100 text-stone-600 border border-stone-200 dark:bg-stone-800 dark:border-stone-700 dark:text-stone-400"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${viewingStaff.is_active ? "bg-emerald-600" : "bg-stone-400"}`} />
+                    <span>{viewingStaff.is_active ? "Active" : "Inactive"}</span>
+                  </span>
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={closeViewModal}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition cursor-pointer"
-                aria-label="Close staff details"
-              >
-                <X size={18} />
-              </button>
+              {/* Employee Information */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <DetailItem label="Employee ID" value={viewingStaff.id} />
+                <DetailItem label="Employee Code" value={viewingStaff.employee_code} />
+                <DetailItem label="Email Address" value={viewingStaff.email} />
+                <DetailItem label="Phone Number" value={viewingStaff.phone} />
+                <DetailItem label="Designation" value={viewingStaff.designation} />
+                <DetailItem label="Joining Date" value={formatDate(viewingStaff.joining_date)} />
+              </div>
             </div>
+          ) : null}
 
-            {/* Content */}
-            <div className="p-6">
-              {viewLoading ? (
-                <p className="py-10 text-center text-sm text-stone-500">
-                  Loading staff details...
-                </p>
-              ) : viewError ? (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700"
-                >
-                  {viewError}
-                </p>
-              ) : viewingStaff ? (
-                <div className="space-y-5">
-                  {/* Employee Profile Header */}
-                  <div className="flex items-center gap-4 rounded-xl border border-stone-200 bg-stone-50/70 p-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FEF08A] border border-[#FDE047] text-lg font-bold text-[#854D0E] shadow-2xs">
-                      {viewingStaff.full_name?.charAt(0)?.toUpperCase() || "—"}
-                    </div>
-
-                    <div>
-                      <h3 className="font-bold text-[#1C1917]">
-                        {viewingStaff.full_name}
-                      </h3>
-                      <p className="mt-0.5 text-xs text-stone-500">
-                        {viewingStaff.designation || "Staff"}
-                      </p>
-
-                      <span
-                        className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                          viewingStaff.is_active
-                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            : "bg-stone-100 text-stone-600 border border-stone-200"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${viewingStaff.is_active ? "bg-emerald-600" : "bg-stone-400"}`} />
-                        <span>{viewingStaff.is_active ? "Active" : "Inactive"}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Employee Information */}
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <DetailItem label="Employee ID" value={viewingStaff.id} />
-                    <DetailItem label="Employee Code" value={viewingStaff.employee_code} />
-                    <DetailItem label="Email Address" value={viewingStaff.email} />
-                    <DetailItem label="Phone Number" value={viewingStaff.phone} />
-                    <DetailItem label="Designation" value={viewingStaff.designation} />
-                    <DetailItem label="Joining Date" value={formatDate(viewingStaff.joining_date)} />
-                  </div>
-                </div>
-              ) : null}
-            </div>
-
-            {/* Footer */}
-            <div className="flex justify-end border-t border-stone-100 px-6 py-3">
-              <button
-                type="button"
-                onClick={closeViewModal}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+          <div className="mt-6 flex justify-end border-t border-stone-100 dark:border-stone-800 pt-3">
+            <button
+              type="button"
+              onClick={closeViewModal}
+              className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#29231F] px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition cursor-pointer"
+            >
+              Close
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
-  );
-}
-
-// Compact statistics card, also used as a status filter
-function StatCard({ title, value, icon, active, onClick, badgeColor }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={`Show ${title.toLowerCase()}`}
-      className={`flex w-full items-center justify-between gap-3 rounded-xl border p-4 text-left transition-all duration-200 cursor-pointer shadow-xs ${
-        active
-          ? "border-[#F5B716] bg-[#FEF9C3]/40 ring-1 ring-[#F5B716]"
-          : "border-stone-200/90 bg-white hover:border-stone-300"
-      }`}
-    >
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">{title}</p>
-        <p className="mt-1 text-2xl font-bold text-[#1C1917]">{value}</p>
-      </div>
-
-      <div className={`rounded-xl p-2.5 ${badgeColor || "bg-[#FEF9C3] text-amber-900 border border-yellow-200"}`}>
-        {icon}
-      </div>
-    </button>
   );
 }
 
@@ -977,7 +924,7 @@ function FormField({
     <div>
       <label
         htmlFor={inputId}
-        className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700"
+        className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300"
       >
         {label}
         {optional ? (
@@ -1006,16 +953,16 @@ function FormField({
           inputMode={inputMode}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
-          className={`w-full rounded-lg border bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:ring-2 ${
+          className={`w-full rounded-lg border bg-white dark:bg-[#29231F] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:ring-2 ${
             error
-              ? "border-red-400 focus:border-red-400 focus:ring-red-100"
-              : "border-stone-300 focus:border-[#F5B716] focus:ring-[#F5B716]/30"
+              ? "border-red-400 focus:border-red-400 focus:ring-red-100 dark:focus:ring-red-950/40"
+              : "border-stone-300 dark:border-stone-700 focus:border-[#F59E0B] focus:ring-[#F59E0B]/30"
           }`}
         />
       </div>
 
       {error && (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-red-600">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
           {error}
         </p>
       )}
@@ -1026,11 +973,11 @@ function FormField({
 // Reusable staff detail item
 function DetailItem({ label, value }) {
   return (
-    <div className="rounded-lg border border-stone-100 bg-stone-50/70 p-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">
+    <div className="rounded-lg border border-stone-100 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-900/40 p-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
         {label}
       </p>
-      <p className="break-words text-sm font-semibold text-[#1C1917]">
+      <p className="break-words text-sm font-semibold text-stone-900 dark:text-white">
         {value || "—"}
       </p>
     </div>

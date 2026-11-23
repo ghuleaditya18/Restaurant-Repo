@@ -72,6 +72,24 @@ export const spaApi = {
   // Payments
   getPayments: (params = {}) => api.get("/api/spa/payments", { params }),
   recordPayment: (invoiceId, data) => api.post(`/api/spa/payments/${invoiceId}`, data),
+
+  // Customer & Staff Images
+  uploadCustomerImage: (id, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post(`/api/spa/customers/${id}/image`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteCustomerImage: (id) => api.delete(`/api/spa/customers/${id}/image`),
+  uploadStaffImage: (id, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post(`/api/spa/staff/${id}/image`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteStaffImage: (id) => api.delete(`/api/spa/staff/${id}/image`),
 };
 
 export default spaApi;

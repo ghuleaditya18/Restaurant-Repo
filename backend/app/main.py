@@ -19,6 +19,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.spa import spa_router
 from app.api.inventory import router as inventory_router
 from app.api.search import router as search_router
+from app.api.business_profile import router as business_profile_router
 
 from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import get_db
@@ -80,6 +81,8 @@ app.include_router(spa_router, prefix="/api/spa")
 app.include_router(inventory_router)
 
 app.include_router(search_router)
+
+app.include_router(business_profile_router, prefix="/api/business-profile", tags=["Business Profile"])
 
 # Serves uploaded menu photos and supplier bills
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")

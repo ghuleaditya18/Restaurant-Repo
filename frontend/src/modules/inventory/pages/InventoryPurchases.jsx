@@ -7,10 +7,14 @@ import {
   X,
   Upload,
   Trash2,
+  Eye,
+  Edit2,
 } from "lucide-react";
 import {
   getPurchaseOrders,
   createPurchaseOrder,
+  updatePurchaseOrder,
+  deletePurchaseOrder,
   updatePOStatus,
   receiveGoods,
   getGoodsReceipts,
@@ -20,6 +24,7 @@ import {
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
+import Pagination from "../../../components/Pagination";
 
 export default function InventoryPurchases() {
   const [activeTab, setActiveTab] = useState("pos"); // 'pos' | 'grns'
@@ -29,8 +34,16 @@ export default function InventoryPurchases() {
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Pagination states
+  const [poPage, setPoPage] = useState(1);
+  const [grnPage, setGrnPage] = useState(1);
+  const pageSize = 10;
+
   // Modals
   const [createPoOpen, setCreatePoOpen] = useState(false);
+  const [editingPo, setEditingPo] = useState(null);
+  const [viewingPo, setViewingPo] = useState(null);
+  const [viewingGrn, setViewingGrn] = useState(null);
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [selectedPoForReceive, setSelectedPoForReceive] = useState(null);
   const [uploadBillModalOpen, setUploadBillModalOpen] = useState(false);
@@ -56,7 +69,7 @@ export default function InventoryPurchases() {
 
   const [billFile, setBillFile] = useState(null);
 
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -82,6 +95,13 @@ export default function InventoryPurchases() {
     loadData();
   }, [loadData]);
 
+  // Tab switch handler resets page
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === "pos") setPoPage(1);
+    else setGrnPage(1);
+  };
+
   // PO Line Items management
   const addPoItem = () => {
     setPoForm((prev) => ({
@@ -105,30 +125,97 @@ export default function InventoryPurchases() {
     });
   };
 
-  const handleCreatePo = async (e) => {
+  const openCreatePo = () => {
+    setEditingPo(null);
+    setPoForm({
+      supplier_id: suppliers[0]?.id ? String(suppliers[0].id) : "",
+      order_date: new Date().toISOString().split("T")[0],
+      expected_delivery_date: "",
+      tax_amount: "0",
+      notes: "",
+      items: [
+        {
+          inventory_item_id: inventoryItems[0]?.id ? String(inventoryItems[0].id) : "",
+          ordered_quantity: "1",
+          unit_price: "0",
+        },
+      ],
+    });
+    setCreatePoOpen(true);
+  };
+
+  const openEditPo = (po) => {
+    setEditingPo(po);
+    setPoForm({
+      supplier_id: String(po.supplier_id),
+      order_date: po.order_date || new Date().toISOString().split("T")[0],
+      expected_delivery_date: po.expected_delivery_date || "",
+      tax_amount: String(po.tax_amount || 0),
+      notes: po.notes || "",
+      items: po.items.map((it) => ({
+        inventory_item_id: String(it.inventory_item_id),
+        ordered_quantity: String(it.ordered_quantity),
+        unit_price: String(it.unit_price),
+      })),
+    });
+    setCreatePoOpen(true);
+  };
+
+  const handleSavePo = async (e) => {
     e.preventDefault();
     if (!poForm.supplier_id) {
       showError("Please select a supplier");
       return;
     }
+    if (poForm.items.length === 0) {
+      showError("Purchase order must have at least one line item");
+      return;
+    }
+
+    const payload = {
+      supplier_id: Number(poForm.supplier_id),
+      order_date: poForm.order_date,
+      expected_delivery_date: poForm.expected_delivery_date || null,
+      tax_amount: Number(poForm.tax_amount) || 0,
+      notes: poForm.notes,
+      items: poForm.items.map((it) => ({
+        inventory_item_id: Number(it.inventory_item_id),
+        ordered_quantity: Number(it.ordered_quantity),
+        unit_price: Number(it.unit_price),
+      })),
+    };
+
     try {
-      await createPurchaseOrder({
-        supplier_id: Number(poForm.supplier_id),
-        order_date: poForm.order_date,
-        expected_delivery_date: poForm.expected_delivery_date || null,
-        tax_amount: Number(poForm.tax_amount) || 0,
-        notes: poForm.notes,
-        items: poForm.items.map((it) => ({
-          inventory_item_id: Number(it.inventory_item_id),
-          ordered_quantity: Number(it.ordered_quantity),
-          unit_price: Number(it.unit_price),
-        })),
-      });
-      showSuccess("Purchase order created as Draft");
+      if (editingPo) {
+        await updatePurchaseOrder(editingPo.id, payload);
+        showUpdate(`Purchase Order #${editingPo.po_number} updated successfully`);
+      } else {
+        await createPurchaseOrder(payload);
+        showSuccess("Purchase order created as Draft");
+      }
       setCreatePoOpen(false);
+      setEditingPo(null);
       loadData();
     } catch (err) {
-      showError(err?.response?.data?.detail || "Failed to create purchase order");
+      showError(err?.response?.data?.detail || "Failed to save purchase order");
+    }
+  };
+
+  const handleDeletePo = async (po) => {
+    const ok = await confirm({
+      title: `Delete Purchase Order #${po.po_number}`,
+      message: `Are you sure you want to delete Draft Purchase Order #${po.po_number}? This cannot be undone.`,
+      confirmText: "Delete PO",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    try {
+      await deletePurchaseOrder(po.id);
+      showDelete(`Purchase Order #${po.po_number} deleted successfully`);
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to delete purchase order");
     }
   };
 
@@ -171,10 +258,15 @@ export default function InventoryPurchases() {
 
   const handleReceiveGoods = async (e) => {
     e.preventDefault();
+    if (!receiveForm.supplier_bill_number || !receiveForm.supplier_bill_number.trim()) {
+      showError("Supplier Bill Number / Invoice Number is mandatory.");
+      return;
+    }
+
     try {
       await receiveGoods(selectedPoForReceive.id, {
         received_date: receiveForm.received_date,
-        supplier_bill_number: receiveForm.supplier_bill_number || null,
+        supplier_bill_number: receiveForm.supplier_bill_number.trim(),
         bill_date: receiveForm.bill_date || null,
         notes: receiveForm.notes,
         items: receiveForm.items
@@ -210,6 +302,13 @@ export default function InventoryPurchases() {
     }
   };
 
+  // Pagination slicing
+  const poTotalPages = Math.ceil(purchaseOrders.length / pageSize) || 1;
+  const paginatedPos = purchaseOrders.slice((poPage - 1) * pageSize, poPage * pageSize);
+
+  const grnTotalPages = Math.ceil(goodsReceipts.length / pageSize) || 1;
+  const paginatedGrns = goodsReceipts.slice((grnPage - 1) * pageSize, grnPage * pageSize);
+
   return (
     <div className="space-y-6">
       {/* Tab Switcher & Action Button */}
@@ -217,10 +316,10 @@ export default function InventoryPurchases() {
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-xl max-w-sm">
           <button
             type="button"
-            onClick={() => setActiveTab("pos")}
+            onClick={() => handleTabChange("pos")}
             className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition ${
               activeTab === "pos"
-                ? "bg-white dark:bg-[#1C1917] text-stone-900 dark:text-stone-100 shadow-xs"
+                ? "bg-white dark:bg-[#101722] text-stone-900 dark:text-stone-100 shadow-xs"
                 : "text-stone-500 hover:text-stone-900 dark:hover:text-stone-200"
             }`}
           >
@@ -228,10 +327,10 @@ export default function InventoryPurchases() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("grns")}
+            onClick={() => handleTabChange("grns")}
             className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition ${
               activeTab === "grns"
-                ? "bg-white dark:bg-[#1C1917] text-stone-900 dark:text-stone-100 shadow-xs"
+                ? "bg-white dark:bg-[#101722] text-stone-900 dark:text-stone-100 shadow-xs"
                 : "text-stone-500 hover:text-stone-900 dark:hover:text-stone-200"
             }`}
           >
@@ -243,17 +342,7 @@ export default function InventoryPurchases() {
           {activeTab === "pos" && (
             <button
               type="button"
-              onClick={() => {
-                setPoForm({
-                  supplier_id: suppliers[0]?.id ? String(suppliers[0].id) : "",
-                  order_date: new Date().toISOString().split("T")[0],
-                  expected_delivery_date: "",
-                  tax_amount: "0",
-                  notes: "",
-                  items: [{ inventory_item_id: inventoryItems[0]?.id ? String(inventoryItems[0].id) : "", ordered_quantity: "1", unit_price: "0" }],
-                });
-                setCreatePoOpen(true);
-              }}
+              onClick={openCreatePo}
               className={BUTTON_VARIANTS.primary}
             >
               <Plus size={16} />
@@ -289,14 +378,14 @@ export default function InventoryPurchases() {
                 </tr>
               </thead>
               <tbody>
-                {purchaseOrders.length === 0 ? (
+                {paginatedPos.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-8 text-center text-sm text-stone-500">
                       {loading ? "Loading purchase orders..." : "No purchase orders found."}
                     </td>
                   </tr>
                 ) : (
-                  purchaseOrders.map((po) => (
+                  paginatedPos.map((po) => (
                     <tr key={po.id} className={TABLE_STYLES.tr}>
                       <td className={TABLE_STYLES.td}>
                         <div className="font-bold text-stone-900 dark:text-stone-100 font-mono">
@@ -327,16 +416,44 @@ export default function InventoryPurchases() {
                         </span>
                       </td>
                       <td className={`${TABLE_STYLES.td} text-right`}>
-                        <div className="inline-flex items-center gap-1.5">
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setViewingPo(po)}
+                            className="p-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded transition"
+                            title="View PO Details"
+                          >
+                            <Eye size={15} />
+                          </button>
+
                           {po.status === "Draft" && (
-                            <button
-                              type="button"
-                              onClick={() => handleTransitionStatus(po, "Ordered")}
-                              className="px-2 py-1 rounded text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition"
-                            >
-                              Send to Vendor
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditPo(po)}
+                                className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded transition"
+                                title="Edit Draft PO"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleTransitionStatus(po, "Ordered")}
+                                className="px-2 py-1 rounded text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition"
+                              >
+                                Send to Vendor
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePo(po)}
+                                className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
+                                title="Delete Draft PO"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </>
                           )}
+
                           {(po.status === "Ordered" || po.status === "Partially Received") && (
                             <button
                               type="button"
@@ -347,7 +464,8 @@ export default function InventoryPurchases() {
                               <span>Receive</span>
                             </button>
                           )}
-                          {po.status === "Draft" && (
+
+                          {po.status === "Ordered" && (
                             <button
                               type="button"
                               onClick={() => handleTransitionStatus(po, "Cancelled")}
@@ -365,6 +483,13 @@ export default function InventoryPurchases() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={poPage}
+            totalPages={poTotalPages}
+            onPageChange={setPoPage}
+            totalRecords={purchaseOrders.length}
+            limit={pageSize}
+          />
         </div>
       )}
 
@@ -381,18 +506,19 @@ export default function InventoryPurchases() {
                   <th className={TABLE_STYLES.th}>Bill Number</th>
                   <th className={TABLE_STYLES.th}>Received Date</th>
                   <th className={TABLE_STYLES.th}>Received Amount</th>
-                  <th className={TABLE_STYLES.th}>Bill Image</th>
+                  <th className={TABLE_STYLES.th}>Bill Attachment</th>
+                  <th className={`${TABLE_STYLES.th} text-right`}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {goodsReceipts.length === 0 ? (
+                {paginatedGrns.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-stone-500">
+                    <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
                       No goods receipt notes recorded yet.
                     </td>
                   </tr>
                 ) : (
-                  goodsReceipts.map((grn) => (
+                  paginatedGrns.map((grn) => (
                     <tr key={grn.id} className={TABLE_STYLES.tr}>
                       <td className={TABLE_STYLES.td}>
                         <div className="font-bold font-mono text-stone-900 dark:text-stone-100">
@@ -401,7 +527,11 @@ export default function InventoryPurchases() {
                       </td>
                       <td className={TABLE_STYLES.td}>{grn.po_number}</td>
                       <td className={TABLE_STYLES.td}>{grn.supplier_name}</td>
-                      <td className={TABLE_STYLES.td}>{grn.supplier_bill_number || "—"}</td>
+                      <td className={TABLE_STYLES.td}>
+                        <span className="font-mono font-medium text-stone-800 dark:text-stone-200">
+                          {grn.supplier_bill_number || "—"}
+                        </span>
+                      </td>
                       <td className={TABLE_STYLES.td}>{grn.received_date}</td>
                       <td className={TABLE_STYLES.td}>
                         ₹{Number(grn.total_received_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -431,34 +561,56 @@ export default function InventoryPurchases() {
                           </button>
                         )}
                       </td>
+                      <td className={`${TABLE_STYLES.td} text-right`}>
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setViewingGrn(grn)}
+                            className="p-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded transition"
+                            title="View GRN Details"
+                          >
+                            <Eye size={15} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={grnPage}
+            totalPages={grnTotalPages}
+            onPageChange={setGrnPage}
+            totalRecords={goodsReceipts.length}
+            limit={pageSize}
+          />
         </div>
       )}
 
-      {/* CREATE PURCHASE ORDER MODAL */}
+      {/* CREATE / EDIT PURCHASE ORDER MODAL */}
       {createPoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-                New Purchase Order
+                {editingPo ? `Edit Purchase Order #${editingPo.po_number}` : "New Purchase Order"}
               </h3>
               <button
                 type="button"
-                onClick={() => setCreatePoOpen(false)}
+                onClick={() => {
+                  setCreatePoOpen(false);
+                  setEditingPo(null);
+                }}
                 className="text-stone-400 hover:text-stone-600"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreatePo} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSavePo} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
                     Supplier *
@@ -489,6 +641,30 @@ export default function InventoryPurchases() {
                     className={INPUT_STYLES.base}
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                    Expected Delivery Date
+                  </label>
+                  <input
+                    type="date"
+                    value={poForm.expected_delivery_date}
+                    onChange={(e) => setPoForm({ ...poForm, expected_delivery_date: e.target.value })}
+                    className={INPUT_STYLES.base}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                    Tax Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={poForm.tax_amount}
+                    onChange={(e) => setPoForm({ ...poForm, tax_amount: e.target.value })}
+                    className={INPUT_STYLES.base}
+                  />
+                </div>
               </div>
 
               {/* Items Section */}
@@ -507,12 +683,12 @@ export default function InventoryPurchases() {
                 </div>
 
                 {poForm.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
+                  <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2 sm:p-0 bg-stone-50 sm:bg-transparent rounded-lg">
                     <select
                       required
                       value={item.inventory_item_id}
                       onChange={(e) => updatePoItem(idx, "inventory_item_id", e.target.value)}
-                      className={`${INPUT_STYLES.select} flex-2`}
+                      className={`${INPUT_STYLES.select} flex-1`}
                     >
                       <option value="">Select Ingredient</option>
                       {inventoryItems.map((inv) => (
@@ -530,7 +706,7 @@ export default function InventoryPurchases() {
                       placeholder="Qty"
                       value={item.ordered_quantity}
                       onChange={(e) => updatePoItem(idx, "ordered_quantity", e.target.value)}
-                      className={`${INPUT_STYLES.base} w-24`}
+                      className={`${INPUT_STYLES.base} w-full sm:w-24`}
                     />
 
                     <input
@@ -541,14 +717,15 @@ export default function InventoryPurchases() {
                       placeholder="₹ Unit Price"
                       value={item.unit_price}
                       onChange={(e) => updatePoItem(idx, "unit_price", e.target.value)}
-                      className={`${INPUT_STYLES.base} w-28`}
+                      className={`${INPUT_STYLES.base} w-full sm:w-28`}
                     />
 
                     {poForm.items.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removePoItem(idx)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded"
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded self-end sm:self-center"
+                        title="Remove item"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -557,16 +734,32 @@ export default function InventoryPurchases() {
                 ))}
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={poForm.notes}
+                  onChange={(e) => setPoForm({ ...poForm, notes: e.target.value })}
+                  placeholder="Special instructions or vendor terms..."
+                  className={INPUT_STYLES.base}
+                />
+              </div>
+
               <div className="flex justify-end gap-2 pt-4 border-t border-stone-100 dark:border-stone-800">
                 <button
                   type="button"
-                  onClick={() => setCreatePoOpen(false)}
+                  onClick={() => {
+                    setCreatePoOpen(false);
+                    setEditingPo(null);
+                  }}
                   className={BUTTON_VARIANTS.secondary}
                 >
                   Cancel
                 </button>
                 <button type="submit" className={BUTTON_VARIANTS.primary}>
-                  Create Draft PO
+                  {editingPo ? "Save Changes" : "Create Draft PO"}
                 </button>
               </div>
             </form>
@@ -574,10 +767,194 @@ export default function InventoryPurchases() {
         </div>
       )}
 
+      {/* VIEW PURCHASE ORDER MODAL */}
+      {viewingPo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+                  Purchase Order #{viewingPo.po_number}
+                </h3>
+                <p className="text-xs text-stone-500">Supplier: {viewingPo.supplier_name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingPo(null)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-stone-50 dark:bg-stone-900/50 rounded-xl text-xs">
+              <div>
+                <span className="text-stone-500 block">Status:</span>
+                <span className="font-semibold">{viewingPo.status}</span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Order Date:</span>
+                <span className="font-semibold">{viewingPo.order_date}</span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Expected:</span>
+                <span className="font-semibold">{viewingPo.expected_delivery_date || "—"}</span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Total Amount:</span>
+                <span className="font-bold text-stone-900 dark:text-stone-100">
+                  ₹{Number(viewingPo.total_amount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-stone-600 dark:text-stone-400">
+                Order Line Items
+              </h4>
+              <div className="overflow-x-auto border border-stone-200 dark:border-stone-800 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-stone-50 dark:bg-stone-900/60 border-b border-stone-200 dark:border-stone-800">
+                    <tr>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Ingredient</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Ordered</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Received</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Unit Cost</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400 text-right">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingPo.items.map((item) => (
+                      <tr key={item.id} className="border-b border-stone-100 dark:border-stone-800/60">
+                        <td className="p-2.5 font-medium">{item.inventory_item_name}</td>
+                        <td className="p-2.5">{item.ordered_quantity} {item.inventory_item_unit}</td>
+                        <td className="p-2.5">{item.received_quantity} {item.inventory_item_unit}</td>
+                        <td className="p-2.5">₹{Number(item.unit_price).toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-medium">₹{Number(item.line_total).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {viewingPo.notes && (
+              <div className="text-xs p-3 bg-stone-50 dark:bg-stone-900/40 rounded-xl">
+                <span className="font-semibold block text-stone-600 dark:text-stone-400 mb-1">Notes:</span>
+                <p className="text-stone-700 dark:text-stone-300">{viewingPo.notes}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setViewingPo(null)}
+                className={BUTTON_VARIANTS.secondary}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW GOODS RECEIPT MODAL */}
+      {viewingGrn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div>
+                <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+                  Goods Receipt #{viewingGrn.grn_number}
+                </h3>
+                <p className="text-xs text-stone-500">
+                  PO: {viewingGrn.po_number} | Supplier: {viewingGrn.supplier_name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingGrn(null)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-stone-50 dark:bg-stone-900/50 rounded-xl text-xs">
+              <div>
+                <span className="text-stone-500 block">Supplier Bill #:</span>
+                <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
+                  {viewingGrn.supplier_bill_number || "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Received Date:</span>
+                <span className="font-semibold">{viewingGrn.received_date}</span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Bill Date:</span>
+                <span className="font-semibold">{viewingGrn.bill_date || "—"}</span>
+              </div>
+              <div>
+                <span className="text-stone-500 block">Total Received:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  ₹{Number(viewingGrn.total_received_amount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-stone-600 dark:text-stone-400">
+                Received Line Items
+              </h4>
+              <div className="overflow-x-auto border border-stone-200 dark:border-stone-800 rounded-xl">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-stone-50 dark:bg-stone-900/60 border-b border-stone-200 dark:border-stone-800">
+                    <tr>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Ingredient</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Received Qty</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400">Actual Unit Cost</th>
+                      <th className="p-2.5 font-semibold text-stone-600 dark:text-stone-400 text-right">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingGrn.items?.map((item) => (
+                      <tr key={item.id} className="border-b border-stone-100 dark:border-stone-800/60">
+                        <td className="p-2.5 font-medium">{item.inventory_item_name}</td>
+                        <td className="p-2.5">{item.received_quantity} {item.inventory_item_unit}</td>
+                        <td className="p-2.5">₹{Number(item.unit_cost).toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-medium">₹{Number(item.line_total).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {viewingGrn.notes && (
+              <div className="text-xs p-3 bg-stone-50 dark:bg-stone-900/40 rounded-xl">
+                <span className="font-semibold block text-stone-600 dark:text-stone-400 mb-1">Notes:</span>
+                <p className="text-stone-700 dark:text-stone-300">{viewingGrn.notes}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-3 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setViewingGrn(null)}
+                className={BUTTON_VARIANTS.secondary}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* RECEIVE GOODS MODAL */}
       {receiveModalOpen && selectedPoForReceive && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-2xl bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -595,7 +972,7 @@ export default function InventoryPurchases() {
             </div>
 
             <form onSubmit={handleReceiveGoods} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
                     Receipt Date *
@@ -610,13 +987,37 @@ export default function InventoryPurchases() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
-                    Supplier Bill Number
+                    Supplier Bill Number <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
+                    required
                     placeholder="e.g. INV-10029"
                     value={receiveForm.supplier_bill_number}
                     onChange={(e) => setReceiveForm({ ...receiveForm, supplier_bill_number: e.target.value })}
+                    className={INPUT_STYLES.base}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                    Bill Date
+                  </label>
+                  <input
+                    type="date"
+                    value={receiveForm.bill_date}
+                    onChange={(e) => setReceiveForm({ ...receiveForm, bill_date: e.target.value })}
+                    className={INPUT_STYLES.base}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                    Receiving Notes
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Batch numbers, condition, etc."
+                    value={receiveForm.notes}
+                    onChange={(e) => setReceiveForm({ ...receiveForm, notes: e.target.value })}
                     className={INPUT_STYLES.base}
                   />
                 </div>
@@ -687,7 +1088,7 @@ export default function InventoryPurchases() {
       {/* UPLOAD BILL MODAL */}
       {uploadBillModalOpen && selectedGrnForUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#1C1917] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 Upload Bill for #{selectedGrnForUpload.grn_number}

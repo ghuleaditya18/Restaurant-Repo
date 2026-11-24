@@ -48,6 +48,7 @@ export const spaApi = {
   getInvoices: (params = {}) => api.get("/api/spa/invoices", { params }),
   createInvoice: (data) => api.post("/api/spa/invoices", data),
   getInvoice: (id) => api.get(`/api/spa/invoices/${id}`),
+  deleteInvoice: (id) => api.delete(`/api/spa/invoices/${id}`),
   getInvoiceDownloadUrl: (id) => `/api/spa/invoices/${id}/download`,
   downloadInvoicePdfBlob: async (invoiceId) => {
     const res = await api.get(`/api/spa/invoices/${invoiceId}/download`, {

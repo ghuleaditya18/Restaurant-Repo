@@ -101,7 +101,7 @@ export default function SpaDashboard() {
         <StatCard
           title="Today's Bookings"
           value={loading ? "--" : String(data?.total_bookings_today || 0).padStart(2, "0")}
-          subtext={loading ? null : `${data?.completed_appointments_today || 0} done`}
+          // subtext={loading ? null : `${data?.completed_appointments_today || 0} done`}
           icon={Calendar}
           color="bg-amber-50 dark:bg-amber-950/50 text-[#9A3412] dark:text-[#FFB02E] border border-amber-200 dark:border-amber-800"
         />
@@ -109,7 +109,7 @@ export default function SpaDashboard() {
         <StatCard
           title="In-Progress"
           value={loading ? "--" : String(data?.in_progress_appointments || 0).padStart(2, "0")}
-          subtext={loading ? null : `${data?.upcoming_bookings || 0} upcoming`}
+          // subtext={loading ? null : `${data?.upcoming_bookings || 0} upcoming`}
           icon={Clock}
           color="bg-orange-50 dark:bg-orange-950/50 text-[#F97316] border border-orange-200 dark:border-orange-800"
         />
@@ -117,7 +117,7 @@ export default function SpaDashboard() {
         <StatCard
           title="Available Therapists"
           value={loading ? "--" : `${data?.available_therapists || 0}/${data?.total_therapists || 0}`}
-          subtext="on duty"
+          // subtext="on duty"
           icon={UserCheck}
           color="bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800"
         />
@@ -125,7 +125,7 @@ export default function SpaDashboard() {
         <StatCard
           title="Today's Revenue"
           value={loading ? "--" : formatCurrency(data?.today_revenue)}
-          subtext={loading ? null : `${data?.pending_payments_count || 0} pending`}
+          // subtext={loading ? null : `${data?.pending_payments_count || 0} pending`}
           icon={TrendingUp}
           color="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
         />

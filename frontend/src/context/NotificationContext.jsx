@@ -8,6 +8,7 @@ export function NotificationProvider({ children }) {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const toastIdRef = useRef(0);
   const timersRef = useRef(new Map());
+  const lastToastRef = useRef({ key: "", time: 0 });
 
   // Remove toast and cancel any active timeout
   const removeToast = useCallback((id) => {
@@ -18,8 +19,15 @@ export function NotificationProvider({ children }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Add toast with exactly 3000ms default auto-dismiss
+  // Add toast with exactly 3000ms default auto-dismiss, deduplicating rapid triggers
   const addToast = useCallback((type, message, title = null, duration = 3000) => {
+    const toastKey = `${type}:${title}:${message}`;
+    const now = Date.now();
+    if (lastToastRef.current.key === toastKey && now - lastToastRef.current.time < 1500) {
+      return null;
+    }
+    lastToastRef.current = { key: toastKey, time: now };
+
     const id = ++toastIdRef.current;
     const newToast = { id, type, message, title };
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Plus,
   Search,
@@ -10,6 +10,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   X,
+  Trash2,
+  Archive,
+  RotateCcw,
+  CheckSquare,
+  ShieldAlert,
 } from "lucide-react";
 import {
   getInventoryItems,
@@ -20,6 +25,12 @@ import {
   getCategories,
   createCategory,
   updateCategory,
+  checkItemEligibility,
+  deleteInventoryItem,
+  archiveInventoryItem,
+  unarchiveInventoryItem,
+  bulkCheckItems,
+  bulkActionItems,
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
@@ -34,8 +45,13 @@ export default function InventoryStock() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all"); // 'all' | 'active' | 'archived'
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const headerCheckboxRef = useRef(null);
 
   // Modals
   const [itemModalOpen, setItemModalOpen] = useState(false);
@@ -44,6 +60,23 @@ export default function InventoryStock() {
   const [movementsModalOpen, setMovementsModalOpen] = useState(false);
   const [activeItemMovements, setActiveItemMovements] = useState(null);
   const [movementsList, setMovementsList] = useState([]);
+
+  // Eligibility & Delete/Archive Modal
+  const [eligibilityModal, setEligibilityModal] = useState({
+    open: false,
+    loading: false,
+    item: null,
+    eligibility: null,
+    archiveReason: "",
+  });
+
+  // Bulk Confirmation Modal
+  const [bulkModal, setBulkModal] = useState({
+    open: false,
+    loading: false,
+    checkResult: null,
+    archiveReason: "",
+  });
 
   // Item Form
   const [formData, setFormData] = useState({
@@ -66,11 +99,14 @@ export default function InventoryStock() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const isArchivedParam =
+        statusFilter === "archived" ? true : statusFilter === "active" ? false : undefined;
       const [itemsData, catsData] = await Promise.all([
         getInventoryItems({
           category_id: selectedCategory || undefined,
           low_stock: lowStockOnly || undefined,
           search: search || undefined,
+          is_archived: isArchivedParam,
         }),
         getCategories(),
       ]);
@@ -81,11 +117,54 @@ export default function InventoryStock() {
     } finally {
       setLoading(false);
     }
-  }, [selectedCategory, lowStockOnly, search, showError]);
+  }, [selectedCategory, lowStockOnly, search, statusFilter, showError]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Pagination & selection calculations
+  const totalPages = Math.ceil(items.length / pageSize) || 1;
+  const pageItems = items.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const pageItemIds = pageItems.map((it) => it.id);
+  const allPageSelected =
+    pageItemIds.length > 0 && pageItemIds.every((id) => selectedIds.has(id));
+  const somePageSelected =
+    pageItemIds.some((id) => selectedIds.has(id)) && !allPageSelected;
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = somePageSelected;
+    }
+  }, [somePageSelected]);
+
+  const handleToggleSelectAllPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageItemIds.forEach((id) => next.delete(id));
+      } else {
+        pageItemIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectItem = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
 
   const handleOpenItemModal = (item = null) => {
     if (item) {
@@ -175,6 +254,180 @@ export default function InventoryStock() {
     }
   };
 
+  // Item Delete / Archive Handler
+  const handleOpenDeleteOrArchive = async (item) => {
+    setEligibilityModal({
+      open: true,
+      loading: true,
+      item,
+      eligibility: null,
+      archiveReason: "",
+    });
+    try {
+      const data = await checkItemEligibility(item.id);
+      setEligibilityModal((prev) => ({
+        ...prev,
+        loading: false,
+        eligibility: data,
+      }));
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to inspect item dependencies");
+      setEligibilityModal({
+        open: false,
+        loading: false,
+        item: null,
+        eligibility: null,
+        archiveReason: "",
+      });
+    }
+  };
+
+  const handleConfirmPermanentDelete = async () => {
+    if (!eligibilityModal.item) return;
+    try {
+      await deleteInventoryItem(eligibilityModal.item.id);
+      showSuccess(`Item '${eligibilityModal.item.name}' permanently deleted`);
+      setEligibilityModal({
+        open: false,
+        loading: false,
+        item: null,
+        eligibility: null,
+        archiveReason: "",
+      });
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(eligibilityModal.item.id);
+        return next;
+      });
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to delete item");
+    }
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!eligibilityModal.item) return;
+    try {
+      await archiveInventoryItem(eligibilityModal.item.id, {
+        reason: eligibilityModal.archiveReason || "Archived by manager",
+      });
+      showSuccess(`Item '${eligibilityModal.item.name}' archived successfully`);
+      setEligibilityModal({
+        open: false,
+        loading: false,
+        item: null,
+        eligibility: null,
+        archiveReason: "",
+      });
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to archive item");
+    }
+  };
+
+  const handleConfirmUnarchive = async (item) => {
+    try {
+      await unarchiveInventoryItem(item.id);
+      showSuccess(`Item '${item.name}' unarchived successfully`);
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to unarchive item");
+    }
+  };
+
+  // Bulk Actions
+  const handleBulkArchive = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const ok = await confirm({
+      title: "Archive Selected Items",
+      message: `Are you sure you want to archive ${ids.length} selected item(s)? Archived items are hidden from daily operations while preserving all historical stock and financial transactions.`,
+      confirmText: "Archive All",
+      variant: "warning",
+    });
+    if (!ok) return;
+
+    try {
+      const res = await bulkActionItems({
+        item_ids: ids,
+        action: "archive",
+        reason: "Bulk archived by manager",
+      });
+      showSuccess(`Successfully archived ${res.archived_count} item(s)`);
+      setSelectedIds(new Set());
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Bulk archive failed");
+    }
+  };
+
+  const handleOpenBulkDeleteCheck = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      const checkResult = await bulkCheckItems(ids);
+      setBulkModal({
+        open: true,
+        loading: false,
+        checkResult,
+        archiveReason: "Bulk archived due to existing ledger dependencies",
+      });
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to inspect selected items");
+    }
+  };
+
+  const handleExecuteBulkDeleteAndArchive = async () => {
+    if (!bulkModal.checkResult) return;
+    const { eligible_for_delete, require_archive } = bulkModal.checkResult;
+    try {
+      let deletedCount = 0;
+      let archivedCount = 0;
+
+      if (eligible_for_delete.length > 0) {
+        const delRes = await bulkActionItems({
+          item_ids: eligible_for_delete.map((it) => it.id),
+          action: "delete",
+        });
+        deletedCount = delRes.deleted_count || 0;
+      }
+
+      if (require_archive.length > 0) {
+        const archRes = await bulkActionItems({
+          item_ids: require_archive.map((it) => it.id),
+          action: "archive",
+          reason: bulkModal.archiveReason || "Bulk archived (dependencies preserved)",
+        });
+        archivedCount = archRes.archived_count || 0;
+      }
+
+      showSuccess(`Processed: ${deletedCount} item(s) permanently deleted, ${archivedCount} item(s) safely archived`);
+      setBulkModal({ open: false, loading: false, checkResult: null, archiveReason: "" });
+      setSelectedIds(new Set());
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Bulk action failed");
+    }
+  };
+
+  const handleExecuteBulkArchiveAll = async () => {
+    if (!bulkModal.checkResult) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await bulkActionItems({
+        item_ids: ids,
+        action: "archive",
+        reason: bulkModal.archiveReason || "Bulk archived",
+      });
+      showSuccess(`Safely archived ${res.archived_count} item(s)`);
+      setBulkModal({ open: false, loading: false, checkResult: null, archiveReason: "" });
+      setSelectedIds(new Set());
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Bulk archive failed");
+    }
+  };
+
   const handleSaveCategory = async (e) => {
     e.preventDefault();
     try {
@@ -204,9 +457,9 @@ export default function InventoryStock() {
   return (
     <div className="space-y-6">
       {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-1 max-w-lg">
-          <div className="relative flex-1">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
@@ -219,7 +472,7 @@ export default function InventoryStock() {
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className={`${INPUT_STYLES.select} w-44`}
+            className={`${INPUT_STYLES.select} w-40`}
           >
             <option value="">All Categories</option>
             {categories.map((c) => (
@@ -240,6 +493,43 @@ export default function InventoryStock() {
             <AlertTriangle size={14} />
             <span className="hidden sm:inline">Low Stock</span>
           </button>
+
+          {/* Status Filter Tabs */}
+          <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-stone-800/80 rounded-lg text-xs font-medium border border-stone-200 dark:border-stone-700">
+            <button
+              type="button"
+              onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-md transition ${
+                statusFilter === "all"
+                  ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+              }`}
+            >
+              All ({items.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStatusFilter("active"); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-md transition ${
+                statusFilter === "active"
+                  ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+              }`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStatusFilter("archived"); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-md transition ${
+                statusFilter === "archived"
+                  ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+              }`}
+            >
+              Archived
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -277,6 +567,16 @@ export default function InventoryStock() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
+                <th className="w-12 px-4 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    ref={headerCheckboxRef}
+                    checked={allPageSelected}
+                    onChange={handleToggleSelectAllPage}
+                    aria-label="Select all on this page"
+                    className="w-4.5 h-4.5 text-amber-600 rounded border-stone-300 dark:border-stone-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                  />
+                </th>
                 <th className={TABLE_STYLES.th}>Item & SKU</th>
                 <th className={TABLE_STYLES.th}>Category</th>
                 <th className={TABLE_STYLES.th}>Current Stock</th>
@@ -290,15 +590,31 @@ export default function InventoryStock() {
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
+                  <td colSpan={9} className="p-8 text-center text-sm text-stone-500">
                     {loading ? "Loading inventory items..." : "No inventory items found."}
                   </td>
                 </tr>
               ) : (
                 items.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((item) => (
-                  <tr key={item.id} className={TABLE_STYLES.tr}>
+                  <tr key={item.id} className={`${TABLE_STYLES.tr} ${selectedIds.has(item.id) ? "bg-amber-50/40 dark:bg-amber-950/20" : ""}`}>
+                    <td className="w-12 px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => handleToggleSelectItem(item.id)}
+                        aria-label={`Select ${item.name}`}
+                        className="w-4.5 h-4.5 text-amber-600 rounded border-stone-300 dark:border-stone-600 focus:ring-amber-500 cursor-pointer accent-amber-600"
+                      />
+                    </td>
                     <td className={TABLE_STYLES.td}>
-                      <div className="font-semibold text-stone-900 dark:text-stone-100">{item.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-stone-900 dark:text-stone-100">{item.name}</span>
+                        {item.is_archived && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300">
+                            ARCHIVED
+                          </span>
+                        )}
+                      </div>
                       {item.sku && <div className="text-xs text-stone-400 font-mono">{item.sku}</div>}
                     </td>
                     <td className={TABLE_STYLES.td}>{item.category_name}</td>
@@ -314,20 +630,27 @@ export default function InventoryStock() {
                     <td className={TABLE_STYLES.td}>₹{Number(item.average_cost).toFixed(2)}</td>
                     <td className={TABLE_STYLES.td}>₹{Number(item.total_valuation).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     <td className={TABLE_STYLES.td}>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          item.stock_status === "OUT_OF_STOCK"
-                            ? "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300"
-                            : item.stock_status === "LOW_STOCK"
-                            ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200"
-                            : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200"
-                        }`}
-                      >
-                        {item.stock_status === "OUT_OF_STOCK" && <AlertTriangle size={12} />}
-                        {item.stock_status === "LOW_STOCK" && <AlertTriangle size={12} />}
-                        {item.stock_status === "IN_STOCK" && <CheckCircle2 size={12} />}
-                        {item.stock_status.replace("_", " ")}
-                      </span>
+                      {item.is_archived ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border border-stone-200 dark:border-stone-700">
+                          <Archive size={11} /> Archived
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            item.stock_status === "OUT_OF_STOCK"
+                              ? "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300"
+                              : item.stock_status === "LOW_STOCK"
+                              ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200"
+                              : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200"
+                          }`}
+                        >
+                          {item.stock_status === "OUT_OF_STOCK" && <AlertTriangle size={12} />}
+                          {item.stock_status === "LOW_STOCK" && <AlertTriangle size={12} />}
+                          {item.stock_status === "IN_STOCK" && <CheckCircle2 size={12} />}
+                          {item.stock_status.replace("_", " ")}
+                          {!item.is_active && " (Inactive)"}
+                        </span>
+                      )}
                     </td>
                     <td className={`${TABLE_STYLES.td} text-right`}>
                       <div className="inline-flex items-center gap-1">
@@ -359,6 +682,25 @@ export default function InventoryStock() {
                         >
                           <Power size={15} />
                         </button>
+                        {item.is_archived ? (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmUnarchive(item)}
+                            className="p-1.5 text-amber-600 hover:text-amber-800 dark:hover:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-950/40 transition"
+                            title="Unarchive Item"
+                          >
+                            <RotateCcw size={15} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDeleteOrArchive(item)}
+                            className="p-1.5 text-stone-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                            title="Delete or Archive Item"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -369,7 +711,7 @@ export default function InventoryStock() {
         </div>
         <Pagination
           currentPage={currentPage}
-          totalPages={Math.ceil(items.length / pageSize) || 1}
+          totalPages={totalPages}
           onPageChange={setCurrentPage}
           totalRecords={items.length}
           limit={pageSize}
@@ -650,6 +992,281 @@ export default function InventoryStock() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING BULK ACTIONS BAR */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 right-8 z-40 flex items-center gap-3 bg-stone-900/95 dark:bg-stone-800/95 text-white px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md border border-stone-700/50">
+          <div className="flex items-center gap-2 pr-3 border-r border-stone-700">
+            <CheckSquare size={18} className="text-amber-400" />
+            <span className="text-sm font-semibold">{selectedIds.size} selected</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearSelection}
+            className="text-xs text-stone-300 hover:text-white px-2 py-1 rounded-md hover:bg-stone-700/50 transition cursor-pointer"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={handleBulkArchive}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-700 hover:bg-stone-600 text-stone-100 transition shadow-xs cursor-pointer"
+          >
+            <Archive size={14} className="text-amber-400" />
+            Archive Selected
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenBulkDeleteCheck}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition shadow-xs cursor-pointer"
+          >
+            <Trash2 size={14} />
+            Delete Selected
+          </button>
+        </div>
+      )}
+
+      {/* SINGLE ITEM ELIGIBILITY / DELETE / ARCHIVE MODAL */}
+      {eligibilityModal.open && eligibilityModal.item && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className={`p-2 rounded-xl ${eligibilityModal.eligibility?.can_delete ? "bg-rose-100 dark:bg-rose-950/50 text-rose-600" : "bg-amber-100 dark:bg-amber-950/50 text-amber-600"}`}>
+                  {eligibilityModal.eligibility?.can_delete ? <Trash2 size={18} /> : <Archive size={18} />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
+                    {eligibilityModal.eligibility?.can_delete ? "Delete Inventory Item" : "Archive Item (Protected Data)"}
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 font-mono">
+                    {eligibilityModal.item.name} {eligibilityModal.item.sku && `(${eligibilityModal.item.sku})`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEligibilityModal({ open: false, loading: false, item: null, eligibility: null, archiveReason: "" })}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {eligibilityModal.loading ? (
+              <div className="py-8 flex flex-col items-center justify-center gap-2 text-stone-500 text-sm">
+                <RefreshCw size={24} className="animate-spin text-amber-600" />
+                <span>Checking item dependencies...</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {eligibilityModal.eligibility?.can_delete ? (
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 font-semibold text-xs">
+                      <CheckCircle2 size={16} />
+                      <span>Zero Dependency Constraints</span>
+                    </div>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                      This item has no recorded movements, purchase orders, receipts, or recipe associations. It can be safely and permanently deleted from the database.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl space-y-2">
+                      <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold text-xs">
+                        <AlertTriangle size={16} />
+                        <span>Permanent Deletion Blocked</span>
+                      </div>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        This item is referenced by active historical records. Permanent deletion is blocked to prevent data corruption and preserve financial integrity.
+                      </p>
+                      <ul className="text-xs text-stone-700 dark:text-stone-300 list-disc list-inside space-y-1 pt-1">
+                        {eligibilityModal.eligibility?.reasons?.map((r, idx) => (
+                          <li key={idx}>{r}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="p-3 bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-800 rounded-xl space-y-2">
+                      <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                        Archive Reason (Recommended)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Discontinued supplier, replaced with new SKU"
+                        value={eligibilityModal.archiveReason}
+                        onChange={(e) => setEligibilityModal({ ...eligibilityModal, archiveReason: e.target.value })}
+                        className={INPUT_STYLES.base}
+                      />
+                      <p className="text-[11px] text-stone-500">
+                        Archiving safely deactivates the item from inventory pickers while maintaining all historical ledger audit trails.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                  <button
+                    type="button"
+                    onClick={() => setEligibilityModal({ open: false, loading: false, item: null, eligibility: null, archiveReason: "" })}
+                    className={BUTTON_VARIANTS.secondary}
+                  >
+                    Cancel
+                  </button>
+
+                  {eligibilityModal.eligibility?.can_delete ? (
+                    <button
+                      type="button"
+                      onClick={handleConfirmPermanentDelete}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition shadow-sm cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                      Permanently Delete
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleConfirmArchive}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white transition shadow-sm cursor-pointer"
+                    >
+                      <Archive size={14} />
+                      Archive Item Instead
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* BULK ACTION CONFIRMATION MODAL */}
+      {bulkModal.open && bulkModal.checkResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950/50 text-amber-600">
+                  <ShieldAlert size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
+                    Bulk Inventory Action Plan
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Inspected {bulkModal.checkResult.total_checked} selected item(s) for data dependencies
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkModal({ open: false, loading: false, checkResult: null, archiveReason: "" })}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
+                <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide block">
+                  Eligible for Deletion
+                </span>
+                <span className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                  {bulkModal.checkResult.eligible_count}
+                </span>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                  Zero ledger or order references.
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl">
+                <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wide block">
+                  Require Archiving
+                </span>
+                <span className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                  {bulkModal.checkResult.require_archive_count}
+                </span>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1">
+                  Contains active or historical ledger data.
+                </p>
+              </div>
+            </div>
+
+            {bulkModal.checkResult.require_archive_count > 0 && (
+              <div className="max-h-48 overflow-y-auto p-3 bg-stone-50 dark:bg-stone-900/60 rounded-xl border border-stone-200 dark:border-stone-800 space-y-2">
+                <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 block">
+                  Items Requiring Safe Archive:
+                </span>
+                <div className="space-y-1.5 divide-y divide-stone-200 dark:divide-stone-800 text-xs">
+                  {bulkModal.checkResult.require_archive.map((it) => (
+                    <div key={it.id} className="pt-1.5 flex items-center justify-between text-stone-600 dark:text-stone-400">
+                      <span className="font-medium text-stone-800 dark:text-stone-200">{it.name}</span>
+                      <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                        {it.reasons?.[0] || "Active historical records"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                Reason for Action
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Bulk cleanup of seasonal inventory"
+                value={bulkModal.archiveReason}
+                onChange={(e) => setBulkModal({ ...bulkModal, archiveReason: e.target.value })}
+                className={INPUT_STYLES.base}
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setBulkModal({ open: false, loading: false, checkResult: null, archiveReason: "" })}
+                className={BUTTON_VARIANTS.secondary}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecuteBulkArchiveAll}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 dark:bg-stone-700 dark:hover:bg-stone-600 text-white transition cursor-pointer"
+              >
+                <Archive size={14} className="text-amber-400" />
+                Archive All ({bulkModal.checkResult.total_checked})
+              </button>
+
+              {bulkModal.checkResult.eligible_count > 0 && bulkModal.checkResult.require_archive_count > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkDeleteAndArchive}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white transition shadow-sm cursor-pointer"
+                >
+                  <ShieldAlert size={14} />
+                  Delete Clean ({bulkModal.checkResult.eligible_count}) & Archive Others ({bulkModal.checkResult.require_archive_count})
+                </button>
+              )}
+
+              {bulkModal.checkResult.eligible_count > 0 && bulkModal.checkResult.require_archive_count === 0 && (
+                <button
+                  type="button"
+                  onClick={handleExecuteBulkDeleteAndArchive}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition shadow-sm cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                  Permanently Delete All ({bulkModal.checkResult.eligible_count})
+                </button>
+              )}
             </div>
           </div>
         </div>

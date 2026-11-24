@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RefreshCw,
   SlidersHorizontal,
@@ -8,6 +8,7 @@ import {
   Eye,
   RotateCcw,
   Archive,
+  CheckSquare,
 } from "lucide-react";
 import {
   getAllMovements,
@@ -15,6 +16,7 @@ import {
   recordAdjustment,
   reverseStockMovement,
   getInventoryItems,
+  bulkArchiveMovements,
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
@@ -30,20 +32,15 @@ export default function InventoryWastage() {
   // Filters & Search
   const [preset, setPreset] = useState("today");
   const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active"); // 'active' | 'archived' | 'all'
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+  const [totalMovements, setTotalMovements] = useState(0);
 
   // Selected for Bulk Archive
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [archivedIds, setArchivedIds] = useState(() => {
-    try {
-      const saved = localStorage.getItem("dineflow_archived_movements");
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const headerCheckboxRef = useRef(null);
 
   // Modals
   const [wastageModalOpen, setWastageModalOpen] = useState(false);
@@ -72,26 +69,37 @@ export default function InventoryWastage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const isArchivedParam =
+        statusFilter === "archived" ? true : statusFilter === "active" ? false : undefined;
       const [movs, items] = await Promise.all([
         getAllMovements({
           preset,
           movement_type: typeFilter || undefined,
-          limit: 200,
+          is_archived: isArchivedParam,
+          search: search.trim() || undefined,
+          page: currentPage,
+          page_size: pageSize,
         }),
         getInventoryItems({ is_active: true }),
       ]);
-      setMovements(movs);
+      setMovements(movs.items || []);
+      setTotalMovements(movs.total || 0);
       setInventoryItems(items);
     } catch {
       showError("Failed to load stock movements");
     } finally {
       setLoading(false);
     }
-  }, [preset, typeFilter, showError]);
+  }, [preset, typeFilter, statusFilter, search, currentPage, pageSize, showError]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Selection applies only to the exact page and filter result the user selected.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [preset, typeFilter, statusFilter, search, currentPage]);
 
   const handleLogWastage = async (e) => {
     e.preventDefault();
@@ -166,31 +174,37 @@ export default function InventoryWastage() {
   };
 
   // Safe Archive Selected
+  // Safe Archive Selected (persists to PostgreSQL)
   const handleArchiveSelected = async () => {
-    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
 
     const ok = await confirm({
       title: "Archive Selected Records",
-      message: `Archive ${selectedIds.size} non-order ledger entries from the active view? This safely archives records for display without deleting historical stock movements.`,
+      message: `Archive ${ids.length} selected ledger entries from active operational views? Historical stock ledger data and balance calculations will be strictly preserved in PostgreSQL.`,
       confirmText: "Archive Selected",
       variant: "danger",
     });
     if (!ok) return;
 
-    const nextArchived = new Set([...archivedIds, ...selectedIds]);
-    setArchivedIds(nextArchived);
     try {
-      localStorage.setItem("dineflow_archived_movements", JSON.stringify([...nextArchived]));
-    } catch {
-      // Local storage fallback
+      const res = await bulkArchiveMovements(ids, "Archived by manager from operational view");
+      showSuccess(`Successfully archived ${res.archived_count} ledger record(s)`);
+      setSelectedIds(new Set());
+      setCurrentPage(1);
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to archive movements");
     }
-    setSelectedIds(new Set());
-    showDelete(`${selectedIds.size} records archived from view`);
   };
 
-  // Toggle row select (only eligible: wastage and adjustment, not immutable order movements)
-  const toggleSelectRow = (id, movementType) => {
-    if (movementType === "SALE_CONSUMPTION") return; // Immutable
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  // Toggle row select (only eligible: wastage and adjustment, not immutable order movements or already archived)
+  const toggleSelectRow = (id, movementType, isArchived) => {
+    if (movementType === "SALE_CONSUMPTION" || isArchived) return; // Immutable
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -199,22 +213,36 @@ export default function InventoryWastage() {
     });
   };
 
-  // Filter out archived rows and apply search
-  const visibleMovements = movements
-    .filter((m) => !archivedIds.has(m.id))
-    .filter((m) => {
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      return (
-        m.inventory_item_name?.toLowerCase().includes(q) ||
-        m.notes?.toLowerCase().includes(q) ||
-        m.reference_type?.toLowerCase().includes(q) ||
-        String(m.id).includes(q)
-      );
-    });
+  const totalPages = Math.ceil(totalMovements / pageSize) || 1;
+  const paginatedMovements = movements;
 
-  const totalPages = Math.ceil(visibleMovements.length / pageSize) || 1;
-  const paginatedMovements = visibleMovements.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Eligible for selection on the current visible page
+  const pageEligibleMovements = paginatedMovements.filter(
+    (m) => m.can_archive
+  );
+  const pageEligibleIds = pageEligibleMovements.map((m) => m.id);
+  const allPageSelected =
+    pageEligibleIds.length > 0 && pageEligibleIds.every((id) => selectedIds.has(id));
+  const somePageSelected =
+    pageEligibleIds.some((id) => selectedIds.has(id)) && !allPageSelected;
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = somePageSelected;
+    }
+  }, [somePageSelected]);
+
+  const handleToggleSelectAllPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageEligibleIds.forEach((id) => next.delete(id));
+      } else {
+        pageEligibleIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -265,6 +293,43 @@ export default function InventoryWastage() {
             <option value="ADJUSTMENT">Adjustment</option>
             <option value="OPENING_STOCK">Opening Stock</option>
           </select>
+
+          {/* Status Filter Tabs */}
+          <div className="inline-flex items-center p-1 bg-stone-100 dark:bg-stone-800/80 rounded-lg text-xs font-medium border border-stone-200 dark:border-stone-700">
+            <button
+              type="button"
+              onClick={() => { setStatusFilter("active"); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-md transition ${
+                statusFilter === "active"
+                  ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+              }`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStatusFilter("archived"); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-md transition ${
+                statusFilter === "archived"
+                  ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+              }`}
+            >
+              Archived
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-md transition ${
+                statusFilter === "all"
+                  ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 font-bold shadow-xs"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200"
+              }`}
+            >
+              All
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -310,11 +375,24 @@ export default function InventoryWastage() {
       {/* Stock Movements Ledger Table */}
       <div className={TABLE_STYLES.container}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[1050px] text-left border-collapse">
             <thead>
               <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
-                <th className="p-3 w-8">
-                  <span className="sr-only">Select</span>
+                <th className="w-12 px-4 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    ref={headerCheckboxRef}
+                    disabled={pageEligibleIds.length === 0}
+                    checked={allPageSelected}
+                    onChange={handleToggleSelectAllPage}
+                    title={
+                      pageEligibleIds.length === 0
+                        ? "No eligible movements to select on this page (order deductions are protected)"
+                        : "Select all eligible rows on this page"
+                    }
+                    aria-label="Select all eligible rows on this page"
+                    className="w-4.5 h-4.5 text-amber-600 rounded border-stone-300 dark:border-stone-600 focus:ring-amber-500 cursor-pointer accent-amber-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                  />
                 </th>
                 <th className={TABLE_STYLES.th}>Timestamp</th>
                 <th className={TABLE_STYLES.th}>Item</th>
@@ -324,7 +402,7 @@ export default function InventoryWastage() {
                 <th className={TABLE_STYLES.th}>Balance After</th>
                 <th className={TABLE_STYLES.th}>Reference</th>
                 <th className={TABLE_STYLES.th}>Notes</th>
-                <th className={`${TABLE_STYLES.th} text-right`}>Actions</th>
+                <th className={`${TABLE_STYLES.th} text-right pr-6 min-w-[90px]`}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -336,20 +414,20 @@ export default function InventoryWastage() {
                 </tr>
               ) : (
                 paginatedMovements.map((m) => {
-                  const isEligibleForReversal =
-                    (m.movement_type === "WASTAGE" || m.movement_type === "ADJUSTMENT") &&
-                    m.reference_type !== "REVERSAL";
+                  const isEligibleForReversal = m.can_archive;
 
                   return (
-                    <tr key={m.id} className={TABLE_STYLES.tr}>
-                      <td className="p-3">
+                    <tr key={m.id} className={`${TABLE_STYLES.tr} ${selectedIds.has(m.id) ? "bg-amber-50/40 dark:bg-amber-950/20" : ""}`}>
+                      <td className="w-12 px-4 py-3 text-center">
                         <input
                           type="checkbox"
-                          disabled={m.movement_type === "SALE_CONSUMPTION"}
+                          disabled={!m.can_archive}
                           checked={selectedIds.has(m.id)}
-                          onChange={() => toggleSelectRow(m.id, m.movement_type)}
-                          className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 disabled:opacity-30 cursor-pointer"
-                          title={m.movement_type === "SALE_CONSUMPTION" ? "Immutable order deduction" : "Select row"}
+                          onChange={() => toggleSelectRow(m.id, m.movement_type, m.is_archived)}
+                          className="w-4.5 h-4.5 rounded border-stone-300 dark:border-stone-600 text-amber-600 focus:ring-amber-500 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer accent-amber-600"
+                          title={
+                            m.can_archive ? `Select movement #${m.id}` : "Protected system or reversed movement"
+                          }
                         />
                       </td>
                       <td className={TABLE_STYLES.td}>
@@ -394,7 +472,7 @@ export default function InventoryWastage() {
                       <td className={TABLE_STYLES.td}>
                         <span className="text-xs text-stone-500 truncate max-w-xs block">{m.notes || "—"}</span>
                       </td>
-                      <td className={`${TABLE_STYLES.td} text-right`}>
+                      <td className={`${TABLE_STYLES.td} text-right pr-6 min-w-[90px]`}>
                         <div className="inline-flex items-center gap-1.5 justify-end">
                           <button
                             type="button"
@@ -429,9 +507,9 @@ export default function InventoryWastage() {
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          totalRecords={visibleMovements.length}
-          limit={pageSize}
+        totalRecords={totalMovements}
+        pageSize={pageSize}
+        onPageChange={(page) => setCurrentPage(page)}
         />
       </div>
 
@@ -751,6 +829,31 @@ export default function InventoryWastage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* FLOATING BULK ACTIONS BAR */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 right-8 z-40 flex items-center gap-3 bg-stone-900/95 dark:bg-stone-800/95 text-white px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md border border-stone-700/50">
+          <div className="flex items-center gap-2 pr-3 border-r border-stone-700">
+            <CheckSquare size={18} className="text-amber-400" />
+            <span className="text-sm font-semibold">{selectedIds.size} selected</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearSelection}
+            className="text-xs text-stone-300 hover:text-white px-2 py-1 rounded-md hover:bg-stone-700/50 transition cursor-pointer"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={handleArchiveSelected}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white transition shadow-xs cursor-pointer"
+          >
+            <Archive size={14} />
+            Archive Selected ({selectedIds.size})
+          </button>
         </div>
       )}
     </div>

@@ -42,41 +42,41 @@ function Header({ onOpenMobileMenu }) {
   }, [notificationsOpen]);
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#1E293B] bg-[#0D1420] text-white px-3 sm:px-6 lg:px-8 transition-colors duration-200">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#1E293B] bg-[#0D1420] text-white px-4 sm:px-6 transition-colors duration-200">
       {/* Left: Mobile Navigation Drawer Toggle */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="flex h-11 w-11 items-center justify-center rounded-xl text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition lg:hidden cursor-pointer"
+          className="flex h-10 w-10 items-center justify-center rounded-xl text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition lg:hidden cursor-pointer"
           aria-label="Open navigation menu"
           title="Open menu"
         >
-          <Menu size={22} />
+          <Menu size={20} />
         </button>
       </div>
 
       {/* Middle: Global Search (Desktop Flexible Width) */}
-      <div className="hidden md:flex flex-1 items-center justify-center max-w-md lg:max-w-lg mx-4 lg:mx-8">
+      <div className="hidden md:flex flex-1 items-center justify-center max-w-md lg:max-w-lg mx-4">
         <GlobalSearch className="w-full" />
       </div>
 
       {/* Right: Date, Notifications & Mobile Search */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Mobile Search Button (>=44px touch target) */}
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        {/* Mobile Search Button (>=40px touch target) */}
         <button
           type="button"
           onClick={() => setMobileSearchOpen(true)}
-          className="md:hidden flex h-11 w-11 items-center justify-center rounded-xl text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition cursor-pointer"
+          className="md:hidden flex h-10 w-10 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B] transition cursor-pointer"
           aria-label="Open global search"
           title="Search records"
         >
-          <Search size={19} />
+          <Search size={18} />
         </button>
 
         {/* Dynamic Date Badge */}
-        <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-[#8A9AB2] px-3 py-2 rounded-xl bg-[#151D29] border border-[#1E293B]/60 tabular-nums">
-          <Calendar size={13} className="text-[#F59E0B]" />
+        <div className="hidden sm:flex h-10 items-center gap-2 text-xs font-semibold text-stone-200 px-3.5 rounded-xl bg-[#151D29] border border-[#1E293B] tabular-nums shadow-xs">
+          <Calendar size={14} className="text-[#F59E0B]" />
           <span>{today}</span>
         </div>
 
@@ -85,15 +85,15 @@ function Header({ onOpenMobileMenu }) {
           <button
             type="button"
             onClick={() => setNotificationsOpen((prev) => !prev)}
-            className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B]/60 transition cursor-pointer"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B] transition cursor-pointer shadow-xs"
             aria-label="View notifications"
             aria-expanded={notificationsOpen}
             title="Notifications"
           >
-            <Bell size={19} />
+            <Bell size={18} />
             {/* Show indicator ONLY when actual unread notifications exist */}
             {unreadCount > 0 && (
-              <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-[#F59E0B] ring-2 ring-[#0D1420]" />
+              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#F59E0B] ring-2 ring-[#0D1420]" />
             )}
           </button>
 

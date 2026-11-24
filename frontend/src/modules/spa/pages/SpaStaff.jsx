@@ -9,9 +9,9 @@ import {
   Sparkles,
   Edit2,
   Calendar,
-  Phone,
-  Mail,
-  Award,
+  Eye,
+  Power,
+  RefreshCw,
   AlertCircle,
   Save,
   Trash2,
@@ -24,6 +24,8 @@ import Modal from "../../../components/Modal";
 import Pagination from "../../../components/Pagination";
 import ProfilePhotoUpload from "../../../components/ProfilePhotoUpload";
 import AuthenticatedImage from "../../../components/AuthenticatedImage";
+import BulkSelectionBar from "../../../components/BulkSelectionBar";
+import useBulkSelection from "../../../hooks/useBulkSelection";
 
 const DAYS_OF_WEEK = [
   "Monday",
@@ -38,6 +40,9 @@ const DAYS_OF_WEEK = [
 export default function SpaStaff() {
   const { showSuccess, showError, confirm } = useNotification();
   const [staffList, setStaffList] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
+  const [viewingStaff, setViewingStaff] = useState(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
@@ -261,6 +266,40 @@ export default function SpaStaff() {
     }
   };
 
+  const handleToggleStaffStatus = async (staff) => {
+    const nextStatus = !staff.is_active;
+    setStatusUpdatingId(staff.id);
+    try {
+      await spaApi.updateStaff(staff.id, { is_active: nextStatus });
+      showSuccess(`${staff.full_name || staff.name} ${nextStatus ? "activated" : "deactivated"}.`, "Staff Status Updated");
+      await fetchStaff();
+      setViewingStaff((current) => current?.id === staff.id ? { ...current, is_active: nextStatus } : current);
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to update staff status.", "Status Update Failed");
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
+
+  const handleDeleteSelectedStaff = async () => {
+    const targets = filteredStaff.filter((staff) => selectedIds.has(staff.id));
+    if (!targets.length) return;
+    const confirmed = await confirm({
+      title: "Delete Selected Spa Staff",
+      message: `Delete or deactivate ${targets.length} selected staff record(s)? Staff with booking history will be deactivated to preserve records.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    const results = await Promise.allSettled(targets.map((staff) => spaApi.deleteStaff(staff.id)));
+    clear();
+    const succeeded = results.filter((result) => result.status === "fulfilled").length;
+    const failed = results.length - succeeded;
+    if (succeeded) showSuccess(`${succeeded} staff record(s) deleted or deactivated.`, "Staff Updated");
+    if (failed) showError(`${failed} staff record(s) could not be deleted.`, "Some Deletions Failed");
+    await fetchStaff();
+  };
+
   const safeList = Array.isArray(staffList) ? staffList : [];
   const therapistsCount = safeList.filter((s) => s.is_therapist).length;
   const otherStaffCount = safeList.filter((s) => !s.is_therapist).length;
@@ -277,7 +316,7 @@ export default function SpaStaff() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Spa Therapists"
@@ -294,31 +333,31 @@ export default function SpaStaff() {
       />
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-col gap-2.5 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-3 sm:flex-row sm:items-center sm:justify-start sm:gap-2.5">
+        <div className="relative w-full sm:max-w-xs">
           <Search
             size={16}
             className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400"
           />
           <input
             type="text"
-            placeholder="Search by name, employee code, specialization, or phone..."
+            placeholder="Search"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] pl-10 pr-4 py-2 text-xs sm:text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F59E0B] focus:outline-none"
+            className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] pl-9 pr-3 py-2 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F59E0B] focus:outline-none"
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => {
               setFilterTherapist("all");
               setCurrentPage(1);
             }}
-            className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
               filterTherapist === "all"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
                 : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
@@ -331,7 +370,7 @@ export default function SpaStaff() {
               setFilterTherapist("therapists");
               setCurrentPage(1);
             }}
-            className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               filterTherapist === "therapists"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
                 : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
@@ -345,7 +384,7 @@ export default function SpaStaff() {
               setFilterTherapist("other");
               setCurrentPage(1);
             }}
-            className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               filterTherapist === "other"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
                 : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
@@ -356,9 +395,11 @@ export default function SpaStaff() {
         </div>
       </div>
 
-      {/* Staff Grid / Cards */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedStaff} onClear={clear} />
+
+      {/* Staff Table */}
       {loading ? (
-        <div className="p-12 text-center text-stone-400 text-sm">
+        <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-10 text-center text-sm text-stone-400">
           Loading staff directory...
         </div>
       ) : error ? (
@@ -366,126 +407,77 @@ export default function SpaStaff() {
           {error}
         </div>
       ) : filteredStaff.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-stone-200 dark:border-stone-800 p-12 text-center">
-          <Users size={40} className="mx-auto text-stone-300 dark:text-stone-600 mb-3" />
-          <h3 className="text-base font-semibold text-stone-800 dark:text-stone-200">
-            No staff members found
-          </h3>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            {search ? "Try adjusting your search criteria" : "Get started by adding your first spa therapist or attendant"}
-          </p>
+        <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-10 text-center">
+          <Users size={32} className="mx-auto mb-2 text-stone-300 dark:text-stone-600" />
+          <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">No staff members found</p>
+          <p className="mt-1 text-xs text-stone-500">{search ? "Try another search." : "Add a therapist or support staff member to get started."}</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((staff) => {
-            const displayName = staff.full_name || staff.name || "Staff Member";
-            return (
-              <div
-                key={staff.id}
-                className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-5 shadow-xs hover:border-[#F59E0B]/40 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-amber-500/10 dark:bg-amber-500/20 text-[#9A3412] dark:text-[#FFB02E] flex items-center justify-center font-bold text-sm shrink-0 border border-amber-500/20">
-                        <AuthenticatedImage
-                          src={staff.image_url}
-                          alt={displayName}
-                          fallback={displayName.charAt(0).toUpperCase()}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="text-sm sm:text-base font-bold text-stone-900 dark:text-white">
-                          {displayName}
-                        </h3>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {staff.employee_code && (
-                            <span className="font-mono text-[10px] font-semibold bg-stone-100 dark:bg-stone-800 px-1.5 py-0.5 rounded text-stone-600 dark:text-stone-400">
-                              {staff.employee_code}
-                            </span>
-                          )}
-                          {staff.is_therapist ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                              <Sparkles size={10} />
-                              Therapist
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full">
-                              {staff.designation || "Support Staff"}
-                            </span>
-                          )}
+        <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722]">
+          <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 px-4 py-3">
+            <div>
+              <h2 className="text-sm font-bold text-stone-900 dark:text-white">Spa Staff Directory</h2>
+              <p className="mt-0.5 text-xs text-stone-500">{filteredStaff.length} staff members</p>
+            </div>
+            <button type="button" onClick={fetchStaff} disabled={loading} aria-label="Refresh staff" className="rounded-lg border border-stone-200 dark:border-stone-700 p-2 text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-50">
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead className="bg-stone-50 dark:bg-stone-800/60 text-xs uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                <tr>
+                  <th className="px-4 py-3"><input type="checkbox" aria-label="Select all spa staff on this page" checked={filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((staff) => selectedIds.has(staff.id))} onChange={() => toggleMany(filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((staff) => staff.id))} className="h-4 w-4 accent-amber-500" /></th>
+                  <th className="px-4 py-3 font-semibold">Staff Member</th>
+                  <th className="px-4 py-3 font-semibold">Role</th>
+                  <th className="px-4 py-3 font-semibold">Specialization</th>
+                  <th className="px-4 py-3 font-semibold">Contact</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+                {filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((staff) => {
+                  const displayName = staff.full_name || staff.name || "Staff Member";
+                  return (
+                    <tr key={staff.id} className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40">
+                      <td className="px-4 py-3"><input type="checkbox" aria-label={`Select staff ${displayName}`} checked={selectedIds.has(staff.id)} onChange={() => toggle(staff.id)} className="h-4 w-4 accent-amber-500" /></td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-amber-200 bg-amber-50 text-center leading-9 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                            <AuthenticatedImage src={staff.image_url} alt={displayName} fallback={displayName.charAt(0).toUpperCase()} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-stone-900 dark:text-white">{displayName}</p>
+                            <p className="text-xs text-stone-500">{staff.employee_code || "No employee code"}</p>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                        staff.is_active
-                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                          : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
-                      }`}
-                    >
-                      {staff.is_active ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
-                      {staff.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 text-xs text-stone-600 dark:text-stone-400 mb-4 pt-2 border-t border-stone-100 dark:border-stone-800/80">
-                    {staff.specialization && (
-                      <div className="flex items-center gap-2">
-                        <Award size={13} className="text-amber-500 shrink-0" />
-                        <span className="truncate">
-                          Specialization: <strong className="text-stone-800 dark:text-stone-200">{staff.specialization}</strong>
+                      </td>
+                      <td className="px-4 py-3 text-stone-700 dark:text-stone-300">{staff.is_therapist ? "Therapist" : staff.designation || "Support Staff"}</td>
+                      <td className="px-4 py-3 text-stone-600 dark:text-stone-400">{staff.specialization || "—"}</td>
+                      <td className="px-4 py-3 text-xs text-stone-600 dark:text-stone-400">
+                        <div>{staff.phone || "—"}</div>
+                        {staff.email && <div className="max-w-[220px] truncate">{staff.email}</div>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${staff.is_active ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                          {staff.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}{staff.is_active ? "Active" : "Inactive"}
                         </span>
-                      </div>
-                    )}
-                    {staff.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone size={13} className="text-stone-400 shrink-0" />
-                        <span>{staff.phone}</span>
-                      </div>
-                    )}
-                    {staff.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail size={13} className="text-stone-400 shrink-0" />
-                        <span className="truncate">{staff.email}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Card Actions */}
-                <div className="flex items-center gap-2 pt-3 border-t border-stone-100 dark:border-stone-800/80">
-                  <button
-                    onClick={() => openEditStaff(staff)}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl border border-stone-200 dark:border-stone-700 py-2 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition cursor-pointer"
-                  >
-                    <Edit2 size={13} />
-                    <span>Edit Profile</span>
-                  </button>
-
-                  {staff.is_therapist && (
-                    <button
-                      onClick={() => openAvailability(staff)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 py-2 text-xs font-semibold text-amber-700 dark:text-[#F59E0B] hover:bg-amber-500/20 transition cursor-pointer"
-                    >
-                      <Calendar size={13} />
-                      <span>Schedule</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => handleDeleteStaff(staff)}
-                    className="p-2 rounded-xl border border-red-200 dark:border-red-900/50 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 transition cursor-pointer"
-                    title="Delete / Deactivate Staff Member"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button type="button" onClick={() => setViewingStaff(staff)} title="View staff details" aria-label={`View ${displayName}`} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white"><Eye size={15} /></button>
+                          <button type="button" onClick={() => openEditStaff(staff)} title="Edit staff" aria-label={`Edit ${displayName}`} className="rounded-lg p-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40"><Edit2 size={15} /></button>
+                          {staff.is_therapist && <button type="button" onClick={() => openAvailability(staff)} title="Manage schedule" aria-label={`Schedule for ${displayName}`} className="rounded-lg p-2 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"><Calendar size={15} /></button>}
+                          <button type="button" onClick={() => handleToggleStaffStatus(staff)} disabled={statusUpdatingId === staff.id} title={staff.is_active ? "Deactivate staff" : "Activate staff"} aria-label={`${staff.is_active ? "Deactivate" : "Activate"} ${displayName}`} className={`rounded-lg p-2 disabled:opacity-50 ${staff.is_active ? "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700" : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"}`}><Power size={15} /></button>
+                          <button type="button" onClick={() => handleDeleteStaff(staff)} title="Delete / deactivate staff" aria-label={`Delete ${displayName}`} className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"><Trash2 size={15} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
           <Pagination
             currentPage={currentPage}
@@ -496,6 +488,26 @@ export default function SpaStaff() {
           />
         </div>
       )}
+
+      <Modal isOpen={Boolean(viewingStaff)} onClose={() => setViewingStaff(null)} title="Staff Details" size="sm">
+        {viewingStaff && (
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 overflow-hidden rounded-full border border-amber-200 bg-amber-50 text-center leading-[3rem] font-bold text-amber-800">
+                <AuthenticatedImage src={viewingStaff.image_url} alt={viewingStaff.full_name || viewingStaff.name} fallback={(viewingStaff.full_name || viewingStaff.name || "?").charAt(0).toUpperCase()} />
+              </div>
+              <div><p className="font-bold text-stone-900 dark:text-white">{viewingStaff.full_name || viewingStaff.name}</p><p className="text-xs text-stone-500">{viewingStaff.employee_code || "No employee code"}</p></div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-stone-100 pt-3 text-xs dark:border-stone-800">
+              <span className="text-stone-500">Role</span><span>{viewingStaff.is_therapist ? "Therapist" : viewingStaff.designation || "Support Staff"}</span>
+              <span className="text-stone-500">Specialization</span><span>{viewingStaff.specialization || "—"}</span>
+              <span className="text-stone-500">Phone</span><span>{viewingStaff.phone || "—"}</span>
+              <span className="text-stone-500">Email</span><span className="break-all">{viewingStaff.email || "—"}</span>
+              <span className="text-stone-500">Status</span><span>{viewingStaff.is_active ? "Active" : "Inactive"}</span>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Add / Edit Staff Modal */}
       <Modal

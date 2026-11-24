@@ -24,6 +24,11 @@ export const createInvoice = async (invoiceData) => {
   return response.data;
 };
 
+export const deleteInvoice = async (invoiceId) => {
+  const response = await api.delete(`/api/invoices/${invoiceId}`);
+  return response.data;
+};
+
 // Download generated invoice PDF
 export const downloadInvoicePdf = async (invoiceId) => {
   const response = await api.get(

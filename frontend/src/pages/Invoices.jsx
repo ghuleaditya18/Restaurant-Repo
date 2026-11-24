@@ -14,6 +14,7 @@ import {
   Download,
   MessageCircle,
   Share2,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -21,6 +22,7 @@ import {
   getInvoiceById,
   createInvoice,
   downloadInvoicePdf,
+  deleteInvoice,
 } from "../services/invoiceService";
 
 import {
@@ -36,6 +38,8 @@ import StandardModal from "../components/Modal";
 import StatCard from "../components/StatCard";
 import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
+import BulkSelectionBar from "../components/BulkSelectionBar";
+import useBulkSelection from "../hooks/useBulkSelection";
 
 // ==========================================
 // CONSTANTS
@@ -163,6 +167,7 @@ const savePdfFile = (blob, filename) => {
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [payments, setPayments] = useState([]);
   const [orders, setOrders] = useState([]);
 
@@ -343,6 +348,49 @@ export default function Invoices() {
     const start = (invoicePage - 1) * pageSize;
     return filteredInvoices.slice(start, start + pageSize);
   }, [filteredInvoices, invoicePage, pageSize]);
+
+  const canDeleteInvoice = (invoice) => {
+    const hasPayments = payments.some((payment) => Number(payment.invoice_id) === Number(invoice.id));
+    return String(invoice.payment_status || "").trim().toLowerCase() === "pending" && !hasPayments;
+  };
+
+  const handleDeleteInvoice = async (invoice) => {
+    const ok = await confirm({
+      title: "Delete Invoice",
+      message: `Delete invoice ${invoice.invoice_number}? This is allowed only when no payment has been recorded.`,
+      confirmText: "Delete Invoice",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await deleteInvoice(invoice.id);
+      clear();
+      showSuccess(`Invoice ${invoice.invoice_number} deleted successfully.`, "Invoice Deleted");
+      await loadData({ showLoader: false });
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Invoice could not be deleted.", "Delete Failed");
+    }
+  };
+
+  const handleDeleteSelectedInvoices = async () => {
+    const targets = filteredInvoices.filter((invoice) => selectedIds.has(invoice.id) && canDeleteInvoice(invoice));
+    if (!targets.length) return;
+    const ok = await confirm({
+      title: "Delete Selected Invoices",
+      message: `Delete ${targets.length} selected unpaid invoice(s) with no recorded payments? Paid invoices and invoices with payment records are protected.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    const results = await Promise.allSettled(targets.map((invoice) => deleteInvoice(invoice.id)));
+    clear();
+    const deleted = results.filter((result) => result.status === "fulfilled").length;
+    const failed = results.length - deleted;
+    if (deleted) showSuccess(`${deleted} invoice(s) deleted successfully.`, "Invoices Deleted");
+    if (failed) showError(`${failed} invoice(s) could not be deleted. Payment history may be attached.`, "Some Deletions Failed");
+    await loadData({ showLoader: false });
+  };
 
   const invoiceMap = useMemo(() => {
     const map = {};
@@ -899,10 +947,15 @@ export default function Invoices() {
           </div>
         </div>
 
+        <div className="px-4 pt-3">
+          <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedInvoices} onClear={clear} />
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full min-w-[800px] text-left">
             <thead className="bg-[#FAF9F6] text-xs uppercase text-gray-500">
               <tr>
+                <th className="px-4 py-3"><input type="checkbox" aria-label="Select deletable invoices on this page" checked={paginatedInvoices.filter(canDeleteInvoice).length > 0 && paginatedInvoices.filter(canDeleteInvoice).every((invoice) => selectedIds.has(invoice.id))} onChange={() => toggleMany(paginatedInvoices.filter(canDeleteInvoice).map((invoice) => invoice.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3">Invoice Number</th>
                 <th className="px-4 py-3">Order</th>
                 <th className="px-4 py-3">Customer</th>
@@ -918,7 +971,7 @@ export default function Invoices() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="8"
+                    colSpan="9"
                     className="p-10 text-center text-sm text-gray-500"
                   >
                     Loading invoices...
@@ -927,7 +980,7 @@ export default function Invoices() {
               ) : filteredInvoices.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="8"
+                    colSpan="9"
                     className="p-10 text-center text-sm text-gray-500"
                   >
                     No invoices found.
@@ -936,6 +989,7 @@ export default function Invoices() {
               ) : (
                 paginatedInvoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-[#FAF9F6]">
+                    <td className="px-4 py-4"><input type="checkbox" aria-label={`Select invoice ${invoice.invoice_number}`} checked={selectedIds.has(invoice.id)} disabled={!canDeleteInvoice(invoice)} onChange={() => toggle(invoice.id)} title={canDeleteInvoice(invoice) ? "Select invoice for deletion" : "Only unpaid invoices with no payment records can be deleted"} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                     <td className="px-4 py-4">
                       <p className="font-semibold text-stone-900 dark:text-stone-100">
                         {invoice.invoice_number}
@@ -996,6 +1050,16 @@ export default function Invoices() {
                             <CreditCard size={17} />
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteInvoice(invoice)}
+                          disabled={!canDeleteInvoice(invoice)}
+                          title={canDeleteInvoice(invoice) ? "Delete invoice" : "Only unpaid invoices with no payment records can be deleted"}
+                          aria-label={`Delete invoice ${invoice.invoice_number}`}
+                          className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-rose-950/30"
+                        >
+                          <Trash2 size={17} />
+                        </button>
                       </div>
                     </td>
                   </tr>

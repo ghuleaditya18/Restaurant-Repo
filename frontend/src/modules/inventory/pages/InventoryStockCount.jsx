@@ -3,8 +3,10 @@ import {
   Plus,
   RefreshCw,
   Eye,
+  Pencil,
   X,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import {
   getStockCounts,
@@ -13,13 +15,17 @@ import {
   submitStockCount,
   approveStockCount,
   cancelStockCount,
+  deleteStockCount,
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
 import Pagination from "../../../components/Pagination";
+import BulkSelectionBar from "../../../components/BulkSelectionBar";
+import useBulkSelection from "../../../hooks/useBulkSelection";
 
 export default function InventoryStockCount() {
   const [counts, setCounts] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
@@ -139,6 +145,49 @@ export default function InventoryStockCount() {
     }
   };
 
+  const handleDeleteCount = async (count) => {
+    if (count.status !== "Draft") {
+      showError("Only Draft stock count sessions can be deleted");
+      return;
+    }
+    const ok = await confirm({
+      title: `Delete Stock Count #${count.count_number}`,
+      message: `Are you sure you want to permanently delete Draft stock count #${count.count_number}? This will remove the unapproved audit sheet.`,
+      confirmText: "Delete Draft Audit",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    try {
+      await deleteStockCount(count.id);
+      showSuccess(`Stock count #${count.count_number} deleted successfully`);
+      if (auditModalOpen && activeCount?.id === count.id) {
+        setAuditModalOpen(false);
+      }
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to delete stock count");
+    }
+  };
+
+  const handleDeleteSelectedCounts = async () => {
+    const targets = counts.filter((count) => selectedIds.has(count.id) && count.status === "Draft");
+    if (!targets.length) return;
+    const ok = await confirm({
+      title: "Delete Selected Draft Counts",
+      message: `Permanently delete ${targets.length} selected Draft stock count session(s)? Submitted and approved audit history is preserved.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const results = await Promise.allSettled(targets.map((count) => deleteStockCount(count.id)));
+    const deletedIds = targets.filter((_, index) => results[index].status === "fulfilled").map((count) => count.id);
+    setCounts((previous) => previous.filter((count) => !deletedIds.includes(count.id)));
+    clear();
+    if (deletedIds.length) showSuccess(`${deletedIds.length} Draft stock count session(s) deleted.`);
+    if (deletedIds.length < targets.length) showError(`${targets.length - deletedIds.length} stock count session(s) could not be deleted.`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Controls */}
@@ -168,30 +217,33 @@ export default function InventoryStockCount() {
       </div>
 
       {/* Counts List Table */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedCounts} onClear={clear} />
       <div className={TABLE_STYLES.container}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[950px] text-left border-collapse">
             <thead>
               <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
+                <th className={TABLE_STYLES.th}><input type="checkbox" aria-label="Select Draft stock counts on this page" checked={counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").length > 0 && counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").every((count) => selectedIds.has(count.id))} onChange={() => toggleMany(counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").map((count) => count.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className={TABLE_STYLES.th}>Audit Number</th>
                 <th className={TABLE_STYLES.th}>Count Date</th>
                 <th className={TABLE_STYLES.th}>Items Counted</th>
                 <th className={TABLE_STYLES.th}>Net Variance Value</th>
                 <th className={TABLE_STYLES.th}>Status</th>
                 <th className={TABLE_STYLES.th}>Notes</th>
-                <th className={`${TABLE_STYLES.th} text-right`}>Actions</th>
+                <th className={`${TABLE_STYLES.th} text-right pr-6`}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {counts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-sm text-stone-500">
+                  <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
                     {loading ? "Loading stock counts..." : "No physical audit sessions found."}
                   </td>
                 </tr>
               ) : (
                 counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
                   <tr key={c.id} className={TABLE_STYLES.tr}>
+                    <td className={TABLE_STYLES.td}><input type="checkbox" aria-label={`Select Draft stock count ${c.count_number}`} checked={selectedIds.has(c.id)} disabled={c.status !== "Draft"} onChange={() => toggle(c.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                     <td className={TABLE_STYLES.td}>
                       <span className="font-bold font-mono text-stone-900 dark:text-stone-100">{c.count_number}</span>
                     </td>
@@ -228,15 +280,40 @@ export default function InventoryStockCount() {
                     <td className={TABLE_STYLES.td}>
                       <span className="text-xs text-stone-500 truncate max-w-xs block">{c.notes || "—"}</span>
                     </td>
-                    <td className={`${TABLE_STYLES.td} text-right`}>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAudit(c.id)}
-                        className={BUTTON_VARIANTS.secondary}
-                      >
-                        <Eye size={14} />
-                        <span>{c.status === "Draft" ? "Enter Counts" : "View Sheet"}</span>
-                      </button>
+                    <td className={`${TABLE_STYLES.td} text-right pr-6`}>
+                      <div className="inline-flex items-center gap-1.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAudit(c.id)}
+                          className="p-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded transition"
+                          title={c.status === "Draft" ? "View / Enter Counts" : "View Audit Sheet"}
+                          aria-label={c.status === "Draft" ? "View / Enter Counts" : "View Audit Sheet"}
+                        >
+                          <Eye size={15} />
+                        </button>
+                        {c.status === "Draft" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAudit(c.id)}
+                              className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded transition"
+                              title="Edit Draft Counts"
+                              aria-label="Edit Draft Counts"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCount(c)}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
+                              title="Delete Draft Audit"
+                              aria-label="Delete Draft Audit"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -442,8 +519,16 @@ export default function InventoryStockCount() {
                   <>
                     <button
                       type="button"
+                      onClick={() => handleDeleteCount(activeCount)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/40 dark:text-rose-300 transition cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                      Delete Draft
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleCancelCount}
-                      className={BUTTON_VARIANTS.danger}
+                      className={BUTTON_VARIANTS.secondary}
                     >
                       Cancel Audit
                     </button>

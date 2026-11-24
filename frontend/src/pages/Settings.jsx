@@ -658,11 +658,11 @@ export default function Settings() {
                 <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
                   Personal & Account Information
                 </h3>
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                {/* <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                   {isSpaContext
                     ? "Current Spa receptionist identity and authorized communication credentials."
                     : "Current receptionist identity and authorized communication credentials."}
-                </p>
+                </p> */}
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -673,11 +673,11 @@ export default function Settings() {
                   <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     {user?.full_name || "—"}
                   </p>
-                  <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  {/* <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
                     {isSpaContext
                       ? "Recorded on booking status transitions and therapy audit trails."
                       : "Recorded on order transitions and system audit trails."}
-                  </p>
+                  </p> */}
                 </div>
 
                 <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
@@ -688,9 +688,9 @@ export default function Settings() {
                     <Mail size={14} className="text-stone-400 shrink-0" />
                     <span className="truncate">{user?.email || "—"}</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  {/* <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
                     Authorized login email and operational notifications.
-                  </p>
+                  </p> */}
                 </div>
 
                 <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
@@ -701,11 +701,11 @@ export default function Settings() {
                     <Phone size={14} className="text-stone-400 shrink-0" />
                     <span>{user?.phone || (isSpaContext ? "Not configured" : "Not provided")}</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  {/* <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
                     {isSpaContext
                       ? "Direct mobile number for internal wellness coordination."
                       : "Direct mobile number for internal restaurant coordination."}
-                  </p>
+                  </p> */}
                 </div>
 
                 <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
@@ -716,11 +716,11 @@ export default function Settings() {
                     <ShieldCheck size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>{isSpaContext ? "Spa Receptionist" : (user?.role || "Receptionist")}</span>
                   </div>
-                  <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
+                  {/* <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
                     {isSpaContext
                       ? "Authorized for Spa Appointments, Therapies, Invoices, and Billing."
                       : "Authorized for Orders, Tables, Invoices, and Billing."}
-                  </p>
+                  </p> */}
                 </div>
               </div>
             </div>
@@ -871,7 +871,7 @@ export default function Settings() {
                 Application Appearance
               </h2>
               <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                Select your preferred interface display theme. The selected setting persists per user and applies throughout the entire application.
+                Select your preferred interface display theme.
               </p>
             </div>
 
@@ -999,7 +999,7 @@ export default function Settings() {
           {/* SEARCH HERO */}
           <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 shadow-xs">
             <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-              {isSpaContext ? "DineFlow Spa Knowledge Base & Help Centre" : "DineFlow Knowledge Base & Help Centre"}
+              {isSpaContext ? "Help Centre" : "Help Centre"}
             </h3>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               {isSpaContext

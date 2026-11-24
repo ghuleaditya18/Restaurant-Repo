@@ -30,10 +30,8 @@ export default function StatCard({
   const renderIcon = () => {
     if (!Icon) return null;
     if (isValidElement(Icon)) return Icon;
-    if (typeof Icon === "function") {
-      return <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5 md:w-5 md:h-5 shrink-0" />;
-    }
-    return null;
+    const IconComponent = Icon;
+    return <IconComponent className="w-4 h-4 sm:w-4.5 sm:h-4.5 md:w-5 md:h-5 shrink-0" />;
   };
 
   const tileColor =

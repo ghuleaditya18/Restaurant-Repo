@@ -19,9 +19,12 @@ import { getMenuItems } from "../../../services/menuService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
 import Pagination from "../../../components/Pagination";
+import BulkSelectionBar from "../../../components/BulkSelectionBar";
+import useBulkSelection from "../../../hooks/useBulkSelection";
 
 export default function InventoryRecipes() {
   const [menuItems, setMenuItems] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [recipes, setRecipes] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +119,23 @@ export default function InventoryRecipes() {
     } catch (err) {
       showError(err?.response?.data?.detail || "Failed to delete recipe BOM");
     }
+  };
+
+  const handleDeleteSelectedRecipes = async () => {
+    const allTargets = menuItems.filter((item) => selectedIds.has(item.id) && recipeMap[item.id]?.items?.length);
+    if (!allTargets.length) return;
+    const ok = await confirm({
+      title: "Delete Selected Recipe BOMs",
+      message: `Delete the recipe BOM for ${allTargets.length} selected menu item(s)? Menu items and historical inventory movements will remain intact.`,
+      confirmText: "Delete Selected BOMs",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const results = await Promise.allSettled(allTargets.map((item) => deleteRecipe(item.id)));
+    clear();
+    if (results.some((result) => result.status === "fulfilled")) showDelete(`${results.filter((result) => result.status === "fulfilled").length} recipe BOM(s) deleted.`);
+    if (results.some((result) => result.status === "rejected")) showError(`${results.filter((result) => result.status === "rejected").length} recipe BOM(s) could not be deleted.`);
+    await loadData();
   };
 
   const addIngredientRow = () => {
@@ -238,11 +258,13 @@ export default function InventoryRecipes() {
       </div>
 
       {/* Recipes Table */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedRecipes} onClear={clear} />
       <div className={TABLE_STYLES.container}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full min-w-[900px] text-left border-collapse">
             <thead>
               <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
+                <th className={TABLE_STYLES.th}><input type="checkbox" aria-label="Select recipe BOMs on this page" checked={paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).length > 0 && paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className={TABLE_STYLES.th}>Menu Item</th>
                 <th className={TABLE_STYLES.th}>Category</th>
                 <th className={TABLE_STYLES.th}>Selling Price</th>
@@ -256,7 +278,7 @@ export default function InventoryRecipes() {
             <tbody>
               {paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
+                  <td colSpan={9} className="p-8 text-center text-sm text-stone-500">
                     {loading ? "Loading menu items..." : "No menu items found."}
                   </td>
                 </tr>
@@ -267,6 +289,7 @@ export default function InventoryRecipes() {
 
                   return (
                     <tr key={item.id} className={TABLE_STYLES.tr}>
+                      <td className={TABLE_STYLES.td}><input type="checkbox" aria-label={`Select recipe BOM for ${item.name}`} checked={selectedIds.has(item.id)} disabled={!hasRecipe} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                       <td className={TABLE_STYLES.td}>
                         <div className="font-bold text-stone-900 dark:text-stone-100">{item.name}</div>
                       </td>
@@ -321,11 +344,11 @@ export default function InventoryRecipes() {
                           <button
                             type="button"
                             onClick={() => handleOpenEditor(item)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 transition"
-                            title={hasRecipe ? "Edit Recipe" : "Build Recipe"}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded transition"
+                            title={hasRecipe ? "Edit Recipe (BOM)" : "Configure Recipe (BOM)"}
+                            aria-label={hasRecipe ? "Edit Recipe" : "Configure Recipe"}
                           >
-                            <Pencil size={13} />
-                            <span>{hasRecipe ? "Edit" : "Build"}</span>
+                            <Pencil size={15} />
                           </button>
                           {hasRecipe && (
                             <button

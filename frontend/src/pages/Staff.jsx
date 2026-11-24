@@ -34,6 +34,8 @@ import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import StatCard from "../components/StatCard";
 import Pagination from "../components/Pagination";
+import BulkSelectionBar from "../components/BulkSelectionBar";
+import useBulkSelection from "../hooks/useBulkSelection";
 
 // Initial state for add/edit form
 const EMPTY_FORM = {
@@ -118,6 +120,7 @@ const toDateInputValue = (isoString) => {
 export default function Staff() {
   const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [staff, setStaff] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
@@ -427,6 +430,23 @@ export default function Staff() {
     }
   };
 
+  const handleDeleteSelectedStaff = async () => {
+    const targets = staff.filter((member) => selectedIds.has(member.id));
+    const confirmed = await confirm({
+      title: "Delete Selected Staff",
+      message: `Delete ${targets.length} selected staff record(s)? Accounts referenced by business records may be deactivated or protected.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    const results = await Promise.allSettled(targets.map((member) => deleteStaff(member.id)));
+    const deletedIds = targets.filter((_, index) => results[index].status === "fulfilled").map((member) => member.id);
+    setStaff((previous) => previous.filter((member) => !deletedIds.includes(member.id)));
+    clear();
+    if (deletedIds.length) showDelete(`${deletedIds.length} staff record(s) processed.`, "Staff Updated");
+    if (deletedIds.length < targets.length) showError(`${targets.length - deletedIds.length} staff record(s) could not be deleted.`, "Some Deletions Failed");
+  };
+
   return (
     <div className="space-y-6">
       {/* A1 Standard PageHeader */}
@@ -474,6 +494,7 @@ export default function Staff() {
       </div>
 
       {/* Staff Table Container */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedStaff} onClear={clear} />
       <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -520,6 +541,7 @@ export default function Staff() {
           <table className="w-full text-left">
             <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
+                <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all staff on this page" checked={paginatedStaff.length > 0 && paginatedStaff.every((member) => selectedIds.has(member.id))} onChange={() => toggleMany(paginatedStaff.map((member) => member.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3">Employee</th>
                 <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Code</th>
                 <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Designation</th>
@@ -533,7 +555,7 @@ export default function Staff() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     Loading staff records...
@@ -542,7 +564,7 @@ export default function Staff() {
               ) : filteredStaff.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     <p>No staff members found.</p>
@@ -560,6 +582,7 @@ export default function Staff() {
               ) : (
                 paginatedStaff.map((member) => (
                   <tr key={member.id} className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40">
+                    <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select staff ${member.full_name}`} checked={selectedIds.has(member.id)} onChange={() => toggle(member.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* Employee Details */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">

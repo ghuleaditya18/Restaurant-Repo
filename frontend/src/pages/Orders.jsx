@@ -38,6 +38,10 @@ import {
   recordOrderPayment,
   bulkArchiveOrders,
   restoreOrder,
+  deleteArchivedOrder,
+  checkArchiveDeletionEligibility,
+  bulkDeleteArchivedOrders,
+  bulkRestoreOrders,
 } from "../services/orderService";
 import DateFilter from "../components/DateFilter";
 import PageHeader from "../components/PageHeader";
@@ -91,6 +95,37 @@ const formatCurrency = (amount) => {
     style: "currency",
     currency: "INR",
   }).format(num);
+};
+
+const formatOrderTime = (dateStr) => {
+  if (!dateStr) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(dateStr));
+  } catch {
+    return dateStr;
+  }
+};
+
+const formatOrderDateTime = (dateStr) => {
+  if (!dateStr) return "—";
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(dateStr));
+  } catch {
+    return dateStr;
+  }
 };
 
 const getPaymentBadge = (paymentStatus, outstandingBalance) => {
@@ -211,9 +246,9 @@ function OrderWorkflowStepper({ status }) {
 
 export default function Orders() {
   const navigate = useNavigate();
-  const { showSuccess, showError, showWarning, confirm } = useNotification();
+  const { showSuccess, showDelete, showError, showWarning, confirm } = useNotification();
 
-  // Active view tab: 'active' | 'history' | 'archived'
+  // Active view tab: 'active' | 'today' | 'history' | 'archived'
   const [activeTab, setActiveTab] = useState("active");
 
   // Orders data and pagination
@@ -224,6 +259,9 @@ export default function Orders() {
   const [pageSize] = useState(10);
   const [summaryCounts, setSummaryCounts] = useState({
     active: 0,
+    all_active: 0,
+    recent_today: 0,
+    history: 0,
     ordered: 0,
     confirmed: 0,
     ready: 0,
@@ -232,6 +270,13 @@ export default function Orders() {
     cancelled: 0,
     archived: 0,
   });
+
+  // Recent Orders – Today state (for dedicated section on active tab)
+  const [recentTodayOrders, setRecentTodayOrders] = useState([]);
+  const [recentTodayTotal, setRecentTodayTotal] = useState(0);
+  const [recentTodayPage, setRecentTodayPage] = useState(1);
+  const [recentTodayTotalPages, setRecentTodayTotalPages] = useState(1);
+  const [recentTodayLoading, setRecentTodayLoading] = useState(false);
 
   // Reference data
   const [customers, setCustomers] = useState([]);
@@ -257,6 +302,13 @@ export default function Orders() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showBulkClearModal, setShowBulkClearModal] = useState(false);
   const [bulkArchiving, setBulkArchiving] = useState(false);
+
+  // Permanent Deletion of Archived Orders modal
+  const [showDeleteArchivedModal, setShowDeleteArchivedModal] = useState(false);
+  const [deletingArchivedOrder, setDeletingArchivedOrder] = useState(null);
+  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
+  const [deletionEligibilityData, setDeletionEligibilityData] = useState(null);
+  const [deletingArchived, setDeletingArchived] = useState(false);
 
   // Create order modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -365,9 +417,48 @@ export default function Orders() {
     showError,
   ]);
 
+  const loadRecentTodayOrders = useCallback(async () => {
+    setRecentTodayLoading(true);
+    try {
+      const res = await getAllOrders({
+        page: recentTodayPage,
+        page_size: 10,
+        paginate: true,
+        tab: "today",
+        sort_by: "newest",
+      });
+      if (res && typeof res === "object" && Array.isArray(res.items)) {
+        setRecentTodayOrders(res.items);
+        setRecentTodayTotal(res.total ?? 0);
+        setRecentTodayTotalPages(res.total_pages ?? 1);
+        if (res.summary_counts) {
+          setSummaryCounts(res.summary_counts);
+        }
+      } else if (Array.isArray(res)) {
+        setRecentTodayOrders(res);
+        setRecentTodayTotal(res.length);
+        setRecentTodayTotalPages(1);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setRecentTodayLoading(false);
+    }
+  }, [recentTodayPage]);
+
   useEffect(() => {
     loadOrders();
-  }, [loadOrders]);
+    if (activeTab === "active") {
+      loadRecentTodayOrders();
+    }
+  }, [loadOrders, loadRecentTodayOrders, activeTab]);
+
+  const refreshAllOrderData = useCallback(async () => {
+    await loadOrders();
+    if (activeTab === "active") {
+      await loadRecentTodayOrders();
+    }
+  }, [loadOrders, loadRecentTodayOrders, activeTab]);
 
   // Handle Tab Switch
   const handleTabSwitch = (tab) => {
@@ -378,10 +469,10 @@ export default function Orders() {
     setTableFilter("ALL");
     setSearch("");
     setSelectedIds(new Set());
-    if (tab === "active") {
+    if (tab === "active" || tab === "today") {
       setDateFilter({ preset: "all_time", startDate: "", endDate: "" });
     } else {
-      setDateFilter({ preset: "today", startDate: "", endDate: "" });
+      setDateFilter({ preset: "all_time", startDate: "", endDate: "" });
     }
   };
 
@@ -393,7 +484,7 @@ export default function Orders() {
     setTableFilter("ALL");
     setSortBy("newest");
     setDateFilter({
-      preset: activeTab === "active" ? "all_time" : "today",
+      preset: "all_time",
       startDate: "",
       endDate: "",
     });
@@ -407,10 +498,9 @@ export default function Orders() {
       paymentStatusFilter !== "ALL" ||
       tableFilter !== "ALL" ||
       sortBy !== "newest" ||
-      (activeTab !== "active" && dateFilter.preset !== "today") ||
-      (activeTab === "active" && dateFilter.preset !== "all_time")
+      (dateFilter.preset && dateFilter.preset !== "all_time")
     );
-  }, [search, statusFilter, paymentStatusFilter, tableFilter, sortBy, activeTab, dateFilter]);
+  }, [search, statusFilter, paymentStatusFilter, tableFilter, sortBy, dateFilter]);
 
   // ==========================================
   // SELECTION & BULK ARCHIVING HANDLERS
@@ -455,7 +545,7 @@ export default function Orders() {
       );
       setSelectedIds(new Set());
       setShowBulkClearModal(false);
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       showError(getErrorMessage(error), "Bulk Archiving Failed");
     } finally {
@@ -468,11 +558,85 @@ export default function Orders() {
     try {
       await restoreOrder(orderId);
       showSuccess("Order restored to active records successfully.", "Order Restored");
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       showError(getErrorMessage(error), "Failed to Restore Order");
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  const handleOpenSingleDeleteArchived = async (order) => {
+    setDeletingArchivedOrder(order);
+    setDeleteCheckLoading(true);
+    setShowDeleteArchivedModal(true);
+    setDeletionEligibilityData(null);
+    try {
+      const res = await checkArchiveDeletionEligibility([order.id]);
+      setDeletionEligibilityData(res);
+    } catch (error) {
+      showError(getErrorMessage(error), "Failed to check deletion eligibility");
+      setShowDeleteArchivedModal(false);
+    } finally {
+      setDeleteCheckLoading(false);
+    }
+  };
+
+  const handleOpenBulkDeleteArchived = async () => {
+    if (selectedIds.size === 0) return;
+    setDeletingArchivedOrder(null);
+    setDeleteCheckLoading(true);
+    setShowDeleteArchivedModal(true);
+    setDeletionEligibilityData(null);
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await checkArchiveDeletionEligibility(ids);
+      setDeletionEligibilityData(res);
+    } catch (error) {
+      showError(getErrorMessage(error), "Failed to check deletion eligibility");
+      setShowDeleteArchivedModal(false);
+    } finally {
+      setDeleteCheckLoading(false);
+    }
+  };
+
+  const handleBulkRestoreArchived = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    try {
+      const res = await bulkRestoreOrders(ids);
+      showSuccess(res.message, "Orders Restored");
+      setSelectedIds(new Set());
+      await refreshAllOrderData();
+    } catch (error) {
+      showError(getErrorMessage(error), "Failed to Restore Orders");
+    }
+  };
+
+  const handleConfirmDeleteArchived = async () => {
+    if (!deletionEligibilityData || deletionEligibilityData.eligible_ids.length === 0) {
+      showWarning("No eligible orders to delete.", "Deletion Blocked");
+      return;
+    }
+    setDeletingArchived(true);
+    try {
+      if (deletingArchivedOrder) {
+        await deleteArchivedOrder(deletingArchivedOrder.id);
+        showDelete(
+          `Archived order #${deletingArchivedOrder.order_number} has been permanently deleted.`,
+          "Order Deleted"
+        );
+      } else {
+        const res = await bulkDeleteArchivedOrders(deletionEligibilityData.eligible_ids);
+        showDelete(res.message, "Orders Deleted");
+      }
+      setShowDeleteArchivedModal(false);
+      setSelectedIds(new Set());
+      await refreshAllOrderData();
+    } catch (error) {
+      showError(getErrorMessage(error), "Deletion Failed");
+    } finally {
+      setDeletingArchived(false);
     }
   };
 
@@ -516,7 +680,7 @@ export default function Orders() {
             await refreshSelectedOrder();
           }
         }
-        await loadOrders();
+        await refreshAllOrderData();
       } catch (error) {
         showError(getErrorMessage(error), "Action Failed");
       } finally {
@@ -547,7 +711,7 @@ export default function Orders() {
       if (selectedOrder && selectedOrder.id === order.id) {
         closeOrderDetails();
       }
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       showError(getErrorMessage(error), "Failed to Cancel Order");
     } finally {
@@ -662,7 +826,7 @@ export default function Orders() {
         "Order Created"
       );
       closeCreateModal();
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       setFormError(getErrorMessage(error));
     } finally {
@@ -733,7 +897,7 @@ export default function Orders() {
       });
       await refreshSelectedOrder();
       showSuccess("Special instructions updated.", "Order Updated");
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       setDetailsError(getErrorMessage(error));
       showError(getErrorMessage(error), "Update Failed");
@@ -758,7 +922,7 @@ export default function Orders() {
       showSuccess("Dish added to order.", "Item Added");
       setAdditionalItem("");
       setAdditionalQuantity(1);
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       setDetailsError(getErrorMessage(error));
       showError(getErrorMessage(error), "Failed to Add Item");
@@ -791,7 +955,7 @@ export default function Orders() {
       await refreshSelectedOrder();
       showSuccess("Dish quantity updated.", "Quantity Updated");
       setQuantityModal(null);
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       setDetailsError(getErrorMessage(error));
       showError(getErrorMessage(error), "Failed to Update Quantity");
@@ -816,7 +980,7 @@ export default function Orders() {
       await removeOrderItem(selectedOrder.id, item.id);
       await refreshSelectedOrder();
       showSuccess(`Removed "${item.item_name}" from order.`, "Item Removed");
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       setDetailsError(getErrorMessage(error));
       showError(getErrorMessage(error), "Failed to Remove Item");
@@ -875,7 +1039,7 @@ export default function Orders() {
       if (updated.status === "Completed" && activeTab === "active") {
         closeOrderDetails();
       }
-      await loadOrders();
+      await refreshAllOrderData();
     } catch (error) {
       showError(getErrorMessage(error), "Payment Failed");
     } finally {
@@ -905,7 +1069,7 @@ export default function Orders() {
         }
       />
 
-      {/* VIEW TABS: LIVE ACTIVE vs ORDER HISTORY vs ARCHIVED */}
+      {/* VIEW TABS: LIVE ACTIVE vs RECENT TODAY vs ORDER HISTORY vs ARCHIVED */}
       <div className="flex flex-col gap-4 border-b border-stone-200 dark:border-stone-800 pb-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           {/* Active Orders Tab */}
@@ -927,7 +1091,30 @@ export default function Orders() {
                   : "bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300"
               }`}
             >
-              {summaryCounts.active ?? 0}
+              {summaryCounts.all_active ?? summaryCounts.active ?? 0}
+            </span>
+          </button>
+
+          {/* Recent Orders – Today Tab */}
+          <button
+            type="button"
+            onClick={() => handleTabSwitch("today")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
+              activeTab === "today"
+                ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] shadow-xs font-bold"
+                : "bg-white dark:bg-[#101722] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
+            }`}
+          >
+            <Clock size={17} />
+            <span>Recent Orders – Today</span>
+            <span
+              className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
+                activeTab === "today"
+                  ? "bg-[#0D1420]/15 text-[#0D1420]"
+                  : "bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300"
+              }`}
+            >
+              {summaryCounts.recent_today ?? 0}
             </span>
           </button>
 
@@ -950,7 +1137,7 @@ export default function Orders() {
                   : "bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300"
               }`}
             >
-              {(summaryCounts.completed ?? 0) + (summaryCounts.cancelled ?? 0)}
+              {summaryCounts.history ?? ((summaryCounts.completed ?? 0) + (summaryCounts.cancelled ?? 0))}
             </span>
           </button>
 
@@ -979,7 +1166,7 @@ export default function Orders() {
         </div>
 
         {/* Date Filter (Available on History and Archived tabs) */}
-        {activeTab !== "active" && (
+        {["history", "archived"].includes(activeTab) && (
           <DateFilter
             selectedPreset={dateFilter.preset}
             startDate={dateFilter.startDate}
@@ -1134,7 +1321,26 @@ export default function Orders() {
             >
               Deselect All
             </button>
-            {activeTab !== "archived" && (
+            {activeTab === "archived" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleBulkRestoreArchived}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 transition cursor-pointer shadow-xs"
+                >
+                  <RotateCcw size={14} />
+                  <span>Restore Selected</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenBulkDeleteArchived}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 transition cursor-pointer shadow-xs"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete Selected</span>
+                </button>
+              </>
+            ) : (
               <button
                 type="button"
                 onClick={handleOpenBulkClear}
@@ -1157,8 +1363,10 @@ export default function Orders() {
               <h2 className="font-bold text-stone-900 dark:text-white">
                 {activeTab === "active"
                   ? "Live Active Dining Orders"
+                  : activeTab === "today"
+                  ? "Recent Orders – Today"
                   : activeTab === "history"
-                  ? "Order History"
+                  ? "Order History (Previous Dates)"
                   : "Archived Orders"}
               </h2>
               <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
@@ -1180,7 +1388,7 @@ export default function Orders() {
                     setSearch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  placeholder="Search order #, customer, table, dish..."
+                  placeholder="Search orders"
                   className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-64"
                 />
               </div>
@@ -1201,6 +1409,16 @@ export default function Orders() {
                     <option value="Confirmed">Confirmed</option>
                     <option value="Ready">Ready</option>
                     <option value="Served">Served</option>
+                  </>
+                ) : activeTab === "today" ? (
+                  <>
+                    <option value="ALL">All Stages (Today)</option>
+                    <option value="Pending">Ordered</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Ready">Ready</option>
+                    <option value="Served">Served</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
                   </>
                 ) : activeTab === "history" ? (
                   <>
@@ -1329,8 +1547,10 @@ export default function Orders() {
                   <td colSpan={9} className="px-4 py-12 text-center text-sm text-stone-500">
                     {activeTab === "active"
                       ? "No active orders found matching your criteria. New orders will appear here."
+                      : activeTab === "today"
+                      ? "No orders placed today yet. New orders created today will appear here."
                       : activeTab === "history"
-                      ? "No completed or cancelled orders found for this filter."
+                      ? "No historical orders found from previous business dates."
                       : "No archived orders found."}
                   </td>
                 </tr>
@@ -1375,10 +1595,9 @@ export default function Orders() {
                           <span>{order.order_number}</span>
                         </div>
                         <span className="text-[11px] text-stone-400 dark:text-stone-500 block">
-                          {new Date(order.created_at).toLocaleTimeString("en-IN", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {activeTab === "history" || activeTab === "archived"
+                            ? formatOrderDateTime(order.created_at)
+                            : formatOrderTime(order.created_at)}
                         </span>
                       </td>
 
@@ -1445,16 +1664,28 @@ export default function Orders() {
                         <div className="flex items-center justify-center gap-1.5">
                           {/* Direct Contextual Primary Action Button */}
                           {activeTab === "archived" ? (
-                            <button
-                              type="button"
-                              onClick={() => handleRestoreOrder(order.id)}
-                              disabled={isActionLoading}
-                              title="Restore order"
-                              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2.5 py-1 text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 transition cursor-pointer shadow-2xs"
-                            >
-                              <RotateCcw size={13} className={isActionLoading ? "animate-spin" : ""} />
-                              <span>Restore</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreOrder(order.id)}
+                                disabled={isActionLoading}
+                                title="Restore order"
+                                className="inline-flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2.5 py-1 text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 transition cursor-pointer shadow-2xs"
+                              >
+                                <RotateCcw size={13} className={isActionLoading ? "animate-spin" : ""} />
+                                <span>Restore</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenSingleDeleteArchived(order)}
+                                disabled={isActionLoading}
+                                title="Permanently Delete Archived Order"
+                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-2 py-1 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-100 transition cursor-pointer shadow-2xs"
+                              >
+                                <Trash2 size={13} />
+                                <span>Delete</span>
+                              </button>
+                            </>
                           ) : contextualAction ? (
                             <button
                               type="button"
@@ -1514,6 +1745,202 @@ export default function Orders() {
         </div>
       </div>
 
+      {/* RECENT ORDERS – TODAY SECTION (SHOWN ON ACTIVE TAB DIRECTLY BELOW LIVE ACTIVE ORDERS) */}
+      {activeTab === "active" && (
+        <div className="overflow-hidden rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#101722] shadow-xs">
+          {/* HEADER TOOLBAR */}
+          <div className="flex flex-col gap-3 border-b border-stone-200/80 dark:border-stone-800 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 dark:bg-amber-500/20">
+                <Clock size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-stone-900 dark:text-white">
+                    Recent Orders – Today
+                  </h2>
+                  <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    {recentTodayTotal} {recentTodayTotal === 1 ? "order" : "orders"}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  Orders created today in Asia/Kolkata timezone (newest first)
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadRecentTodayOrders}
+              disabled={recentTodayLoading}
+              className="inline-flex items-center gap-1.5 self-start rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-1.5 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 transition cursor-pointer disabled:opacity-50 sm:self-auto"
+              title="Refresh today's orders"
+            >
+              <RefreshCw size={13} className={recentTodayLoading ? "animate-spin text-[#F59E0B]" : ""} />
+              <span>Refresh Today</span>
+            </button>
+          </div>
+
+          {/* TABLE */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-stone-600 dark:text-stone-300">
+              <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-[#151D29] text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                <tr>
+                  <th className="px-4 py-3">Order Number</th>
+                  <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Dining Table</th>
+                  <th className="px-4 py-3">Summary</th>
+                  <th className="px-4 py-3">Amount</th>
+                  <th className="px-4 py-3">Payment</th>
+                  <th className="px-4 py-3">Workflow Status</th>
+                  <th className="px-4 py-3">Order Time</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-200/80 dark:divide-stone-800/80">
+                {recentTodayLoading ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-8 text-center text-xs text-stone-400">
+                      <div className="flex items-center justify-center gap-2">
+                        <RefreshCw size={16} className="animate-spin text-[#F59E0B]" />
+                        <span>Loading today's orders...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : recentTodayOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-8 text-center text-sm text-stone-500">
+                      No orders placed today yet. New orders created today will appear here.
+                    </td>
+                  </tr>
+                ) : (
+                  recentTodayOrders.map((order) => {
+                    const contextualAction = getContextualOrderAction(order);
+                    const isActionLoading = actionLoadingId === order.id;
+                    const itemsSummary = (order.items || [])
+                      .map((item) => `${item.quantity}x ${item.item_name}`)
+                      .join(", ");
+                    const totalVal = Number(order.total_amount ?? order.subtotal ?? 0);
+
+                    return (
+                      <tr
+                        key={order.id}
+                        className="transition hover:bg-stone-50/60 dark:hover:bg-[#151D29]/50"
+                      >
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => openOrderDetails(order)}
+                            className="font-bold text-[#D97706] hover:text-[#B45309] dark:text-[#F59E0B] dark:hover:text-[#FBBF24] hover:underline"
+                          >
+                            {order.order_number}
+                          </button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-stone-900 dark:text-white">
+                            {order.customer_name || order.customer?.full_name || "Guest Customer"}
+                          </div>
+                          {(order.customer_phone || order.customer?.phone) && (
+                            <div className="text-xs text-stone-500">
+                              {order.customer_phone || order.customer?.phone}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:text-stone-300">
+                            {order.table_number || order.table?.table_number
+                              ? `Table ${order.table_number || order.table?.table_number}`
+                              : "Takeaway"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 max-w-xs">
+                          <div className="truncate text-xs text-stone-700 dark:text-stone-300" title={itemsSummary}>
+                            {itemsSummary || "No dishes"}
+                          </div>
+                          <div className="text-[11px] text-stone-400">
+                            {order.items?.length || 0} {order.items?.length === 1 ? "item" : "items"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-stone-900 dark:text-white tabular-nums">
+                          {formatCurrency(totalVal)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {getPaymentBadge(order.payment_status, order.outstanding_balance)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${getOrderStatusBadgeStyle(
+                              order.status
+                            )}`}
+                          >
+                            {getWorkflowStageLabel(order.status)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-stone-500 tabular-nums">
+                          {formatOrderTime(order.created_at)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {contextualAction && (
+                              <button
+                                type="button"
+                                onClick={() => handleDirectAction(order, contextualAction)}
+                                disabled={isActionLoading}
+                                title={contextualAction.label}
+                                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition cursor-pointer ${
+                                  contextualAction.actionKey === "view_invoice"
+                                    ? "border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#151D29] text-stone-700 dark:text-stone-200 hover:bg-stone-50"
+                                    : contextualAction.actionKey === "complete"
+                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                                    : "bg-[#F59E0B] hover:bg-[#E5A910] text-stone-900 shadow-xs"
+                                }`}
+                              >
+                                {isActionLoading ? (
+                                  <RefreshCw size={11} className="animate-spin" />
+                                ) : contextualAction.actionKey === "view_invoice" ? (
+                                  <FileText size={11} />
+                                ) : contextualAction.actionKey === "collect_payment" ? (
+                                  <CreditCard size={11} />
+                                ) : (
+                                  <ArrowRight size={11} />
+                                )}
+                                <span>{contextualAction.label}</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => openOrderDetails(order)}
+                              title="View details"
+                              className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200 transition cursor-pointer"
+                            >
+                              <Eye size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          {recentTodayTotalPages > 1 && (
+            <div className="border-t border-stone-200 dark:border-stone-800 p-3">
+              <Pagination
+                currentPage={recentTodayPage}
+                totalPages={recentTodayTotalPages}
+                totalRecords={recentTodayTotal}
+                pageSize={10}
+                onPageChange={(p) => setRecentTodayPage(p)}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* =====================================
           BULK CLEAR / ARCHIVE CONFIRMATION MODAL
       ===================================== */}
@@ -1566,6 +1993,129 @@ export default function Orders() {
                 <span>{bulkArchiving ? "Archiving..." : "Confirm & Archive"}</span>
               </button>
             </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* =====================================
+          PERMANENT DELETE ARCHIVED ORDERS MODAL
+      ===================================== */}
+      {showDeleteArchivedModal && (
+        <ModalShell
+          title="Permanent Deletion – Archived Orders"
+          subtitle="Verify financial, inventory, and audit dependencies before removing records."
+          onClose={() => {
+            if (!deletingArchived) setShowDeleteArchivedModal(false);
+          }}
+          size="max-w-xl"
+        >
+          <div className="space-y-4">
+            {deleteCheckLoading ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-3">
+                <RefreshCw size={28} className="animate-spin text-amber-500" />
+                <p className="text-sm font-medium text-stone-600 dark:text-stone-400">
+                  Auditing dependencies (invoices, payments, stock movements)...
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/30 p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={20} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                    <div className="text-xs space-y-1">
+                      <p className="font-bold text-red-800 dark:text-red-200 text-sm">
+                        Permanent Deletion Warning
+                      </p>
+                      <p className="text-red-700 dark:text-red-300">
+                        Are you sure you want to permanently delete {deletingArchivedOrder ? `archived order #${deletingArchivedOrder.order_number}` : `${deletionEligibilityData?.eligible_count || 0} eligible archived order(s)`}? This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {deletionEligibilityData && (
+                  <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40 p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 p-2.5">
+                        <span className="text-[11px] font-semibold uppercase text-emerald-800 dark:text-emerald-300">
+                          Eligible for Deletion
+                        </span>
+                        <p className="text-xl font-extrabold text-emerald-700 dark:text-emerald-400">
+                          {deletionEligibilityData.eligible_count}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 p-2.5">
+                        <span className="text-[11px] font-semibold uppercase text-amber-800 dark:text-amber-300">
+                          Protected Records
+                        </span>
+                        <p className="text-xl font-extrabold text-amber-700 dark:text-amber-400">
+                          {deletionEligibilityData.protected_count}
+                        </p>
+                      </div>
+                    </div>
+
+                    {deletionEligibilityData.protected_orders.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-stone-200 dark:border-stone-800">
+                        <p className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                          Protected records contain linked financial or inventory history:
+                        </p>
+                        <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                          {deletionEligibilityData.protected_orders.map((prot) => (
+                            <div
+                              key={prot.id}
+                              className="text-xs rounded-md bg-white dark:bg-stone-800/80 p-2 border border-stone-200 dark:border-stone-700"
+                            >
+                              <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
+                                #{prot.order_number}:
+                              </span>{" "}
+                              <span className="text-stone-600 dark:text-stone-400">
+                                {prot.reason}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-stone-200 dark:border-stone-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteArchivedModal(false)}
+                    disabled={deletingArchived}
+                    className="rounded-lg border border-stone-300 dark:border-stone-700 px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDeleteArchived}
+                    disabled={
+                      deletingArchived ||
+                      !deletionEligibilityData ||
+                      deletionEligibilityData.eligible_count === 0
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer shadow-xs"
+                  >
+                    {deletingArchived ? (
+                      <RefreshCw size={15} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={15} />
+                    )}
+                    <span>
+                      {deletingArchived
+                        ? "Deleting..."
+                        : deletionEligibilityData?.eligible_count > 0
+                        ? `Delete ${deletionEligibilityData.eligible_count} Eligible Order${
+                            deletionEligibilityData.eligible_count > 1 ? "s" : ""
+                          }`
+                        : "Cannot Delete Protected Orders"}
+                    </span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </ModalShell>
       )}

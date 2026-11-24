@@ -24,6 +24,28 @@ function formatCurrency(val) {
   return `₹${num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function getKolkataDateTimeKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}`;
+}
+
+function canCompleteSession(booking, now) {
+  if (!booking?.booking_date || !booking?.end_time) return false;
+  const endTime = String(booking.end_time).slice(0, 8);
+  const normalizedEndTime = endTime.length === 5 ? `${endTime}:00` : endTime;
+  return getKolkataDateTimeKey(now) >= `${booking.booking_date}T${normalizedEndTime}`;
+}
+
 export default function SpaBookings() {
   const { showSuccess, showError, showWarning, confirm } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -81,6 +103,12 @@ export default function SpaBookings() {
   const [bookingToCancel, setBookingToCancel] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
+  const [clockNow, setClockNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setClockNow(new Date()), 15000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -288,6 +316,16 @@ export default function SpaBookings() {
 
   // Three-Stage Status transitions: Booked -> In Progress -> Completed
   const handleTransitionStatus = async (bookingId, targetStatus, promptMsg) => {
+    if (targetStatus === "Completed") {
+      const booking = bookings.find((item) => item.id === bookingId);
+      if (booking && !canCompleteSession(booking, new Date())) {
+        showWarning(
+          `Therapy has not ended yet. You can complete this session after ${formatTime12Hour(booking.end_time)} on ${booking.booking_date}.`,
+          "Session In Progress"
+        );
+        return;
+      }
+    }
     if (promptMsg) {
       const isStart = targetStatus === "In Progress";
       const isComplete = targetStatus === "Completed";
@@ -493,7 +531,7 @@ export default function SpaBookings() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Search reference, customer..."
+              placeholder="Search"
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
             />
           </div>
@@ -545,7 +583,7 @@ export default function SpaBookings() {
                   <th className="py-3 px-4">Services</th>
                   <th className="py-3 px-4">Est. Total</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Workflow Actions</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-700 dark:text-stone-200">
@@ -598,27 +636,40 @@ export default function SpaBookings() {
                             className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-900 cursor-pointer transition shadow-2xs disabled:opacity-50 flex items-center gap-1"
                             title="Check in customer and start therapy"
                           >
-                            <span>{updatingStatusId === b.id ? "Updating..." : "Check-in / Start Therapy"}</span>
+                            <span>{updatingStatusId === b.id ? "Updating..." : "Start Therapy"}</span>
                           </button>
                         )}
 
-                        {["In Progress", "Checked In"].includes(b.status) && (
-                          <button
-                            type="button"
-                            disabled={updatingStatusId === b.id}
-                            onClick={() =>
-                              handleTransitionStatus(
-                                b.id,
-                                "Completed",
-                                `Confirm completion of therapy session #${b.booking_number}?`
-                              )
-                            }
-                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition shadow-2xs disabled:opacity-50 flex items-center gap-1"
-                            title="Complete therapy session"
-                          >
-                            <span>{updatingStatusId === b.id ? "Updating..." : "Complete Session"}</span>
-                          </button>
-                        )}
+                        {["In Progress", "Checked In"].includes(b.status) && (() => {
+                          const sessionCanComplete = canCompleteSession(b, clockNow);
+                          return (
+                            <div className="group relative flex flex-col items-end gap-1">
+                              <button
+                                type="button"
+                                disabled={updatingStatusId === b.id || !sessionCanComplete}
+                                onClick={() =>
+                                  handleTransitionStatus(
+                                    b.id,
+                                    "Completed",
+                                    `Confirm completion of therapy session #${b.booking_number}?`
+                                  )
+                                }
+                                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                title={sessionCanComplete ? "Complete therapy session" : undefined}
+                              >
+                                <span>{updatingStatusId === b.id ? "Updating..." : "Complete Session"}</span>
+                              </button>
+                              {!sessionCanComplete && (
+                                <span
+                                  role="tooltip"
+                                  className="pointer-events-none absolute bottom-full right-0 z-20 mb-1 hidden whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 text-[10px] font-medium text-white shadow-lg group-hover:block"
+                                >
+                                  Session hasn&apos;t ended yet.
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Completed: Invoice Action */}
                         {b.status === "Completed" && (
@@ -914,9 +965,6 @@ export default function SpaBookings() {
                   <label className="font-semibold text-stone-700 dark:text-stone-300">
                     Available Appointment Time Slot *
                   </label>
-                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    +15 min therapist break buffer included
-                  </span>
                 </div>
                 {loadingSlots ? (
                   <div className="p-4 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 text-center text-xs text-stone-500 flex items-center justify-center gap-2">
@@ -965,7 +1013,7 @@ export default function SpaBookings() {
                           </strong>
                         </span>
                         <span className="text-[11px] text-stone-400">
-                          (Therapist break reserved: 15 min after therapy)
+                          Therapist break reserved: 15 min after therapy
                         </span>
                       </p>
                     )}
@@ -978,7 +1026,7 @@ export default function SpaBookings() {
                 <div>
                   <span className="text-stone-500 dark:text-stone-400">Total Duration: </span>
                   <span className="font-bold text-stone-900 dark:text-stone-100">
-                    {computedBookingStats.totalMinutes} mins (+15m reset break)
+                    {computedBookingStats.totalMinutes} mins
                   </span>
                 </div>
                 <div>

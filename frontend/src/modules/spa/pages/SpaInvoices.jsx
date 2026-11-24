@@ -19,6 +19,7 @@ import {
   Smartphone,
   Banknote,
   FileText,
+  Trash2,
 } from "lucide-react";
 
 import spaApi from "../services/spaApi";
@@ -29,6 +30,8 @@ import StatCard from "../../../components/StatCard";
 import Pagination from "../../../components/Pagination";
 import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
+import BulkSelectionBar from "../../../components/BulkSelectionBar";
+import useBulkSelection from "../../../hooks/useBulkSelection";
 
 // ==========================================
 // CONSTANTS
@@ -154,10 +157,11 @@ function PaymentMethodBadge({ method }) {
 
 export default function SpaInvoices() {
   const [searchParams] = useSearchParams();
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showDelete, confirm } = useNotification();
 
   // Data states
   const [invoices, setInvoices] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [payments, setPayments] = useState([]);
   const [completedBookings, setCompletedBookings] = useState([]);
 
@@ -459,18 +463,6 @@ export default function SpaInvoices() {
     [invoices]
   );
 
-  const totalPaid = useMemo(
-    () =>
-      invoices.reduce((sum, inv) => sum + Number(inv.paid_amount || 0), 0),
-    [invoices]
-  );
-
-  const totalDue = useMemo(
-    () =>
-      invoices.reduce((sum, inv) => sum + Number(inv.balance_due || 0), 0),
-    [invoices]
-  );
-
   const paidInvoicesCount = useMemo(
     () =>
       invoices.filter(
@@ -528,6 +520,49 @@ export default function SpaInvoices() {
       return matchesSearch && matchesStatus;
     });
   }, [invoices, search, paymentStatusFilter]);
+
+  const canDeleteInvoice = (invoice) =>
+    String(invoice.payment_status || "").trim().toLowerCase() === "pending" &&
+    Number(invoice.paid_amount || 0) === 0 &&
+    (invoice.payments || []).length === 0;
+
+  const handleDeleteInvoice = async (invoice) => {
+    const ok = await confirm({
+      title: "Delete Treatment Invoice",
+      message: `Delete invoice ${invoice.invoice_number}? Invoices with recorded payments cannot be deleted.`,
+      confirmText: "Delete Invoice",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await spaApi.deleteInvoice(invoice.id);
+      clear();
+      showDelete(`Invoice ${invoice.invoice_number} deleted successfully.`, "Invoice Deleted");
+      await loadData({ showLoader: false });
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Invoice could not be deleted.", "Delete Failed");
+    }
+  };
+
+  const handleDeleteSelectedInvoices = async () => {
+    const targets = filteredInvoices.filter((invoice) => selectedIds.has(invoice.id) && canDeleteInvoice(invoice));
+    if (!targets.length) return;
+    const ok = await confirm({
+      title: "Delete Selected Treatment Invoices",
+      message: `Delete ${targets.length} selected unpaid invoice(s) with no payment records? Invoices with payment history are protected.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!ok) return;
+
+    const results = await Promise.allSettled(targets.map((invoice) => spaApi.deleteInvoice(invoice.id)));
+    clear();
+    const deleted = results.filter((result) => result.status === "fulfilled").length;
+    const failed = results.length - deleted;
+    if (deleted) showDelete(`${deleted} invoice(s) deleted successfully.`, "Invoices Deleted");
+    if (failed) showError(`${failed} invoice(s) could not be deleted. Payment history may be attached.`, "Some Deletions Failed");
+    await loadData({ showLoader: false });
+  };
 
   // ==========================================
   // FILTER PAYMENTS
@@ -760,21 +795,18 @@ export default function SpaInvoices() {
           title="Total Invoices"
           value={invoices.length}
           icon={<Receipt size={20} />}
-          subtext={`${filteredInvoices.length} in current view`}
         />
 
         <StatCard
           title="Total Amount"
           value={formatCurrency(totalAmount)}
           icon={<IndianRupee size={20} />}
-          subtext={`Collected: ${formatCurrency(totalPaid)}`}
         />
 
         <StatCard
           title="Paid Invoices"
           value={paidInvoicesCount}
           icon={<CheckCircle2 size={20} />}
-          subtext="Fully settled"
           badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
           active={paymentStatusFilter === "PAID"}
           onClick={() => {
@@ -787,7 +819,6 @@ export default function SpaInvoices() {
           title="Pending Invoices"
           value={pendingInvoicesCount}
           icon={<Clock size={20} />}
-          subtext={`Due: ${formatCurrency(totalDue)}`}
           badgeColor="bg-amber-50 text-amber-800 border-amber-200"
           active={paymentStatusFilter === "PENDING"}
           onClick={() => {
@@ -846,7 +877,7 @@ export default function SpaInvoices() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search invoice #, customer..."
+                  placeholder="Search"
                   className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 py-2 pl-9 pr-3 text-xs sm:text-sm outline-none focus:border-[#F59E0B] focus:ring-1 focus:ring-[#F59E0B]"
                 />
               </div>
@@ -875,10 +906,14 @@ export default function SpaInvoices() {
           </div>
 
           {/* Table */}
+          <div className="px-4 pt-3">
+            <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedInvoices} onClear={clear} />
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-xs sm:text-sm">
+            <table className="w-full min-w-[950px] text-left text-xs sm:text-sm">
               <thead className="bg-stone-50 dark:bg-stone-900/50 text-stone-500 dark:text-stone-400 text-[11px] uppercase tracking-wider font-semibold border-b border-stone-100 dark:border-stone-800">
                 <tr>
+                  <th className="px-4 py-3"><input type="checkbox" aria-label="Select deletable invoices on this page" checked={filteredInvoices.slice((invoicePage - 1) * pageSize, invoicePage * pageSize).filter(canDeleteInvoice).length > 0 && filteredInvoices.slice((invoicePage - 1) * pageSize, invoicePage * pageSize).filter(canDeleteInvoice).every((invoice) => selectedIds.has(invoice.id))} onChange={() => toggleMany(filteredInvoices.slice((invoicePage - 1) * pageSize, invoicePage * pageSize).filter(canDeleteInvoice).map((invoice) => invoice.id))} className="h-4 w-4 accent-amber-500" /></th>
                   <th className="px-4 py-3">Invoice Number</th>
                   <th className="px-4 py-3">Booking Ref</th>
                   <th className="px-4 py-3">Date</th>
@@ -896,14 +931,14 @@ export default function SpaInvoices() {
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
                 {loading ? (
                   <tr>
-                    <td colSpan="11" className="p-12 text-center text-xs sm:text-sm text-stone-400">
+                    <td colSpan="12" className="p-12 text-center text-xs sm:text-sm text-stone-400">
                       <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-[#F59E0B]" />
                       Loading treatment invoices...
                     </td>
                   </tr>
                 ) : filteredInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan="11" className="p-12 text-center text-xs sm:text-sm text-stone-400">
+                    <td colSpan="12" className="p-12 text-center text-xs sm:text-sm text-stone-400">
                       <FileText size={36} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
                       No invoices found for the selected period.
                     </td>
@@ -916,6 +951,7 @@ export default function SpaInvoices() {
                         key={inv.id}
                         className="hover:bg-stone-50/60 dark:hover:bg-stone-800/30 transition-colors"
                       >
+                        <td className="px-4 py-3.5"><input type="checkbox" aria-label={`Select invoice ${inv.invoice_number}`} checked={selectedIds.has(inv.id)} disabled={!canDeleteInvoice(inv)} onChange={() => toggle(inv.id)} title={canDeleteInvoice(inv) ? "Select invoice for deletion" : "Only unpaid invoices with no payment records can be deleted"} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                         <td className="px-4 py-3.5">
                           <p className="font-mono font-bold text-stone-900 dark:text-white">
                             {inv.invoice_number}
@@ -1000,6 +1036,16 @@ export default function SpaInvoices() {
                                 <span>Pay</span>
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteInvoice(inv)}
+                              disabled={!canDeleteInvoice(inv)}
+                              title={canDeleteInvoice(inv) ? "Delete invoice" : "Only unpaid invoices with no payment records can be deleted"}
+                              aria-label={`Delete invoice ${inv.invoice_number}`}
+                              className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-rose-950/30 transition cursor-pointer"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                         </td>
                       </tr>

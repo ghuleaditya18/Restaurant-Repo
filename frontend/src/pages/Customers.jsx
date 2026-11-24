@@ -18,6 +18,8 @@ import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import StatCard from "../components/StatCard";
 import Pagination from "../components/Pagination";
+import BulkSelectionBar from "../components/BulkSelectionBar";
+import useBulkSelection from "../hooks/useBulkSelection";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -51,6 +53,7 @@ const getErrorMessage = (error) => {
 export default function Customers() {
   const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [customers, setCustomers] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -289,6 +292,23 @@ export default function Customers() {
     }
   };
 
+  const handleDeleteSelected = async () => {
+    const targets = customers.filter((customer) => selectedIds.has(customer.id));
+    const confirmed = await confirm({
+      title: "Delete Selected Customers",
+      message: `Permanently delete ${targets.length} selected customer(s)? Customers linked to orders may be protected by the server.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    const results = await Promise.allSettled(targets.map((customer) => deleteCustomer(customer.id)));
+    const deletedIds = targets.filter((_, index) => results[index].status === "fulfilled").map((customer) => customer.id);
+    setCustomers((previous) => previous.filter((customer) => !deletedIds.includes(customer.id)));
+    clear();
+    if (deletedIds.length) showDelete(`${deletedIds.length} customer(s) deleted successfully.`, "Customers Deleted");
+    if (deletedIds.length < targets.length) showError(`${targets.length - deletedIds.length} customer(s) could not be deleted because of linked records or another server rule.`, "Some Deletions Failed");
+  };
+
   return (
     <div className="space-y-6">
       {/* A1 Standard PageHeader */}
@@ -330,6 +350,7 @@ export default function Customers() {
       </div>
 
       {/* TABLE CONTAINER */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelected} onClear={clear} />
       <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND REFRESH */}
         <div className="flex flex-col gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center md:justify-between">
@@ -375,6 +396,7 @@ export default function Customers() {
           <table className="w-full min-w-[760px] text-left">
             <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
+                <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all customers on this page" checked={paginatedCustomers.length > 0 && paginatedCustomers.every((customer) => selectedIds.has(customer.id))} onChange={() => toggleMany(paginatedCustomers.map((customer) => customer.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Phone Number</th>
                 <th className="px-4 py-3">Email Address</th>
@@ -387,7 +409,7 @@ export default function Customers() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     Loading customer records...
@@ -396,7 +418,7 @@ export default function Customers() {
               ) : filteredCustomers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     No customers found.
@@ -408,6 +430,7 @@ export default function Customers() {
                     key={customer.id}
                     className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40"
                   >
+                    <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select customer ${customer.full_name}`} checked={selectedIds.has(customer.id)} onChange={() => toggle(customer.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* CUSTOMER */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">

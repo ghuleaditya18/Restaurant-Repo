@@ -27,6 +27,8 @@ import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import StatCard from "../components/StatCard";
 import Pagination from "../components/Pagination";
+import BulkSelectionBar from "../components/BulkSelectionBar";
+import useBulkSelection from "../hooks/useBulkSelection";
 
 const EMPTY_FORM = {
   table_number: "",
@@ -51,6 +53,7 @@ const getErrorMessage = (error) => {
 export default function Tables() {
   const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [tables, setTables] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -306,6 +309,24 @@ export default function Tables() {
     }
   };
 
+  const handleDeleteSelected = async () => {
+    const targets = tables.filter((table) => selectedIds.has(table.id));
+    const confirmed = await confirm({
+      title: "Delete Selected Tables",
+      message: `Permanently delete ${targets.length} selected table(s)? This action cannot be undone.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    const results = await Promise.allSettled(targets.map((table) => deleteTable(table.id)));
+    const deletedIds = targets.filter((_, index) => results[index].status === "fulfilled").map((table) => table.id);
+    setTables((previous) => previous.filter((table) => !deletedIds.includes(table.id)));
+    clear();
+    const failed = results.length - deletedIds.length;
+    if (deletedIds.length) showDelete(`${deletedIds.length} table(s) deleted successfully.`, "Tables Deleted");
+    if (failed) showError(`${failed} table(s) could not be deleted. Refresh and review those records.`, "Some Deletions Failed");
+  };
+
   // ==========================================
   // PAGE UI
   // ==========================================
@@ -378,6 +399,7 @@ export default function Tables() {
       </div>
 
       {/* TABLE LIST CONTAINER */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelected} onClear={clear} />
       <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
         {/* SEARCH AND FILTER */}
         <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
@@ -437,6 +459,7 @@ export default function Tables() {
           <table className="w-full min-w-[700px] text-left">
             <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
               <tr>
+                <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all tables on this page" checked={paginatedTables.length > 0 && paginatedTables.every((table) => selectedIds.has(table.id))} onChange={() => toggleMany(paginatedTables.map((table) => table.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3">Table Number</th>
                 <th className="px-4 py-3">Capacity</th>
                 <th className="px-4 py-3">Occupancy Status</th>
@@ -449,7 +472,7 @@ export default function Tables() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     Loading restaurant tables...
@@ -458,7 +481,7 @@ export default function Tables() {
               ) : filteredTables.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-12 text-center text-sm text-stone-500"
                   >
                     No restaurant tables found.
@@ -469,6 +492,7 @@ export default function Tables() {
                   const isOccupied = table.status?.toLowerCase() === "occupied";
                   return (
                     <tr key={table.id} className="transition hover:bg-stone-50/70">
+                      <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select table ${table.table_number}`} checked={selectedIds.has(table.id)} onChange={() => toggle(table.id)} className="h-4 w-4 accent-amber-500" /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className={`flex h-9 w-9 items-center justify-center rounded-lg border ${

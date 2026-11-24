@@ -39,6 +39,8 @@ import Modal from "../components/Modal";
 import StatCard from "../components/StatCard";
 import Pagination from "../components/Pagination";
 import { useNotification } from "../context/NotificationContext";
+import BulkSelectionBar from "../components/BulkSelectionBar";
+import useBulkSelection from "../hooks/useBulkSelection";
 
 // ==========================================
 // CONSTANTS
@@ -170,6 +172,7 @@ const validateCategoryForm = (form) => {
 export default function Menu() {
   const { showSuccess, showUpdate, showDelete, showError } = useNotification();
   const [items, setItems] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [categories, setCategories] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -602,6 +605,24 @@ export default function Menu() {
     });
   };
 
+  const requestDeleteSelectedItems = () => {
+    const targets = items.filter((item) => selectedIds.has(item.id));
+    if (!targets.length) return;
+    setConfirmState({
+      title: "Delete Selected Menu Items",
+      message: `Permanently delete ${targets.length} selected menu item(s)? Items referenced by existing orders may be protected.`,
+      confirmLabel: "Delete Selected",
+      onConfirm: async () => {
+        const results = await Promise.allSettled(targets.map((item) => deleteMenuItem(item.id)));
+        const deletedIds = targets.filter((_, index) => results[index].status === "fulfilled").map((item) => item.id);
+        setItems((previous) => previous.filter((item) => !deletedIds.includes(item.id)));
+        clear();
+        if (deletedIds.length) showDelete(`${deletedIds.length} menu item(s) deleted successfully.`, "Menu Items Deleted");
+        if (deletedIds.length < targets.length) showError(`${targets.length - deletedIds.length} menu item(s) could not be deleted because of linked records or another server rule.`, "Some Deletions Failed");
+      },
+    });
+  };
+
   // ==========================================
   // CATEGORY FORM HANDLERS
   // ==========================================
@@ -849,6 +870,7 @@ export default function Menu() {
       </div>
 
       {/* MENU TABLE CONTAINER */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={requestDeleteSelectedItems} onClear={clear} />
 
       <div className="overflow-hidden rounded-xl border border-[#E7E5E4] bg-white">
         {/* SEARCH AND FILTER */}
@@ -950,6 +972,7 @@ export default function Menu() {
           <table className="w-full text-left">
             <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-[#78716C]">
               <tr>
+                <th className="px-4 py-3 text-center font-medium"><input type="checkbox" aria-label="Select all menu items on this page" checked={paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3 font-medium">Menu Item</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell">
                   Category
@@ -966,7 +989,7 @@ export default function Menu() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-10 text-center text-sm text-[#78716C]"
                   >
                     Loading menu items...
@@ -975,7 +998,7 @@ export default function Menu() {
               ) : filteredItems.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="6"
                     className="px-4 py-10 text-center text-sm text-[#78716C]"
                   >
                     <p>No menu items found.</p>
@@ -994,6 +1017,7 @@ export default function Menu() {
               ) : (
                 paginatedItems.map((item) => (
                   <tr key={item.id} className="transition hover:bg-[#FAF9F6]">
+                    <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select menu item ${item.name}`} checked={selectedIds.has(item.id)} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* ITEM (image + name + description) */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">

@@ -18,6 +18,8 @@ import Modal from "../../../components/Modal";
 import Pagination from "../../../components/Pagination";
 import ProfilePhotoUpload from "../../../components/ProfilePhotoUpload";
 import AuthenticatedImage from "../../../components/AuthenticatedImage";
+import BulkSelectionBar from "../../../components/BulkSelectionBar";
+import useBulkSelection from "../../../hooks/useBulkSelection";
 
 function formatCurrency(val) {
   const num = Number(val || 0);
@@ -27,6 +29,7 @@ function formatCurrency(val) {
 export default function SpaCustomers() {
   const { showSuccess, showUpdate, showDelete, showError, confirm } = useNotification();
   const [customers, setCustomers] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -143,6 +146,23 @@ export default function SpaCustomers() {
     }
   };
 
+  const handleDeleteSelectedCustomers = async () => {
+    const targets = customers.filter((customer) => selectedIds.has(customer.id));
+    const confirmed = await confirm({
+      title: "Delete Selected Spa Customers",
+      message: `Delete ${targets.length} selected customer record(s)? Customers with booking history are protected by the server.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    const results = await Promise.allSettled(targets.map((customer) => spaApi.deleteCustomer(customer.id)));
+    const deletedIds = targets.filter((_, index) => results[index].status === "fulfilled").map((customer) => customer.id);
+    setCustomers((previous) => previous.filter((customer) => !deletedIds.includes(customer.id)));
+    clear();
+    if (deletedIds.length) showDelete(`${deletedIds.length} customer record(s) deleted.`, "Customers Deleted");
+    if (deletedIds.length < targets.length) showError(`${targets.length - deletedIds.length} customer record(s) could not be deleted because of booking history or another server rule.`, "Some Deletions Failed");
+  };
+
   return (
     <div className="space-y-6">
       {/* A1 Standard PageHeader */}
@@ -177,12 +197,13 @@ export default function SpaCustomers() {
             setSearch(e.target.value);
             setCurrentPage(1);
           }}
-          placeholder="Search by name, phone, or email..."
+          placeholder="Search "
           className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] transition"
         />
       </div>
 
       {/* Customers Table */}
+      <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedCustomers} onClear={clear} />
       <div className="rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs overflow-hidden">
         {loading ? (
           <div className="p-16 text-center text-sm text-stone-400">Loading guests...</div>
@@ -197,6 +218,7 @@ export default function SpaCustomers() {
             <table className="w-full text-left text-xs sm:text-sm">
               <thead className="bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-xs uppercase tracking-wider border-b border-stone-200 dark:border-stone-800">
                 <tr>
+                  <th className="py-3 px-4"><input type="checkbox" aria-label="Select all spa customers on this page" checked={customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((customer) => selectedIds.has(customer.id))} onChange={() => toggleMany(customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((customer) => customer.id))} className="h-4 w-4 accent-amber-500" /></th>
                   <th className="py-3 px-4">Customer Name</th>
                   <th className="py-3 px-4">Contact Phone</th>
                   <th className="py-3 px-4">Email Address</th>
@@ -209,6 +231,7 @@ export default function SpaCustomers() {
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-700 dark:text-stone-200">
                 {customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
                   <tr key={c.id} className="hover:bg-stone-50/60 dark:hover:bg-stone-800/40 transition">
+                    <td className="py-3.5 px-4"><input type="checkbox" aria-label={`Select spa customer ${c.full_name}`} checked={selectedIds.has(c.id)} onChange={() => toggle(c.id)} className="h-4 w-4 accent-amber-500" /></td>
                     <td className="py-3.5 px-4 font-bold text-stone-900 dark:text-stone-100">
                       <div className="flex items-center gap-3">
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-xs shadow-2xs">
@@ -302,7 +325,7 @@ export default function SpaCustomers() {
           </div>
         )}
         <Pagination
-          currentPage={currentPage}
+            currentPage={currentPage}
           totalPages={Math.ceil(customers.length / pageSize) || 1}
           onPageChange={setCurrentPage}
           totalRecords={customers.length}

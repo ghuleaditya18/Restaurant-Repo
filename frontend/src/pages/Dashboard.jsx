@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-  ShoppingBag,
+  ShoppingCart,
   IndianRupee,
   Clock,
-  AlertCircle,
+  Receipt,
   AlertTriangle,
   Users,
-  UserCheck,
+  UserCog,
   UtensilsCrossed,
   Grid3X3,
   Plus,
@@ -18,6 +18,7 @@ import {
   ServerCrash,
   WifiOff,
   Package,
+  PackageX,
 } from "lucide-react";
 
 import StatCard from "../components/StatCard";
@@ -232,7 +233,7 @@ function Dashboard() {
                     ? `${stats.completed_orders} completed in this period`
                     : "Total orders recorded"
                 }
-                icon={ShoppingBag}
+                icon={ShoppingCart}
                 color="bg-[#FFF7E8] dark:bg-[#30251C] text-[#9A3412] dark:text-[#FFB02E] border border-[#FFEDD5] dark:border-[#9A3412]/40"
               />
 
@@ -260,7 +261,7 @@ function Dashboard() {
                 title="Pending Bills"
                 value={String(stats.pending_payments).padStart(2, "0")}
                 description="Unsettled customer invoices"
-                icon={AlertCircle}
+                icon={Receipt}
                 color="bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-800"
               />
             </section>
@@ -285,7 +286,7 @@ function Dashboard() {
                 layout="horizontal"
                 title="Staff Members"
                 value={stats.total_staff}
-                icon={UserCheck}
+                icon={UserCog}
                 color="bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700"
               />
 
@@ -343,7 +344,7 @@ function Dashboard() {
                 layout="horizontal"
                 title="Out of Stock"
                 value={stats.out_of_stock_items_count || 0}
-                icon={AlertCircle}
+                icon={PackageX}
                 color="bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
               />
 

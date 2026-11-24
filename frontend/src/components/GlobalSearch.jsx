@@ -40,7 +40,7 @@ export default function GlobalSearch({
   isMobileModal = false,
   isOpen = false,
   onClose = null,
-  placeholder = "Search orders, guests, menu, inventory...",
+  placeholder = "Search",
   className = "",
 }) {
   const navigate = useNavigate();

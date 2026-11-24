@@ -8,7 +8,10 @@ import {
   Upload,
   Trash2,
   Eye,
-  Edit2,
+  Pencil,
+  RotateCcw,
+  Ban,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getPurchaseOrders,
@@ -19,16 +22,21 @@ import {
   receiveGoods,
   getGoodsReceipts,
   uploadGrnBill,
+  updateGoodsReceipt,
+  reverseGoodsReceipt,
   getSuppliers,
   getInventoryItems,
 } from "../../../services/inventoryService";
 import { useNotification } from "../../../context/NotificationContext";
 import { BUTTON_VARIANTS, INPUT_STYLES, TABLE_STYLES } from "../../../utils/themeTokens";
 import Pagination from "../../../components/Pagination";
+import BulkSelectionBar from "../../../components/BulkSelectionBar";
+import useBulkSelection from "../../../hooks/useBulkSelection";
 
 export default function InventoryPurchases() {
   const [activeTab, setActiveTab] = useState("pos"); // 'pos' | 'grns'
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [goodsReceipts, setGoodsReceipts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
@@ -48,6 +56,17 @@ export default function InventoryPurchases() {
   const [selectedPoForReceive, setSelectedPoForReceive] = useState(null);
   const [uploadBillModalOpen, setUploadBillModalOpen] = useState(false);
   const [selectedGrnForUpload, setSelectedGrnForUpload] = useState(null);
+
+  // GRN Edit & Reversal states
+  const [editingGrn, setEditingGrn] = useState(null);
+  const [editGrnForm, setEditGrnForm] = useState({
+    supplier_bill_number: "",
+    bill_date: "",
+    notes: "",
+  });
+  const [reversingGrn, setReversingGrn] = useState(null);
+  const [reverseReason, setReverseReason] = useState("");
+  const [reversingLoading, setReversingLoading] = useState(false);
 
   // Form states
   const [poForm, setPoForm] = useState({
@@ -219,6 +238,23 @@ export default function InventoryPurchases() {
     }
   };
 
+  const handleDeleteSelectedPos = async () => {
+    const targets = purchaseOrders.filter((po) => selectedIds.has(po.id) && po.status === "Draft");
+    if (!targets.length) return;
+    const ok = await confirm({
+      title: "Delete Selected Draft Purchase Orders",
+      message: `Permanently delete ${targets.length} selected Draft purchase order(s)? Only Draft orders without goods receipts can be deleted.`,
+      confirmText: "Delete Selected",
+      variant: "danger",
+    });
+    if (!ok) return;
+    const results = await Promise.allSettled(targets.map((po) => deletePurchaseOrder(po.id)));
+    clear();
+    if (results.some((result) => result.status === "fulfilled")) showDelete(`${results.filter((result) => result.status === "fulfilled").length} purchase order(s) deleted.`, "Purchase Orders Deleted");
+    if (results.some((result) => result.status === "rejected")) showError(`${results.filter((result) => result.status === "rejected").length} purchase order(s) could not be deleted.`, "Some Deletions Failed");
+    await loadData();
+  };
+
   const handleTransitionStatus = async (po, newStatus) => {
     const ok = await confirm({
       title: `Update Purchase Order #${po.po_number}`,
@@ -302,6 +338,53 @@ export default function InventoryPurchases() {
     }
   };
 
+  const openEditGrn = (grn) => {
+    setEditingGrn(grn);
+    setEditGrnForm({
+      supplier_bill_number: grn.supplier_bill_number || "",
+      bill_date: grn.bill_date || "",
+      notes: grn.notes || "",
+    });
+  };
+
+  const handleSaveGrnEdit = async (e) => {
+    e.preventDefault();
+    if (!editingGrn) return;
+    try {
+      await updateGoodsReceipt(editingGrn.id, editGrnForm);
+      showUpdate(`Updated GRN #${editingGrn.grn_number} metadata.`);
+      setEditingGrn(null);
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to update Goods Receipt");
+    }
+  };
+
+  const openReverseGrn = (grn) => {
+    setReversingGrn(grn);
+    setReverseReason("");
+  };
+
+  const handleConfirmReverseGrn = async (e) => {
+    e.preventDefault();
+    if (!reversingGrn) return;
+    if (!reverseReason.trim()) {
+      showError("A mandatory reversal reason must be provided.");
+      return;
+    }
+    setReversingLoading(true);
+    try {
+      await reverseGoodsReceipt(reversingGrn.id, reverseReason.trim());
+      showSuccess(`GRN #${reversingGrn.grn_number} has been reversed and stock adjusted.`);
+      setReversingGrn(null);
+      loadData();
+    } catch (err) {
+      showError(err?.response?.data?.detail || "Failed to reverse Goods Receipt");
+    } finally {
+      setReversingLoading(false);
+    }
+  };
+
   // Pagination slicing
   const poTotalPages = Math.ceil(purchaseOrders.length / pageSize) || 1;
   const paginatedPos = purchaseOrders.slice((poPage - 1) * pageSize, poPage * pageSize);
@@ -363,11 +446,14 @@ export default function InventoryPurchases() {
 
       {/* PURCHASE ORDERS TAB */}
       {activeTab === "pos" && (
+        <>
+        <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedPos} onClear={clear} />
         <div className={TABLE_STYLES.container}>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
+                  <th className={TABLE_STYLES.th}><input type="checkbox" aria-label="Select deletable draft purchase orders on this page" checked={paginatedPos.filter((po) => po.status === "Draft").length > 0 && paginatedPos.filter((po) => po.status === "Draft").every((po) => selectedIds.has(po.id))} onChange={() => toggleMany(paginatedPos.filter((po) => po.status === "Draft").map((po) => po.id))} className="h-4 w-4 accent-amber-500" /></th>
                   <th className={TABLE_STYLES.th}>PO Number</th>
                   <th className={TABLE_STYLES.th}>Supplier</th>
                   <th className={TABLE_STYLES.th}>Order Date</th>
@@ -380,13 +466,14 @@ export default function InventoryPurchases() {
               <tbody>
                 {paginatedPos.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-sm text-stone-500">
+                    <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
                       {loading ? "Loading purchase orders..." : "No purchase orders found."}
                     </td>
                   </tr>
                 ) : (
                   paginatedPos.map((po) => (
                     <tr key={po.id} className={TABLE_STYLES.tr}>
+                      <td className={TABLE_STYLES.td}><input type="checkbox" aria-label={`Select draft purchase order ${po.po_number}`} checked={selectedIds.has(po.id)} disabled={po.status !== "Draft"} onChange={() => toggle(po.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                       <td className={TABLE_STYLES.td}>
                         <div className="font-bold text-stone-900 dark:text-stone-100 font-mono">
                           {po.po_number}
@@ -433,8 +520,9 @@ export default function InventoryPurchases() {
                                 onClick={() => openEditPo(po)}
                                 className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded transition"
                                 title="Edit Draft PO"
+                                aria-label="Edit Draft PO"
                               >
-                                <Edit2 size={15} />
+                                <Pencil size={15} />
                               </button>
                               <button
                                 type="button"
@@ -448,6 +536,7 @@ export default function InventoryPurchases() {
                                 onClick={() => handleDeletePo(po)}
                                 className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
                                 title="Delete Draft PO"
+                                aria-label="Delete Draft PO"
                               >
                                 <Trash2 size={15} />
                               </button>
@@ -471,8 +560,9 @@ export default function InventoryPurchases() {
                               onClick={() => handleTransitionStatus(po, "Cancelled")}
                               className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
                               title="Cancel PO"
+                              aria-label="Cancel PO"
                             >
-                              <X size={16} />
+                              <Ban size={15} />
                             </button>
                           )}
                         </div>
@@ -491,13 +581,14 @@ export default function InventoryPurchases() {
             limit={pageSize}
           />
         </div>
+        </>
       )}
 
       {/* GOODS RECEIPTS TAB */}
       {activeTab === "grns" && (
         <div className={TABLE_STYLES.container}>
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[950px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
                   <th className={TABLE_STYLES.th}>GRN Number</th>
@@ -507,13 +598,14 @@ export default function InventoryPurchases() {
                   <th className={TABLE_STYLES.th}>Received Date</th>
                   <th className={TABLE_STYLES.th}>Received Amount</th>
                   <th className={TABLE_STYLES.th}>Bill Attachment</th>
+                  <th className={TABLE_STYLES.th}>Status</th>
                   <th className={`${TABLE_STYLES.th} text-right`}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {paginatedGrns.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-sm text-stone-500">
+                    <td colSpan={9} className="p-8 text-center text-sm text-stone-500">
                       No goods receipt notes recorded yet.
                     </td>
                   </tr>
@@ -561,6 +653,20 @@ export default function InventoryPurchases() {
                           </button>
                         )}
                       </td>
+                      <td className={TABLE_STYLES.td}>
+                        {grn.is_reversed ? (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-200"
+                            title={`Reversed: ${grn.reversal_reason || "Reversed"}`}
+                          >
+                            Reversed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200">
+                            Received
+                          </span>
+                        )}
+                      </td>
                       <td className={`${TABLE_STYLES.td} text-right`}>
                         <div className="inline-flex items-center gap-1.5 justify-end">
                           <button
@@ -568,9 +674,32 @@ export default function InventoryPurchases() {
                             onClick={() => setViewingGrn(grn)}
                             className="p-1.5 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded transition"
                             title="View GRN Details"
+                            aria-label="View GRN Details"
                           >
                             <Eye size={15} />
                           </button>
+                          {!grn.is_reversed && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditGrn(grn)}
+                                className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded transition"
+                                title="Edit Bill / Notes"
+                                aria-label="Edit Bill or Notes"
+                              >
+                                <Pencil size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openReverseGrn(grn)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition"
+                                title="Reverse Goods Receipt"
+                                aria-label="Reverse Goods Receipt"
+                              >
+                                <RotateCcw size={15} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1122,6 +1251,153 @@ export default function InventoryPurchases() {
                 </button>
                 <button type="submit" className={BUTTON_VARIANTS.primary}>
                   Upload File
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT GOODS RECEIPT MODAL */}
+      {editingGrn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
+                Edit GRN #{editingGrn.grn_number}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingGrn(null)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGrnEdit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                  Supplier Bill Number *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editGrnForm.supplier_bill_number}
+                  onChange={(e) =>
+                    setEditGrnForm({ ...editGrnForm, supplier_bill_number: e.target.value })
+                  }
+                  className={INPUT_STYLES.base}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                  Bill Date
+                </label>
+                <input
+                  type="date"
+                  value={editGrnForm.bill_date}
+                  onChange={(e) => setEditGrnForm({ ...editGrnForm, bill_date: e.target.value })}
+                  className={INPUT_STYLES.base}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                  Notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={editGrnForm.notes}
+                  onChange={(e) => setEditGrnForm({ ...editGrnForm, notes: e.target.value })}
+                  placeholder="Additional notes about this goods receipt"
+                  className={INPUT_STYLES.base}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingGrn(null)}
+                  className={BUTTON_VARIANTS.secondary}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className={BUTTON_VARIANTS.primary}>
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* REVERSE GOODS RECEIPT MODAL */}
+      {reversingGrn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+              <h3 className="text-lg font-bold text-red-600 dark:text-red-400">
+                Reverse GRN #{reversingGrn.grn_number}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReversingGrn(null)}
+                className="text-stone-400 hover:text-stone-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmReverseGrn} className="space-y-4">
+              <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50/80 dark:bg-red-950/30 p-3 text-xs text-red-800 dark:text-red-200 space-y-1">
+                <div className="flex items-center gap-2 font-bold">
+                  <AlertTriangle size={16} className="text-red-600" />
+                  <span>Controlled GRN Reversal</span>
+                </div>
+                <p>
+                  Reversing this goods receipt will deduct the received quantities from current stock and record compensating ledger movements.
+                </p>
+                <p className="font-semibold">
+                  Total Amount: ₹{Number(reversingGrn.total_received_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-stone-500 mb-1">
+                  Mandatory Reversal Reason *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={reverseReason}
+                  onChange={(e) => setReverseReason(e.target.value)}
+                  placeholder="Explain why this GRN is being reversed (e.g. wrong batch, damaged goods returned to vendor, entry error)..."
+                  className={INPUT_STYLES.base}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setReversingGrn(null)}
+                  disabled={reversingLoading}
+                  className={BUTTON_VARIANTS.secondary}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={reversingLoading || !reverseReason.trim()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition disabled:opacity-50"
+                >
+                  {reversingLoading ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <RotateCcw size={14} />
+                  )}
+                  <span>{reversingLoading ? "Reversing..." : "Confirm Reversal"}</span>
                 </button>
               </div>
             </form>

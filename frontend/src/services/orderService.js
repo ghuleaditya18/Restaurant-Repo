@@ -99,3 +99,23 @@ export const restoreOrder = async (orderId) => {
   const response = await api.post(`/api/orders/${orderId}/restore`);
   return response.data;
 };
+
+export const deleteArchivedOrder = async (orderId) => {
+  const response = await api.delete(`/api/orders/${orderId}`);
+  return response.data;
+};
+
+export const checkArchiveDeletionEligibility = async (orderIds) => {
+  const response = await api.post("/api/orders/check-archive-deletion", { order_ids: orderIds });
+  return response.data;
+};
+
+export const bulkDeleteArchivedOrders = async (orderIds) => {
+  const response = await api.post("/api/orders/bulk-delete-archived", { order_ids: orderIds });
+  return response.data;
+};
+
+export const bulkRestoreOrders = async (orderIds) => {
+  const response = await api.post("/api/orders/bulk-restore", { order_ids: orderIds });
+  return response.data;
+};

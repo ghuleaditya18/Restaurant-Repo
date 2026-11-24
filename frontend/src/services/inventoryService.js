@@ -63,6 +63,36 @@ export const getItemMovements = async (id, params = {}) => {
   return response.data;
 };
 
+export const deleteInventoryItem = async (id) => {
+  const response = await api.delete(`/api/inventory/items/${id}`);
+  return response.data;
+};
+
+export const archiveInventoryItem = async (id, data = {}) => {
+  const response = await api.post(`/api/inventory/items/${id}/archive`, data);
+  return response.data;
+};
+
+export const unarchiveInventoryItem = async (id) => {
+  const response = await api.post(`/api/inventory/items/${id}/unarchive`);
+  return response.data;
+};
+
+export const checkItemEligibility = async (id) => {
+  const response = await api.get(`/api/inventory/items/${id}/eligibility`);
+  return response.data;
+};
+
+export const bulkCheckItems = async (itemIds) => {
+  const response = await api.post("/api/inventory/items/bulk-check", { item_ids: itemIds });
+  return response.data;
+};
+
+export const bulkActionItems = async (data) => {
+  const response = await api.post("/api/inventory/items/bulk-action", data);
+  return response.data;
+};
+
 // ==========================================
 // 3. SUPPLIERS & SUPPLIER ITEMS
 // ==========================================
@@ -84,6 +114,31 @@ export const getSupplier = async (id) => {
 
 export const updateSupplier = async (id, data) => {
   const response = await api.patch(`/api/inventory/suppliers/${id}`, data);
+  return response.data;
+};
+
+export const deleteSupplier = async (id) => {
+  const response = await api.delete(`/api/inventory/suppliers/${id}`);
+  return response.data;
+};
+
+export const archiveSupplier = async (id, data = {}) => {
+  const response = await api.post(`/api/inventory/suppliers/${id}/archive`, data);
+  return response.data;
+};
+
+export const unarchiveSupplier = async (id) => {
+  const response = await api.post(`/api/inventory/suppliers/${id}/unarchive`);
+  return response.data;
+};
+
+export const checkSupplierEligibility = async (id) => {
+  const response = await api.get(`/api/inventory/suppliers/${id}/eligibility`);
+  return response.data;
+};
+
+export const bulkActionSuppliers = async (data) => {
+  const response = await api.post("/api/inventory/suppliers/bulk-action", data);
   return response.data;
 };
 
@@ -184,6 +239,16 @@ export const uploadGrnBill = async (grnId, file) => {
   return response.data;
 };
 
+export const updateGoodsReceipt = async (grnId, data) => {
+  const response = await api.patch(`/api/inventory/goods-receipts/${grnId}`, data);
+  return response.data;
+};
+
+export const reverseGoodsReceipt = async (grnId, reason) => {
+  const response = await api.post(`/api/inventory/goods-receipts/${grnId}/reverse`, { reason });
+  return response.data;
+};
+
 // ==========================================
 // 6. WASTAGE & ADJUSTMENTS
 // ==========================================
@@ -205,6 +270,14 @@ export const getAllMovements = async (params = {}) => {
 
 export const reverseStockMovement = async (movementId, reason) => {
   const response = await api.post(`/api/inventory/movements/${movementId}/reverse`, { reason });
+  return response.data;
+};
+
+export const bulkArchiveMovements = async (movementIds, reason = "") => {
+  const response = await api.post("/api/inventory/movements/bulk-archive", {
+    movement_ids: movementIds,
+    reason: reason || undefined,
+  });
   return response.data;
 };
 
@@ -239,6 +312,11 @@ export const approveStockCount = async (id) => {
 
 export const cancelStockCount = async (id) => {
   const response = await api.post(`/api/inventory/stock-counts/${id}/cancel`);
+  return response.data;
+};
+
+export const deleteStockCount = async (id) => {
+  const response = await api.delete(`/api/inventory/stock-counts/${id}`);
   return response.data;
 };
 

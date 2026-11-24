@@ -104,7 +104,7 @@ function SidebarNav({ items, onClose, collapsed = false }) {
   );
 }
 
-function SidebarProfile({ user, collapsed = false, onNavigate }) {
+function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -114,11 +114,20 @@ function SidebarProfile({ user, collapsed = false, onNavigate }) {
         setOpen(false);
       }
     }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
 
@@ -159,35 +168,72 @@ function SidebarProfile({ user, collapsed = false, onNavigate }) {
       {/* Profile Popover / Dropdown Menu */}
       {open && (
         <div
-          className={`absolute z-50 rounded-2xl border border-[#1E293B] bg-[#101722] p-1.5 shadow-2xl animate-in fade-in-50 duration-150 text-white ${
+          role="menu"
+          aria-label="User Account Menu"
+          className={`absolute z-50 rounded-2xl border border-[#1E293B] bg-[#101722] p-2 shadow-2xl animate-in fade-in-50 duration-150 text-white ${
             collapsed
-              ? "left-full bottom-0 ml-2 w-56"
-              : "bottom-full left-0 right-0 mb-2 w-full"
+              ? "left-full bottom-0 ml-2 w-64"
+              : "bottom-full left-0 right-0 mb-2 w-full min-w-[210px]"
           }`}
         >
-          {/* User Details Header */}
-          <div className="border-b border-[#1E293B] px-3.5 py-3">
-            <p className="truncate text-sm font-bold text-white">{userName}</p>
-            <p className="truncate text-xs text-[#8A9AB2] mt-0.5">{user?.email}</p>
-            <div className="mt-2 flex items-center gap-1.5">
-              <span className="inline-block rounded-full bg-[#30251C] border border-[#F59E0B]/40 px-2 py-0.5 text-[10px] font-bold text-[#FFB02E] uppercase tracking-wider">
+          {/* User Details Header with Avatar, Name, Email and Badge */}
+          <div className="border-b border-[#1E293B] px-2.5 py-2.5">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-[#FFB02E] to-[#D97706] border border-[#F59E0B]/50 text-xs font-bold text-[#0D1420] shadow-xs">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={userName}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <span>{userInitial}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs sm:text-sm font-bold text-white">{userName}</p>
+                <p className="truncate text-[11px] text-[#8A9AB2] mt-0.5">{user?.email || "No email"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block rounded-full bg-[#30251C] border border-[#F59E0B]/40 px-2 py-0.5 text-[9px] font-bold text-[#FFB02E] uppercase tracking-wider">
                 {userRole}
               </span>
             </div>
           </div>
 
-          {/* Navigation Action */}
-          <div className="py-1">
+          {/* View Profile Action */}
+          <div className="pt-1.5 pb-1">
             <button
               type="button"
+              role="menuitem"
               onClick={() => {
                 setOpen(false);
                 onNavigate("/settings?tab=profile");
               }}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[38px]"
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[36px]"
             >
-              <User size={14} className="text-[#F59E0B]" />
+              <User size={15} className="text-[#F59E0B] shrink-0" />
               <span>View Profile</span>
+            </button>
+          </div>
+
+          {/* Logout Action */}
+          <div className="border-t border-[#1E293B] pt-1">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onLogout?.();
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-400 hover:text-rose-300 transition hover:bg-rose-950/30 cursor-pointer min-h-[36px]"
+            >
+              <LogOut size={15} className="shrink-0" />
+              <span>Logout</span>
             </button>
           </div>
         </div>
@@ -201,6 +247,8 @@ function SidebarProfile({ user, collapsed = false, onNavigate }) {
           className="group relative flex items-center justify-center rounded-xl p-1.5 hover:bg-[#151D29] transition cursor-pointer"
           title={`${userName} (${userRole})`}
           aria-label="User Profile"
+          aria-haspopup="menu"
+          aria-expanded={open}
         >
           {Avatar}
           <span className="pointer-events-none absolute left-full ml-2 hidden rounded-md bg-[#101722] px-2.5 py-1 text-xs font-semibold text-white shadow-lg group-hover:block z-50 whitespace-nowrap border border-[#1E293B]">
@@ -212,6 +260,7 @@ function SidebarProfile({ user, collapsed = false, onNavigate }) {
           type="button"
           onClick={() => setOpen((prev) => !prev)}
           className="flex w-full items-center justify-between gap-2.5 rounded-xl px-2.5 py-2 hover:bg-[#151D29] transition cursor-pointer min-h-[44px] text-left"
+          aria-haspopup="menu"
           aria-expanded={open}
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -316,27 +365,13 @@ function Sidebar({
         </div>
 
         {/* Bottom Profile & Actions */}
-        <div className="border-t border-[#1E293B]/70 p-3.5 space-y-2">
-          {/* User Profile Section */}
+        <div className="border-t border-[#1E293B]/70 p-3">
           <SidebarProfile
             user={user}
             collapsed={false}
             onNavigate={handleNavigate}
             onLogout={handleLogout}
           />
-
-          {/* Logout Section */}
-          <div className="border-t border-[#1E293B]/50 pt-2">
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[44px]"
-              title="Logout"
-            >
-              <LogOut size={18} className="shrink-0" />
-              <span>Logout</span>
-            </button>
-          </div>
         </div>
       </aside>
 
@@ -407,31 +442,13 @@ function Sidebar({
         </div>
 
         {/* Bottom Profile & Actions */}
-        <div className={`border-t border-[#1E293B]/70 ${collapsed ? "p-2 space-y-2 flex flex-col items-center" : "p-3 space-y-2"}`}>
-          {/* User Profile Section */}
+        <div className={`border-t border-[#1E293B]/70 ${collapsed ? "p-2 flex flex-col items-center" : "p-3"}`}>
           <SidebarProfile
             user={user}
             collapsed={collapsed}
             onNavigate={handleNavigate}
+            onLogout={handleLogout}
           />
-
-          {/* Logout Section */}
-          <div className={`w-full border-t border-[#1E293B]/50 ${collapsed ? "pt-1.5 flex justify-center" : "pt-2"}`}>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className={`flex items-center rounded-xl text-xs sm:text-sm text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer ${
-                collapsed
-                  ? "justify-center p-2.5"
-                  : "w-full gap-2.5 px-3.5 py-2 min-h-[40px]"
-              }`}
-              title="Logout"
-              aria-label="Logout"
-            >
-              <LogOut size={collapsed ? 20 : 18} className="shrink-0" />
-              {!collapsed && <span>Logout</span>}
-            </button>
-          </div>
         </div>
       </aside>
     </>

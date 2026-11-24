@@ -134,6 +134,12 @@ class InventoryItem(TimestampMixin, Base):
         Numeric(12, 4), default=Decimal("0.0000"), nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -168,6 +174,12 @@ class Supplier(TimestampMixin, Base):
     gstin: Mapped[str | None] = mapped_column(String(20), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -222,6 +234,12 @@ class Recipe(TimestampMixin, Base):
     yield_servings: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     preparation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    archive_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )

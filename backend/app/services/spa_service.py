@@ -291,53 +291,72 @@ def generate_available_slots(
     active_bookings = conflict_query.all()
 
     # 6. Candidate slot generation accounting for mandatory 15-minute therapy break buffer
+    # Exactly 6 discrete fixed appointment slots across 10:00 AM - 06:00 PM operating hours:
+    # 1. 10:00 AM - 11:00 AM (Break until 11:15 AM)
+    # 2. 11:15 AM - 12:15 PM (Break until 12:30 PM)
+    # 3. 12:30 PM - 01:30 PM (Break until 01:45 PM)
+    # 4. 01:45 PM - 02:45 PM (Break until 03:00 PM)
+    # 5. 03:00 PM - 04:00 PM (Break until 04:15 PM)
+    # 6. 04:15 PM - 05:15 PM (Break until 05:30 PM)
     buffer_min = getattr(settings, "SPA_THERAPY_BUFFER_MINUTES", 15)
     slots = []
     seen_starts = set()
 
-    for w_start, w_end in windows:
-        start_sec = time_to_seconds(w_start)
-        end_sec = time_to_seconds(w_end)
-        curr_sec = start_sec
+    FIXED_SLOT_STARTS = [
+        time(10, 0),
+        time(11, 15),
+        time(12, 30),
+        time(13, 45),
+        time(15, 0),
+        time(16, 15),
+    ]
 
-        while curr_sec + (duration * 60) <= end_sec:
-            cand_start = seconds_to_time(curr_sec)
-            cand_end = seconds_to_time(curr_sec + (duration * 60))
-            cand_reserved_end = add_minutes_to_time(cand_end, buffer_min)
+    for cand_start in FIXED_SLOT_STARTS:
+        cand_end = add_minutes_to_time(cand_start, duration)
+        cand_reserved_end = add_minutes_to_time(cand_end, buffer_min)
 
-            # Exclude past times if today
-            if is_today and cand_start <= current_time:
-                curr_sec += interval_min * 60
-                continue
+        # Exclude past times if today
+        if is_today and cand_start <= current_time:
+            continue
 
-            # Check overlap with existing active bookings:
-            # Overlap exists if candidate therapy+break interval overlaps active booking therapy+break interval
-            has_overlap = False
-            for b in active_bookings:
-                b_reserved_end = add_minutes_to_time(b.end_time, buffer_min)
-                if cand_start < b_reserved_end and cand_reserved_end > b.start_time:
-                    has_overlap = True
-                    break
+        # Check therapist availability windows
+        in_window = any(
+            w_start <= cand_start and cand_end <= w_end
+            for w_start, w_end in windows
+        )
+        if not in_window:
+            continue
 
-            start_str = cand_start.strftime("%H:%M")
-            if not has_overlap and start_str not in seen_starts:
-                seen_starts.add(start_str)
-                end_str = cand_end.strftime("%H:%M")
-                buffer_end_str = cand_reserved_end.strftime("%H:%M")
+        # Treatment session must complete within spa operating hours
+        if cand_end > spa_close:
+            continue
 
-                disp_start = datetime.strptime(start_str, "%H:%M").strftime("%I:%M %p")
-                disp_end = datetime.strptime(end_str, "%H:%M").strftime("%I:%M %p")
-                display_text = f"{disp_start} - {disp_end}"
+        # Check overlap with existing active bookings:
+        # Overlap exists if candidate therapy+break interval overlaps active booking therapy+break interval
+        has_overlap = False
+        for b in active_bookings:
+            b_reserved_end = add_minutes_to_time(b.end_time, buffer_min)
+            if cand_start < b_reserved_end and cand_reserved_end > b.start_time:
+                has_overlap = True
+                break
 
-                slots.append({
-                    "start_time": start_str,
-                    "end_time": end_str,
-                    "buffer_end_time": buffer_end_str,
-                    "display_text": display_text,
-                    "available": True,
-                })
+        start_str = cand_start.strftime("%H:%M")
+        if not has_overlap and start_str not in seen_starts:
+            seen_starts.add(start_str)
+            end_str = cand_end.strftime("%H:%M")
+            buffer_end_str = cand_reserved_end.strftime("%H:%M")
 
-            curr_sec += interval_min * 60
+            disp_start = datetime.strptime(start_str, "%H:%M").strftime("%I:%M %p")
+            disp_end = datetime.strptime(end_str, "%H:%M").strftime("%I:%M %p")
+            display_text = f"{disp_start} - {disp_end}"
+
+            slots.append({
+                "start_time": start_str,
+                "end_time": end_str,
+                "buffer_end_time": buffer_end_str,
+                "display_text": display_text,
+                "available": True,
+            })
 
     slots.sort(key=lambda s: s["start_time"])
 
@@ -580,6 +599,17 @@ def transition_booking_status(
                 f"Allowed transitions from '{current_status}': {list(allowed) if allowed else 'None (terminal state)'}."
             )
         )
+
+    if match_status == SpaBookingStatus.COMPLETED.value:
+        scheduled_end = datetime.combine(booking.booking_date, booking.end_time)
+        if get_kolkata_now().replace(tzinfo=None) < scheduled_end:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Therapy session has not ended yet. You can mark it complete after "
+                    f"{booking.end_time.strftime('%I:%M %p')} on {booking.booking_date.isoformat()}."
+                ),
+            )
 
     booking.status = match_status
     history = SpaBookingStatusHistory(

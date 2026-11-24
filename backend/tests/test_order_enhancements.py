@@ -1,21 +1,16 @@
 import unittest
 from datetime import timedelta
 from decimal import Decimal
-from fastapi.testclient import TestClient
 
-from app.main import app
-from app.db.session import SessionLocal
+from tests.base import IsolatedTestCase
 from app.core.date_utils import get_kolkata_now
 from app.models.entities import (
     User,
     UserRole,
     Customer,
     RestaurantTable,
-    TableStatus,
-    MenuCategory,
     MenuItem,
     Order,
-    OrderItem,
     OrderStatus,
     Invoice,
     Payment,
@@ -25,40 +20,34 @@ from app.models.entities import (
 from app.core.security import create_access_token
 
 
-class OrderEnhancementsTestCase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.client = TestClient(app)
-        cls.db = SessionLocal()
+class OrderEnhancementsTestCase(IsolatedTestCase):
+    def setUp(self):
+        super().setUp()
 
         # Manager user
-        cls.manager = cls.db.query(User).filter_by(email="amit.patil@gmail.com").first()
-        if not cls.manager:
-            cls.manager = User(
+        self.manager = self.db.query(User).filter_by(role=UserRole.MANAGER).first()
+        if not self.manager:
+            self.manager = User(
                 full_name="Amit Patil",
-                email="amit.patil@gmail.com",
+                email="amit.patil.test@dineflow.com",
                 password_hash="test",
                 role=UserRole.MANAGER,
                 business_context="RESTAURANT",
                 is_active=True,
             )
-            cls.db.add(cls.manager)
-            cls.db.commit()
-            cls.db.refresh(cls.manager)
+            self.db.add(self.manager)
+            self.db.commit()
+            self.db.refresh(self.manager)
 
-        cls.token = create_access_token(
-            data={"sub": str(cls.manager.id), "role": "MANAGER", "business_context": "RESTAURANT"}
+        self.token = create_access_token(
+            data={"sub": str(self.manager.id), "role": "MANAGER", "business_context": "RESTAURANT"}
         )
-        cls.headers = {"Authorization": f"Bearer {cls.token}"}
+        self.headers = {"Authorization": f"Bearer {self.token}"}
 
-        # Customer & Table
-        cls.customer = cls.db.query(Customer).first()
-        cls.table = cls.db.query(RestaurantTable).first()
-        cls.menu_item = cls.db.query(MenuItem).filter_by(is_available=True).first()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.db.close()
+        # Customer & Table & MenuItem
+        self.customer = self.db.query(Customer).first()
+        self.table = self.db.query(RestaurantTable).first()
+        self.menu_item = self.db.query(MenuItem).filter_by(is_available=True).first()
 
     def test_01_create_and_progress_order(self):
         # 1. Place order (starts at PENDING / Ordered)
@@ -94,7 +83,7 @@ class OrderEnhancementsTestCase(unittest.TestCase):
         self.assertEqual(conf_res.status_code, 200)
         self.assertEqual(conf_res.json()["status"], "Confirmed")
 
-        # 3. Confirmed -> Ready
+        # 3. Confirmed -> Ready (triggers BOM deduction in isolated test DB)
         ready_res = self.client.patch(
             f"/api/orders/{order_id}/status",
             json={"status": "Ready"},
@@ -228,6 +217,155 @@ class OrderEnhancementsTestCase(unittest.TestCase):
         rest_res = self.client.post(f"/api/orders/{old_order.id}/restore", headers=self.headers)
         self.assertEqual(rest_res.status_code, 200)
         self.assertIsNone(rest_res.json()["archived_at"])
+
+    def test_04_today_and_history_tab_filtering(self):
+        """Verify tab='today' only includes today's orders, and tab='history' only includes older orders."""
+        now = get_kolkata_now()
+
+        # 1. Today order
+        today_order = Order(
+            order_number=f"ORD-TODAY-{int(now.timestamp())}",
+            customer_id=self.customer.id,
+            table_id=self.table.id,
+            created_by_user_id=self.manager.id,
+            status=OrderStatus.COMPLETED,
+            created_at=now,
+        )
+        self.db.add(today_order)
+
+        # 2. Historical order from 2 days ago
+        historical_order = Order(
+            order_number=f"ORD-HIST-{int(now.timestamp())}",
+            customer_id=self.customer.id,
+            table_id=self.table.id,
+            created_by_user_id=self.manager.id,
+            status=OrderStatus.COMPLETED,
+            created_at=now - timedelta(days=2),
+        )
+        self.db.add(historical_order)
+        self.db.commit()
+
+        # 3. Query tab=today
+        res_today = self.client.get("/api/orders/?tab=today&paginate=true", headers=self.headers)
+        self.assertEqual(res_today.status_code, 200)
+        data_today = res_today.json()
+        today_ids = [o["id"] for o in data_today["items"]]
+        self.assertIn(today_order.id, today_ids)
+        self.assertNotIn(historical_order.id, today_ids)
+        self.assertGreaterEqual(data_today["summary_counts"]["recent_today"], 1)
+
+        # 4. Query tab=history
+        res_hist = self.client.get("/api/orders/?tab=history&paginate=true", headers=self.headers)
+        self.assertEqual(res_hist.status_code, 200)
+        data_hist = res_hist.json()
+        hist_ids = [o["id"] for o in data_hist["items"]]
+        self.assertIn(historical_order.id, hist_ids)
+        self.assertNotIn(today_order.id, hist_ids)
+        self.assertGreaterEqual(data_hist["summary_counts"]["history"], 1)
+
+    def test_05_archived_order_permanent_deletion_safeguards(self):
+        """Test permanent deletion rules and safeguards for archived orders."""
+        from app.models.inventory import StockMovement, MovementType
+
+        now = get_kolkata_now()
+
+        # 1. Clean eligible archived order (no invoice, no movements)
+        eligible_order = Order(
+            order_number=f"ORD-ELIG-{int(now.timestamp())}",
+            customer_id=self.customer.id,
+            table_id=self.table.id,
+            created_by_user_id=self.manager.id,
+            status=OrderStatus.COMPLETED,
+            created_at=now - timedelta(days=10),
+            archived_at=now - timedelta(days=2),
+            archived_by=self.manager.id,
+            archive_reason="Routine archive",
+        )
+        # 2. Protected archived order with issued invoice
+        protected_invoice_order = Order(
+            order_number=f"ORD-PROT-INV-{int(now.timestamp())}",
+            customer_id=self.customer.id,
+            table_id=self.table.id,
+            created_by_user_id=self.manager.id,
+            status=OrderStatus.COMPLETED,
+            created_at=now - timedelta(days=10),
+            archived_at=now - timedelta(days=2),
+            archived_by=self.manager.id,
+            archive_reason="Routine archive",
+        )
+        self.db.add_all([eligible_order, protected_invoice_order])
+        self.db.commit()
+
+        inv = Invoice(
+            order_id=protected_invoice_order.id,
+            invoice_number=f"INV-TEST-{int(now.timestamp())}",
+            subtotal=Decimal("500.00"),
+            gst_rate=Decimal("5.00"),
+            gst_amount=Decimal("25.00"),
+            total_amount=Decimal("525.00"),
+            payment_status=PaymentStatus.PAID,
+        )
+        self.db.add(inv)
+        self.db.commit()
+
+        # 3. Protected archived order with stock movements
+        protected_stock_order = Order(
+            order_number=f"ORD-PROT-STK-{int(now.timestamp())}",
+            customer_id=self.customer.id,
+            table_id=self.table.id,
+            created_by_user_id=self.manager.id,
+            status=OrderStatus.COMPLETED,
+            created_at=now - timedelta(days=10),
+            archived_at=now - timedelta(days=2),
+            archived_by=self.manager.id,
+            archive_reason="Routine archive",
+        )
+        self.db.add(protected_stock_order)
+        self.db.commit()
+
+        mov = StockMovement(
+            inventory_item_id=1,
+            movement_type=MovementType.SALE_CONSUMPTION,
+            quantity=Decimal("-2.0000"),
+            unit_cost=Decimal("50.0000"),
+            balance_after=Decimal("100.0000"),
+            reference_type="ORDER",
+            reference_id=protected_stock_order.id,
+            created_by_user_id=self.manager.id,
+        )
+        self.db.add(mov)
+        self.db.commit()
+
+        # 4. Check eligibility endpoint
+        check_res = self.client.post(
+            "/api/orders/check-archive-deletion",
+            json={"order_ids": [eligible_order.id, protected_invoice_order.id, protected_stock_order.id]},
+            headers=self.headers,
+        )
+        self.assertEqual(check_res.status_code, 200)
+        check_data = check_res.json()
+        self.assertEqual(check_data["eligible_count"], 1)
+        self.assertEqual(check_data["protected_count"], 2)
+        self.assertEqual(check_data["eligible_ids"], [eligible_order.id])
+
+        # 5. Attempt single deletion on protected order -> 400
+        del_prot_res = self.client.delete(f"/api/orders/{protected_invoice_order.id}", headers=self.headers)
+        self.assertEqual(del_prot_res.status_code, 400)
+        self.assertIn("financial invoice", del_prot_res.json()["detail"])
+
+        # 6. Delete single eligible order -> 200
+        del_elig_res = self.client.delete(f"/api/orders/{eligible_order.id}", headers=self.headers)
+        self.assertEqual(del_elig_res.status_code, 200)
+        self.assertIsNone(self.db.query(Order).filter_by(id=eligible_order.id).first())
+
+        # 7. Bulk restore protected orders back to active
+        restore_res = self.client.post(
+            "/api/orders/bulk-restore",
+            json={"order_ids": [protected_invoice_order.id, protected_stock_order.id]},
+            headers=self.headers,
+        )
+        self.assertEqual(restore_res.status_code, 200)
+        self.assertEqual(restore_res.json()["restored_count"], 2)
 
 
 if __name__ == "__main__":

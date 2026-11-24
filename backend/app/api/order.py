@@ -31,6 +31,7 @@ from app.models.entities import (
     Invoice,
     Payment,
 )
+from app.models.inventory import StockMovement
 from app.api.deps import require_roles, get_current_user, require_restaurant_context
 from app.schemas.order import (
     OrderCreate,
@@ -45,6 +46,13 @@ from app.schemas.order import (
     BulkArchiveRequest,
     BulkArchiveResponse,
     PaginatedOrdersResponse,
+    CheckArchiveDeletionRequest,
+    CheckArchiveDeletionResponse,
+    ProtectedOrderDetail,
+    BulkDeleteArchivedOrdersRequest,
+    BulkDeleteArchivedOrdersResponse,
+    BulkRestoreOrdersRequest,
+    BulkRestoreOrdersResponse,
 )
 
 # ==========================================
@@ -383,11 +391,37 @@ def get_all_orders(
     # Automatically evaluate and cancel stale orders exceeding inactivity timeout
     cancel_stale_orders(db)
 
+    today_start, today_end = get_date_range("today")
+
     # Summary counts across non-archived orders for the lifecycle badges
     summary_counts = {
         "all_active": (
             db.query(func.count(Order.id))
             .filter(Order.archived_at.is_(None), Order.status.notin_(TERMINAL_STATUSES))
+            .scalar()
+            or 0
+        ),
+        "recent_today": (
+            db.query(func.count(Order.id))
+            .filter(
+                Order.archived_at.is_(None),
+                Order.created_at >= today_start,
+                Order.created_at <= today_end,
+            )
+            .scalar()
+            or 0
+        ) if today_start and today_end else 0,
+        "history": (
+            db.query(func.count(Order.id))
+            .filter(
+                Order.archived_at.is_(None),
+                Order.created_at < today_start,
+            )
+            .scalar()
+            or 0
+        ) if today_start else (
+            db.query(func.count(Order.id))
+            .filter(Order.archived_at.is_(None), Order.status.in_(TERMINAL_STATUSES))
             .scalar()
             or 0
         ),
@@ -460,8 +494,14 @@ def get_all_orders(
         query = query.filter(Order.archived_at.is_(None))
         if effective_tab == "active":
             query = query.filter(Order.status.notin_(TERMINAL_STATUSES))
+        elif effective_tab in ("today", "recent_today", "recent"):
+            if today_start is not None and today_end is not None:
+                query = query.filter(Order.created_at >= today_start, Order.created_at <= today_end)
         elif effective_tab == "history":
-            query = query.filter(Order.status.in_(TERMINAL_STATUSES))
+            if today_start is not None:
+                query = query.filter(Order.created_at < today_start)
+            else:
+                query = query.filter(Order.status.in_(TERMINAL_STATUSES))
 
     if status is not None:
         query = query.filter(Order.status == status)
@@ -1175,3 +1215,196 @@ def restore_archived_order(
 
     db.commit()
     return build_order_response(get_order_record(db, order_id))
+
+
+# ==========================================
+# 12. ARCHIVED ORDER DELETION & BULK MANAGEMENT
+# ==========================================
+
+
+def _check_order_deletion_eligibility(order: Order, db: Session) -> tuple[bool, str]:
+    """Check if an archived order can be permanently deleted without violating financial or inventory integrity."""
+    if not order.archived_at:
+        return False, "Order is active or not archived. Only archived orders can be considered for permanent deletion."
+
+    # Rule 1: Protected financial dependencies
+    if order.invoice:
+        payment_count = len(order.invoice.payments or [])
+        if payment_count > 0:
+            return False, f"Contains issued invoice ({order.invoice.invoice_number}) with {payment_count} linked payment transaction(s). Financial audit records are protected."
+        return False, f"Contains issued financial invoice ({order.invoice.invoice_number}). Financial audit records are protected."
+
+    # Rule 2: Protected immutable inventory movements (BOM sale consumption, adjustments, etc.)
+    stock_movements_count = (
+        db.query(func.count(StockMovement.id))
+        .filter(StockMovement.reference_type == "ORDER", StockMovement.reference_id == order.id)
+        .scalar()
+        or 0
+    )
+    if stock_movements_count > 0:
+        return False, f"Contains {stock_movements_count} immutable inventory stock movement(s). Ledger reconciliation history must be preserved."
+
+    return True, "Eligible for permanent deletion. No blocking financial or stock movement dependencies."
+
+
+@router.post("/check-archive-deletion", response_model=CheckArchiveDeletionResponse)
+def check_archive_deletion_eligibility(
+    data: CheckArchiveDeletionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(status_code=403, detail="Only managers or administrators can check deletion eligibility.")
+
+    orders = (
+        db.query(Order)
+        .options(
+            joinedload(Order.invoice).selectinload(Invoice.payments),
+        )
+        .filter(Order.id.in_(data.order_ids))
+        .all()
+    )
+
+    eligible_ids = []
+    protected_orders = []
+
+    order_map = {o.id: o for o in orders}
+    for oid in data.order_ids:
+        order = order_map.get(oid)
+        if not order:
+            continue
+        is_eligible, reason = _check_order_deletion_eligibility(order, db)
+        if is_eligible:
+            eligible_ids.append(order.id)
+        else:
+            protected_orders.append(
+                ProtectedOrderDetail(
+                    id=order.id,
+                    order_number=order.order_number,
+                    reason=reason,
+                )
+            )
+
+    return CheckArchiveDeletionResponse(
+        total_selected=len(data.order_ids),
+        eligible_count=len(eligible_ids),
+        protected_count=len(protected_orders),
+        eligible_ids=eligible_ids,
+        protected_orders=protected_orders,
+    )
+
+
+@router.delete("/{order_id}")
+def delete_archived_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(status_code=403, detail="Only managers or administrators are authorized to permanently delete orders.")
+
+    order = get_order_record(db, order_id)
+    is_eligible, reason = _check_order_deletion_eligibility(order, db)
+    if not is_eligible:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot permanently delete Order {order.order_number}: {reason}",
+        )
+
+    # Clean dependent items and status history safely
+    db.query(OrderItem).filter(OrderItem.order_id == order.id).delete(synchronize_session=False)
+    db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order.id).delete(synchronize_session=False)
+    order_num = order.order_number
+    db.delete(order)
+    db.commit()
+
+    return {
+        "message": f"Archived Order {order_num} has been permanently deleted.",
+        "deleted_id": order_id,
+    }
+
+
+@router.post("/bulk-delete-archived", response_model=BulkDeleteArchivedOrdersResponse)
+def bulk_delete_archived_orders(
+    data: BulkDeleteArchivedOrdersRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(status_code=403, detail="Only managers or administrators are authorized to delete archived orders.")
+
+    orders = (
+        db.query(Order)
+        .options(
+            joinedload(Order.invoice).selectinload(Invoice.payments),
+        )
+        .filter(Order.id.in_(data.order_ids))
+        .all()
+    )
+
+    deleted_ids = []
+    protected_orders = []
+
+    for order in orders:
+        is_eligible, reason = _check_order_deletion_eligibility(order, db)
+        if is_eligible:
+            db.query(OrderItem).filter(OrderItem.order_id == order.id).delete(synchronize_session=False)
+            db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id == order.id).delete(synchronize_session=False)
+            deleted_ids.append(order.id)
+            db.delete(order)
+        else:
+            protected_orders.append(
+                ProtectedOrderDetail(
+                    id=order.id,
+                    order_number=order.order_number,
+                    reason=reason,
+                )
+            )
+
+    if deleted_ids:
+        db.commit()
+
+    msg = f"Successfully deleted {len(deleted_ids)} eligible archived order(s)."
+    if protected_orders:
+        msg += f" {len(protected_orders)} protected order(s) were preserved due to financial or stock audit records."
+
+    return BulkDeleteArchivedOrdersResponse(
+        total_requested=len(data.order_ids),
+        deleted_count=len(deleted_ids),
+        protected_count=len(protected_orders),
+        deleted_ids=deleted_ids,
+        protected_orders=protected_orders,
+        message=msg,
+    )
+
+
+@router.post("/bulk-restore", response_model=BulkRestoreOrdersResponse)
+def bulk_restore_orders(
+    data: BulkRestoreOrdersRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(status_code=403, detail="Only managers or administrators are authorized to restore orders.")
+
+    orders = db.query(Order).filter(Order.id.in_(data.order_ids), Order.archived_at.isnot(None)).all()
+    restored_ids = []
+    for order in orders:
+        order.archived_at = None
+        order.archived_by = None
+        order.archive_reason = None
+        restored_ids.append(order.id)
+
+    if restored_ids:
+        db.commit()
+
+    return BulkRestoreOrdersResponse(
+        total_requested=len(data.order_ids),
+        restored_count=len(restored_ids),
+        restored_ids=restored_ids,
+        message=f"Successfully restored {len(restored_ids)} order(s) to active records.",
+    )

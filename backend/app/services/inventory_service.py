@@ -612,6 +612,31 @@ def record_stock_adjustment(
     )
 
 
+def manual_movement_eligibility(db: Session, movement: StockMovement) -> tuple[bool, str | None]:
+    """Return whether a ledger row is an explicitly manual, safe-to-manage entry."""
+    if movement.movement_type not in {MovementType.WASTAGE, MovementType.ADJUSTMENT}:
+        return False, f"{movement.movement_type.value} movements are system managed."
+
+    expected_reference = movement.movement_type.value
+    if movement.reference_type != expected_reference or movement.reference_id != 0:
+        return False, "This movement has a system reference and is protected."
+
+    if movement.is_archived:
+        return False, "This movement is already archived."
+
+    if movement.reference_type == "REVERSAL":
+        return False, "Reversal movements are protected."
+
+    reversal = db.query(StockMovement.id).filter(
+        StockMovement.reference_type == "REVERSAL",
+        StockMovement.reference_id == movement.id,
+    ).first()
+    if reversal:
+        return False, "This movement has already been reversed."
+
+    return True, None
+
+
 def reverse_wastage_or_adjustment_movement(
     db: Session,
     movement_id: int,
@@ -623,14 +648,18 @@ def reverse_wastage_or_adjustment_movement(
     an opposite compensating movement. Guards against double reversal and checks
     that the movement is not an immutable order-linked or system-deducted movement.
     """
-    target = db.query(StockMovement).filter(StockMovement.id == movement_id).first()
+    target = db.query(StockMovement).filter(StockMovement.id == movement_id).with_for_update().first()
     if not target:
         raise HTTPException(status_code=404, detail="Stock movement not found.")
 
-    if target.movement_type not in {MovementType.WASTAGE, MovementType.ADJUSTMENT}:
+    if not reason or not reason.strip():
+        raise HTTPException(status_code=400, detail="Reversal reason is mandatory.")
+
+    eligible, rejection_reason = manual_movement_eligibility(db, target)
+    if not eligible:
         raise HTTPException(
-            status_code=400,
-            detail=f"Only manual adjustment or wastage movements can be reversed. Cannot reverse '{target.movement_type.value}'.",
+            status_code=409,
+            detail=rejection_reason,
         )
 
     # Check if already reversed
@@ -647,9 +676,6 @@ def reverse_wastage_or_adjustment_movement(
             status_code=400,
             detail=f"Movement #{target.id} has already been reversed by Movement #{existing_reversal.id}.",
         )
-
-    if not reason or not reason.strip():
-        raise HTTPException(status_code=400, detail="Reversal reason is mandatory.")
 
     # Opposite compensating quantity
     compensating_qty = -target.quantity

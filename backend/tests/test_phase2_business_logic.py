@@ -12,10 +12,10 @@ if str(BACKEND_DIR) not in sys.path:
 
 from starlette.testclient import TestClient
 
+from tests.base import IsolatedTestCase
 from app.main import app
 from app.core.config import settings
 from app.core.date_utils import get_kolkata_now, get_date_range
-from app.db.session import SessionLocal
 from app.models.entities import (
     User,
     Customer,
@@ -43,37 +43,17 @@ def get_auth_header(user_id: int = 1) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-class Phase2BusinessLogicTestCase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.client = TestClient(app)
-        cls.headers = get_auth_header(1)
-
+class Phase2BusinessLogicTestCase(IsolatedTestCase):
     def setUp(self):
-        self.db = SessionLocal()
+        super().setUp()
+        self.headers = get_auth_header(1)
         self.created_order_ids = []
         self.created_invoice_ids = []
         self.created_payment_ids = []
         self.created_customer_ids = []
 
     def tearDown(self):
-        # Clean up any test fixtures created during the test to avoid DB pollution
-        try:
-            if self.created_payment_ids:
-                self.db.query(Payment).filter(Payment.id.in_(self.created_payment_ids)).delete(synchronize_session=False)
-            if self.created_invoice_ids:
-                self.db.query(Invoice).filter(Invoice.id.in_(self.created_invoice_ids)).delete(synchronize_session=False)
-            if self.created_order_ids:
-                self.db.query(OrderStatusHistory).filter(OrderStatusHistory.order_id.in_(self.created_order_ids)).delete(synchronize_session=False)
-                self.db.query(OrderItem).filter(OrderItem.order_id.in_(self.created_order_ids)).delete(synchronize_session=False)
-                self.db.query(Order).filter(Order.id.in_(self.created_order_ids)).delete(synchronize_session=False)
-            if self.created_customer_ids:
-                self.db.query(Customer).filter(Customer.id.in_(self.created_customer_ids)).delete(synchronize_session=False)
-            self.db.commit()
-        except Exception:
-            self.db.rollback()
-        finally:
-            self.db.close()
+        super().tearDown()
 
     # =========================================================================
     # 1. PREVIOUS-DAY OCCUPIED TABLES FIX

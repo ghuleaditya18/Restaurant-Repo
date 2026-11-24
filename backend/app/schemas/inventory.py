@@ -186,11 +186,36 @@ class InventoryItemResponse(BaseModel):
     reorder_level: Decimal
     average_cost: Decimal
     is_active: bool
+    is_archived: bool = False
+    archived_at: datetime | None = None
+    archive_reason: str | None = None
     created_by_user_id: int
     created_at: datetime
     updated_at: datetime
     stock_status: str = "IN_STOCK"  # IN_STOCK, LOW_STOCK, OUT_OF_STOCK
     total_valuation: Decimal = Decimal("0.00")
+
+
+class ItemArchiveRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class BulkItemActionRequest(BaseModel):
+    item_ids: list[int] = Field(..., min_length=1)
+    action: str = Field(..., pattern="^(delete|archive|activate|deactivate)$")
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class BulkCheckRequest(BaseModel):
+    item_ids: list[int] = Field(..., min_length=1)
+
+
+class BulkCheckResponse(BaseModel):
+    total_selected: int
+    eligible_for_deletion: list[int]
+    require_archiving: list[int]
+    cannot_modify: list[int]
+    breakdown: list[dict]
 
 
 # ==========================================
@@ -248,11 +273,24 @@ class SupplierResponse(BaseModel):
     gstin: str | None
     address: str | None
     is_active: bool
+    is_archived: bool = False
+    archived_at: datetime | None = None
+    archive_reason: str | None = None
     created_by_user_id: int
     created_at: datetime
     updated_at: datetime
     supplied_items_count: int = 0
     total_orders_count: int = 0
+
+
+class SupplierArchiveRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=255)
+
+
+class BulkSupplierActionRequest(BaseModel):
+    supplier_ids: list[int] = Field(..., min_length=1)
+    action: str = Field(..., pattern="^(delete|archive|activate|deactivate)$")
+    reason: str | None = Field(default=None, max_length=255)
 
 
 # ==========================================
@@ -467,9 +505,23 @@ class GoodsReceiptResponse(BaseModel):
     received_date: date
     total_received_amount: Decimal
     notes: str | None
+    is_reversed: bool = False
+    reversed_at: datetime | None = None
+    reversed_by_user_id: int | None = None
+    reversal_reason: str | None = None
     received_by_user_id: int
     created_at: datetime
     items: list[GoodsReceiptItemResponse] = []
+
+
+class GoodsReceiptUpdate(BaseModel):
+    supplier_bill_number: str | None = None
+    bill_date: date | None = None
+    notes: str | None = None
+
+
+class GoodsReceiptReverseRequest(BaseModel):
+    reason: str
 
 
 # ==========================================
@@ -490,8 +542,17 @@ class StockMovementResponse(BaseModel):
     reference_type: str
     reference_id: int
     notes: str | None
+    is_archived: bool = False
+    archived_at: datetime | None = None
+    archive_reason: str | None = None
+    can_archive: bool = False
     created_by_user_id: int
     created_at: datetime
+
+
+class BulkMovementArchiveRequest(BaseModel):
+    movement_ids: list[int] = Field(..., min_length=1)
+    reason: str | None = Field(default=None, max_length=255)
 
 
 # ==========================================

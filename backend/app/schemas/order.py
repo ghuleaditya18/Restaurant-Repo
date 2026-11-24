@@ -280,3 +280,50 @@ class PaginatedOrdersResponse(BaseModel):
     total_pages: int
 
     summary_counts: dict[str, int] = Field(default_factory=dict)
+
+
+# ==========================================
+# 10. ARCHIVED ORDER DELETION SCHEMAS
+# ==========================================
+
+
+class CheckArchiveDeletionRequest(BaseModel):
+    order_ids: list[int]
+
+
+class ProtectedOrderDetail(BaseModel):
+    id: int
+    order_number: str
+    reason: str
+
+
+class CheckArchiveDeletionResponse(BaseModel):
+    total_selected: int
+    eligible_count: int
+    protected_count: int
+    eligible_ids: list[int]
+    protected_orders: list[ProtectedOrderDetail] = Field(default_factory=list)
+
+
+class BulkDeleteArchivedOrdersRequest(BaseModel):
+    order_ids: list[int]
+
+
+class BulkDeleteArchivedOrdersResponse(BaseModel):
+    total_requested: int
+    deleted_count: int
+    protected_count: int
+    deleted_ids: list[int]
+    protected_orders: list[ProtectedOrderDetail] = Field(default_factory=list)
+    message: str
+
+
+class BulkRestoreOrdersRequest(BaseModel):
+    order_ids: list[int]
+
+
+class BulkRestoreOrdersResponse(BaseModel):
+    total_requested: int
+    restored_count: int
+    restored_ids: list[int]
+    message: str

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, or_
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -34,12 +34,19 @@ from app.models.inventory import (
     WastageReason,
 )
 from app.schemas.inventory import (
+    BulkCheckRequest,
+    BulkCheckResponse,
+    BulkItemActionRequest,
+    BulkMovementArchiveRequest,
+    BulkSupplierActionRequest,
     ConsumptionReport,
     ConsumptionReportItem,
     FoodCostReportItem,
     GoodsReceiptCreate,
     GoodsReceiptItemResponse,
     GoodsReceiptResponse,
+    GoodsReceiptUpdate,
+    GoodsReceiptReverseRequest,
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
@@ -47,6 +54,7 @@ from app.schemas.inventory import (
     InventoryItemResponse,
     InventoryItemStatusUpdate,
     InventoryItemUpdate,
+    ItemArchiveRequest,
     MenuItemInventoryStatus,
     OpeningStockCreate,
     POStatusUpdate,
@@ -69,6 +77,7 @@ from app.schemas.inventory import (
     StockMovementResponse,
     StockValuationItem,
     StockValuationReport,
+    SupplierArchiveRequest,
     SupplierCreate,
     SupplierItemCreate,
     SupplierItemResponse,
@@ -90,6 +99,7 @@ from app.services.inventory_service import (
     record_stock_adjustment,
     record_wastage,
     reverse_wastage_or_adjustment_movement,
+    manual_movement_eligibility,
 )
 
 router = APIRouter(
@@ -222,6 +232,9 @@ def _enrich_item_response(item: InventoryItem) -> InventoryItemResponse:
         reorder_level=item.reorder_level,
         average_cost=item.average_cost,
         is_active=item.is_active,
+        is_archived=getattr(item, "is_archived", False),
+        archived_at=getattr(item, "archived_at", None),
+        archive_reason=getattr(item, "archive_reason", None),
         created_by_user_id=item.created_by_user_id,
         created_at=item.created_at,
         updated_at=item.updated_at,
@@ -230,10 +243,60 @@ def _enrich_item_response(item: InventoryItem) -> InventoryItemResponse:
     )
 
 
+def check_item_dependencies(item_id: int, db: Session) -> dict:
+    item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
+    if not item:
+        return {"exists": False, "can_delete": False, "reasons": ["Item does not exist"]}
+
+    movements_count = db.query(StockMovement).filter(StockMovement.inventory_item_id == item_id).count()
+    recipes_count = db.query(RecipeItem).filter(RecipeItem.inventory_item_id == item_id).count()
+    supplier_items_count = db.query(SupplierItem).filter(SupplierItem.inventory_item_id == item_id).count()
+    po_items_count = db.query(PurchaseOrderItem).filter(PurchaseOrderItem.inventory_item_id == item_id).count()
+    grn_items_count = db.query(GoodsReceiptItem).filter(GoodsReceiptItem.inventory_item_id == item_id).count()
+    stock_count_items_count = db.query(StockCountItem).filter(StockCountItem.inventory_item_id == item_id).count()
+
+    reasons = []
+    if movements_count > 0:
+        reasons.append(f"Referenced by {movements_count} recorded stock movement(s) in the ledger")
+    if recipes_count > 0:
+        reasons.append(f"Configured in {recipes_count} active recipe/BOM specification(s)")
+    if supplier_items_count > 0:
+        reasons.append(f"Linked to {supplier_items_count} supplier catalog association(s)")
+    if po_items_count > 0:
+        reasons.append(f"Included in {po_items_count} purchase order line item(s)")
+    if grn_items_count > 0:
+        reasons.append(f"Recorded in {grn_items_count} goods receipt line item(s)")
+    if stock_count_items_count > 0:
+        reasons.append(f"Recorded in {stock_count_items_count} physical stock count audit(s)")
+    if item.current_stock > Decimal("0.0000"):
+        reasons.append(f"Outstanding stock balance of {item.current_stock} {item.base_unit}")
+
+    can_delete = len(reasons) == 0
+    return {
+        "exists": True,
+        "item_id": item_id,
+        "name": item.name,
+        "can_delete": can_delete,
+        "can_archive": True,
+        "is_archived": getattr(item, "is_archived", False),
+        "reasons": reasons,
+        "counts": {
+            "movements": movements_count,
+            "recipes": recipes_count,
+            "supplier_items": supplier_items_count,
+            "po_items": po_items_count,
+            "grn_items": grn_items_count,
+            "stock_counts": stock_count_items_count,
+            "current_stock": float(item.current_stock),
+        },
+    }
+
+
 @router.get("/items", response_model=list[InventoryItemResponse])
 def get_inventory_items(
     category_id: int | None = None,
     is_active: bool | None = None,
+    is_archived: bool | None = None,
     low_stock: bool | None = None,
     search: str | None = None,
     db: Session = Depends(get_db),
@@ -244,6 +307,8 @@ def get_inventory_items(
         query = query.filter(InventoryItem.category_id == category_id)
     if is_active is not None:
         query = query.filter(InventoryItem.is_active == is_active)
+    if is_archived is not None:
+        query = query.filter(InventoryItem.is_archived == is_archived)
     if low_stock is True:
         query = query.filter(InventoryItem.current_stock <= InventoryItem.reorder_level)
     if search:
@@ -418,6 +483,183 @@ def get_item_movements(
     return results
 
 
+@router.get("/items/{item_id}/eligibility")
+def get_item_deletion_eligibility(
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    dep = check_item_dependencies(item_id, db)
+    if not dep["exists"]:
+        raise HTTPException(status_code=404, detail="Inventory item not found.")
+    return dep
+
+
+@router.delete("/items/{item_id}")
+def delete_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = db.query(InventoryItem).filter(InventoryItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found.")
+
+    dep = check_item_dependencies(item_id, db)
+    if not dep["can_delete"]:
+        reasons_str = "; ".join(dep["reasons"])
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot permanently delete item '{item.name}'. {reasons_str}. Archive or deactivate the item instead to preserve historical records.",
+        )
+
+    db.delete(item)
+    db.commit()
+    return {"message": f"Inventory item '{item.name}' deleted successfully."}
+
+
+@router.post("/items/{item_id}/archive", response_model=InventoryItemResponse)
+def archive_inventory_item(
+    item_id: int,
+    data: ItemArchiveRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = db.query(InventoryItem).options(joinedload(InventoryItem.category)).filter(InventoryItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found.")
+
+    item.is_archived = True
+    item.is_active = False
+    item.archived_at = get_kolkata_now()
+    item.archived_by_user_id = current_user.id
+    item.archive_reason = data.reason if data and data.reason else "Archived by manager"
+
+    db.commit()
+    db.refresh(item)
+    return _enrich_item_response(item)
+
+
+@router.post("/items/{item_id}/unarchive", response_model=InventoryItemResponse)
+def unarchive_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = db.query(InventoryItem).options(joinedload(InventoryItem.category)).filter(InventoryItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Inventory item not found.")
+
+    item.is_archived = False
+    item.is_active = True
+    item.archived_at = None
+    item.archived_by_user_id = None
+    item.archive_reason = None
+
+    db.commit()
+    db.refresh(item)
+    return _enrich_item_response(item)
+
+
+@router.post("/items/bulk-check", response_model=BulkCheckResponse)
+def bulk_check_items(
+    data: BulkCheckRequest,
+    db: Session = Depends(get_db),
+):
+    eligible_for_deletion = []
+    require_archiving = []
+    cannot_modify = []
+    breakdown = []
+
+    for it_id in data.item_ids:
+        dep = check_item_dependencies(it_id, db)
+        if not dep["exists"]:
+            cannot_modify.append(it_id)
+        elif dep["can_delete"]:
+            eligible_for_deletion.append(it_id)
+        else:
+            require_archiving.append(it_id)
+        breakdown.append(dep)
+
+    return BulkCheckResponse(
+        total_selected=len(data.item_ids),
+        eligible_for_deletion=eligible_for_deletion,
+        require_archiving=require_archiving,
+        cannot_modify=cannot_modify,
+        breakdown=breakdown,
+    )
+
+
+@router.post("/items/bulk-action")
+def bulk_action_items(
+    data: BulkItemActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    deleted_ids = []
+    archived_ids = []
+    activated_ids = []
+    deactivated_ids = []
+    failed_ids = []
+    details = []
+
+    now = get_kolkata_now()
+
+    for it_id in data.item_ids:
+        item = db.query(InventoryItem).filter(InventoryItem.id == it_id).first()
+        if not item:
+            failed_ids.append(it_id)
+            details.append({"id": it_id, "status": "failed", "reason": "Item not found"})
+            continue
+
+        if data.action == "delete":
+            dep = check_item_dependencies(it_id, db)
+            if dep["can_delete"]:
+                db.delete(item)
+                deleted_ids.append(it_id)
+                details.append({"id": it_id, "status": "deleted"})
+            else:
+                # Require archiving instead of failing the batch
+                item.is_archived = True
+                item.is_active = False
+                item.archived_at = now
+                item.archived_by_user_id = current_user.id
+                item.archive_reason = data.reason or f"Auto-archived during bulk delete: {'; '.join(dep['reasons'])}"
+                archived_ids.append(it_id)
+                details.append({"id": it_id, "status": "archived", "reason": "; ".join(dep["reasons"])})
+
+        elif data.action == "archive":
+            item.is_archived = True
+            item.is_active = False
+            item.archived_at = now
+            item.archived_by_user_id = current_user.id
+            item.archive_reason = data.reason or "Archived via bulk action"
+            archived_ids.append(it_id)
+            details.append({"id": it_id, "status": "archived"})
+
+        elif data.action == "activate":
+            item.is_active = True
+            item.is_archived = False
+            activated_ids.append(it_id)
+            details.append({"id": it_id, "status": "activated"})
+
+        elif data.action == "deactivate":
+            item.is_active = False
+            deactivated_ids.append(it_id)
+            details.append({"id": it_id, "status": "deactivated"})
+
+    db.commit()
+    return {
+        "action": data.action,
+        "total": len(data.item_ids),
+        "deleted_count": len(deleted_ids),
+        "archived_count": len(archived_ids),
+        "activated_count": len(activated_ids),
+        "deactivated_count": len(deactivated_ids),
+        "failed_count": len(failed_ids),
+        "details": details,
+    }
+
+
 # ==========================================
 # 3. SUPPLIERS & SUPPLIER ITEMS
 # ==========================================
@@ -443,6 +685,9 @@ def get_suppliers(
         resp = SupplierResponse.model_validate(s)
         resp.supplied_items_count = items_cnt
         resp.total_orders_count = orders_cnt
+        resp.is_archived = getattr(s, "is_archived", False)
+        resp.archived_at = getattr(s, "archived_at", None)
+        resp.archive_reason = getattr(s, "archive_reason", None)
         results.append(resp)
     return results
 
@@ -578,6 +823,199 @@ def remove_supplier_item(supplier_id: int, supplier_item_id: int, db: Session = 
     db.delete(link)
     db.commit()
     return {"message": "Supplier-item link removed successfully"}
+
+
+def check_supplier_dependencies(supplier_id: int, db: Session) -> dict:
+    sup = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not sup:
+        return {"exists": False, "can_delete": False, "reasons": ["Supplier does not exist"]}
+
+    po_count = db.query(PurchaseOrder).filter(PurchaseOrder.supplier_id == supplier_id).count()
+    grn_count = db.query(GoodsReceipt).filter(GoodsReceipt.supplier_id == supplier_id).count()
+    items_count = db.query(SupplierItem).filter(SupplierItem.supplier_id == supplier_id).count()
+
+    reasons = []
+    if po_count > 0:
+        reasons.append(f"Referenced by {po_count} historical purchase order(s)")
+    if grn_count > 0:
+        reasons.append(f"Referenced by {grn_count} historical goods receipt(s)")
+
+    can_delete = len(reasons) == 0
+    return {
+        "exists": True,
+        "supplier_id": supplier_id,
+        "name": sup.name,
+        "can_delete": can_delete,
+        "can_archive": True,
+        "is_archived": getattr(sup, "is_archived", False),
+        "reasons": reasons,
+        "counts": {
+            "purchase_orders": po_count,
+            "goods_receipts": grn_count,
+            "catalog_items": items_count,
+        },
+    }
+
+
+@router.get("/suppliers/{supplier_id}/eligibility")
+def get_supplier_deletion_eligibility(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+):
+    dep = check_supplier_dependencies(supplier_id, db)
+    if not dep["exists"]:
+        raise HTTPException(status_code=404, detail="Supplier not found.")
+    return dep
+
+
+@router.delete("/suppliers/{supplier_id}")
+def delete_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sup = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not sup:
+        raise HTTPException(status_code=404, detail="Supplier not found.")
+
+    dep = check_supplier_dependencies(supplier_id, db)
+    if not dep["can_delete"]:
+        reasons_str = "; ".join(dep["reasons"])
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot permanently delete supplier '{sup.name}'. {reasons_str}. Archive or deactivate the supplier instead.",
+        )
+
+    db.delete(sup)
+    db.commit()
+    return {"message": f"Supplier '{sup.name}' deleted successfully."}
+
+
+@router.post("/suppliers/{supplier_id}/archive", response_model=SupplierResponse)
+def archive_supplier(
+    supplier_id: int,
+    data: SupplierArchiveRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sup = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not sup:
+        raise HTTPException(status_code=404, detail="Supplier not found.")
+
+    sup.is_archived = True
+    sup.is_active = False
+    sup.archived_at = get_kolkata_now()
+    sup.archived_by_user_id = current_user.id
+    sup.archive_reason = data.reason if data and data.reason else "Archived by manager"
+
+    db.commit()
+    db.refresh(sup)
+    items_cnt = db.query(SupplierItem).filter(SupplierItem.supplier_id == sup.id).count()
+    orders_cnt = db.query(PurchaseOrder).filter(PurchaseOrder.supplier_id == sup.id).count()
+    resp = SupplierResponse.model_validate(sup)
+    resp.supplied_items_count = items_cnt
+    resp.total_orders_count = orders_cnt
+    resp.is_archived = True
+    resp.archived_at = sup.archived_at
+    resp.archive_reason = sup.archive_reason
+    return resp
+
+
+@router.post("/suppliers/{supplier_id}/unarchive", response_model=SupplierResponse)
+def unarchive_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sup = db.query(Supplier).filter(Supplier.id == supplier_id).first()
+    if not sup:
+        raise HTTPException(status_code=404, detail="Supplier not found.")
+
+    sup.is_archived = False
+    sup.is_active = True
+    sup.archived_at = None
+    sup.archived_by_user_id = None
+    sup.archive_reason = None
+
+    db.commit()
+    db.refresh(sup)
+    items_cnt = db.query(SupplierItem).filter(SupplierItem.supplier_id == sup.id).count()
+    orders_cnt = db.query(PurchaseOrder).filter(PurchaseOrder.supplier_id == sup.id).count()
+    resp = SupplierResponse.model_validate(sup)
+    resp.supplied_items_count = items_cnt
+    resp.total_orders_count = orders_cnt
+    resp.is_archived = False
+    return resp
+
+
+@router.post("/suppliers/bulk-action")
+def bulk_action_suppliers(
+    data: BulkSupplierActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    deleted_ids = []
+    archived_ids = []
+    activated_ids = []
+    deactivated_ids = []
+    failed_ids = []
+    details = []
+
+    now = get_kolkata_now()
+
+    for sup_id in data.supplier_ids:
+        sup = db.query(Supplier).filter(Supplier.id == sup_id).first()
+        if not sup:
+            failed_ids.append(sup_id)
+            details.append({"id": sup_id, "status": "failed", "reason": "Supplier not found"})
+            continue
+
+        if data.action == "delete":
+            dep = check_supplier_dependencies(sup_id, db)
+            if dep["can_delete"]:
+                db.delete(sup)
+                deleted_ids.append(sup_id)
+                details.append({"id": sup_id, "status": "deleted"})
+            else:
+                sup.is_archived = True
+                sup.is_active = False
+                sup.archived_at = now
+                sup.archived_by_user_id = current_user.id
+                sup.archive_reason = data.reason or f"Auto-archived during bulk delete: {'; '.join(dep['reasons'])}"
+                archived_ids.append(sup_id)
+                details.append({"id": sup_id, "status": "archived", "reason": "; ".join(dep["reasons"])})
+
+        elif data.action == "archive":
+            sup.is_archived = True
+            sup.is_active = False
+            sup.archived_at = now
+            sup.archived_by_user_id = current_user.id
+            sup.archive_reason = data.reason or "Archived via bulk action"
+            archived_ids.append(sup_id)
+            details.append({"id": sup_id, "status": "archived"})
+
+        elif data.action == "activate":
+            sup.is_active = True
+            sup.is_archived = False
+            activated_ids.append(sup_id)
+            details.append({"id": sup_id, "status": "activated"})
+
+        elif data.action == "deactivate":
+            sup.is_active = False
+            deactivated_ids.append(sup_id)
+            details.append({"id": sup_id, "status": "deactivated"})
+
+    db.commit()
+    return {
+        "action": data.action,
+        "total": len(data.supplier_ids),
+        "deleted_count": len(deleted_ids),
+        "archived_count": len(archived_ids),
+        "activated_count": len(activated_ids),
+        "deactivated_count": len(deactivated_ids),
+        "failed_count": len(failed_ids),
+        "details": details,
+    }
 
 
 # ==========================================
@@ -1123,6 +1561,10 @@ def get_goods_receipts(db: Session = Depends(get_db)):
                 received_date=grn.received_date,
                 total_received_amount=grn.total_received_amount,
                 notes=grn.notes,
+                is_reversed=grn.is_reversed,
+                reversed_at=grn.reversed_at,
+                reversed_by_user_id=grn.reversed_by_user_id,
+                reversal_reason=grn.reversal_reason,
                 received_by_user_id=grn.received_by_user_id,
                 created_at=grn.created_at,
                 items=items_resp,
@@ -1171,10 +1613,133 @@ def get_goods_receipt(grn_id: int, db: Session = Depends(get_db)):
         received_date=grn.received_date,
         total_received_amount=grn.total_received_amount,
         notes=grn.notes,
+        is_reversed=grn.is_reversed,
+        reversed_at=grn.reversed_at,
+        reversed_by_user_id=grn.reversed_by_user_id,
+        reversal_reason=grn.reversal_reason,
         received_by_user_id=grn.received_by_user_id,
         created_at=grn.created_at,
         items=items_resp,
     )
+
+
+@router.patch("/goods-receipts/{grn_id}", response_model=GoodsReceiptResponse)
+def update_goods_receipt(
+    grn_id: int,
+    data: GoodsReceiptUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    grn = (
+        db.query(GoodsReceipt)
+        .options(
+            joinedload(GoodsReceipt.purchase_order).joinedload(PurchaseOrder.supplier),
+            selectinload(GoodsReceipt.items).joinedload(GoodsReceiptItem.inventory_item),
+        )
+        .filter(GoodsReceipt.id == grn_id)
+        .first()
+    )
+    if not grn:
+        raise HTTPException(status_code=404, detail="Goods receipt not found.")
+
+    if grn.is_reversed:
+        raise HTTPException(status_code=400, detail="Cannot edit a reversed Goods Receipt.")
+
+    if data.supplier_bill_number is not None:
+        grn.supplier_bill_number = data.supplier_bill_number.strip() or None
+    if data.bill_date is not None:
+        grn.bill_date = data.bill_date
+    if data.notes is not None:
+        grn.notes = data.notes.strip() or None
+
+    db.commit()
+    return get_goods_receipt(grn_id, db)
+
+
+@router.post("/goods-receipts/{grn_id}/reverse", response_model=GoodsReceiptResponse)
+def reverse_goods_receipt(
+    grn_id: int,
+    data: GoodsReceiptReverseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = str(getattr(current_user.role, "value", current_user.role)).upper()
+    if role not in ("MANAGER", "ADMIN"):
+        raise HTTPException(status_code=403, detail="Only managers or administrators are authorized to reverse Goods Receipts.")
+
+    grn = (
+        db.query(GoodsReceipt)
+        .options(
+            joinedload(GoodsReceipt.purchase_order).joinedload(PurchaseOrder.supplier),
+            selectinload(GoodsReceipt.items).joinedload(GoodsReceiptItem.inventory_item),
+        )
+        .filter(GoodsReceipt.id == grn_id)
+        .first()
+    )
+    if not grn:
+        raise HTTPException(status_code=404, detail="Goods receipt not found.")
+
+    if grn.is_reversed:
+        raise HTTPException(status_code=400, detail="Goods receipt has already been reversed.")
+
+    if not data.reason or not data.reason.strip():
+        raise HTTPException(status_code=400, detail="A mandatory reversal reason must be provided.")
+
+    # Validate stock sufficiency for every item received
+    for it in grn.items:
+        inv_item = it.inventory_item or db.query(InventoryItem).filter(InventoryItem.id == it.inventory_item_id).first()
+        if not inv_item:
+            raise HTTPException(status_code=404, detail=f"Inventory item ID {it.inventory_item_id} not found.")
+        if inv_item.current_stock < it.received_quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot reverse GRN: stock for '{inv_item.name}' has already been consumed ({inv_item.current_stock} {inv_item.base_unit} available, {it.received_quantity} {inv_item.base_unit} needed).",
+            )
+
+    # Perform reversing stock movements and stock deductions
+    for it in grn.items:
+        inv_item = it.inventory_item or db.query(InventoryItem).filter(InventoryItem.id == it.inventory_item_id).first()
+        inv_item.current_stock -= it.received_quantity
+
+        # Create compensating ledger movement
+        comp_movement = StockMovement(
+            inventory_item_id=inv_item.id,
+            movement_type=MovementType.ADJUSTMENT,
+            quantity=-it.received_quantity,
+            unit_cost=it.unit_cost,
+            balance_after=inv_item.current_stock,
+            reference_type="GRN_REVERSAL",
+            reference_id=grn.id,
+            notes=f"Reversal of GRN #{grn.grn_number}: {data.reason.strip()}",
+            created_by_user_id=current_user.id,
+        )
+        db.add(comp_movement)
+
+    # Mark GRN as reversed
+    grn.is_reversed = True
+    grn.reversed_at = datetime.now(timezone.utc)
+    grn.reversed_by_user_id = current_user.id
+    grn.reversal_reason = data.reason.strip()
+
+    # Re-evaluate parent Purchase Order status
+    po = grn.purchase_order
+    if po:
+        other_active_grns = (
+            db.query(GoodsReceipt)
+            .filter(
+                GoodsReceipt.po_id == po.id,
+                GoodsReceipt.id != grn.id,
+                GoodsReceipt.is_reversed.is_(False),
+            )
+            .all()
+        )
+        if not other_active_grns:
+            po.status = POStatus.ORDERED
+        else:
+            po.status = POStatus.PARTIALLY_RECEIVED
+
+    db.commit()
+    return get_goods_receipt(grn_id, db)
 
 
 @router.post("/goods-receipts/{grn_id}/bill")
@@ -1256,14 +1821,17 @@ def create_adjustment(
     return resp
 
 
-@router.get("/movements", response_model=list[StockMovementResponse])
+@router.get("/movements")
 def get_all_movements(
     preset: str = Query(default="today"),
     start_date: date | None = None,
     end_date: date | None = None,
     movement_type: MovementType | None = None,
     item_id: int | None = None,
-    limit: int = 100,
+    is_archived: bool | None = None,
+    search: str | None = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     start_dt, end_dt = get_date_range(preset=preset, start_date=start_date, end_date=end_date)
@@ -1275,16 +1843,73 @@ def get_all_movements(
         query = query.filter(StockMovement.movement_type == movement_type)
     if item_id:
         query = query.filter(StockMovement.inventory_item_id == item_id)
+    if is_archived is not None:
+        query = query.filter(StockMovement.is_archived == is_archived)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.join(InventoryItem, StockMovement.inventory_item_id == InventoryItem.id).filter(
+            InventoryItem.name.ilike(term)
+            | StockMovement.notes.ilike(term)
+            | StockMovement.reference_type.ilike(term)
+            | StockMovement.id.cast(String).ilike(term)
+        )
 
-    movements = query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc()).limit(limit).all()
+    total = query.order_by(None).count()
+    movements = query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     results = []
     for m in movements:
         resp = StockMovementResponse.model_validate(m)
         if m.inventory_item:
             resp.inventory_item_name = m.inventory_item.name
             resp.inventory_item_unit = m.inventory_item.base_unit
+        resp.is_archived = getattr(m, "is_archived", False)
+        resp.archived_at = getattr(m, "archived_at", None)
+        resp.archive_reason = getattr(m, "archive_reason", None)
+        resp.can_archive = manual_movement_eligibility(db, m)[0]
         results.append(resp)
-    return results
+    return {"items": results, "total": total, "page": page, "page_size": page_size}
+
+
+@router.post("/movements/bulk-archive")
+def bulk_archive_movements(
+    data: BulkMovementArchiveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    now = get_kolkata_now()
+    movements = db.query(StockMovement).filter(StockMovement.id.in_(set(data.movement_ids))).with_for_update().all()
+    movement_by_id = {movement.id: movement for movement in movements}
+    invalid = []
+    requested_ids = list(dict.fromkeys(data.movement_ids))
+    for movement_id in requested_ids:
+        movement = movement_by_id.get(movement_id)
+        if movement is None:
+            invalid.append({"id": movement_id, "reason": "Movement not found."})
+            continue
+        eligible, reason = manual_movement_eligibility(db, movement)
+        if not eligible:
+            invalid.append({"id": movement_id, "reason": reason})
+
+    if invalid:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"message": "One or more movements cannot be archived.", "invalid_movements": invalid})
+
+    archived_count = 0
+    for movement_id in requested_ids:
+        m = movement_by_id[movement_id]
+
+        m.is_archived = True
+        m.archived_at = now
+        m.archived_by_user_id = current_user.id
+        m.archive_reason = data.reason or "Archived by manager from operational view"
+        archived_count += 1
+
+    db.commit()
+    return {
+        "total": len(requested_ids),
+        "archived_count": archived_count,
+        "skipped_count": 0,
+        "message": f"Successfully archived {archived_count} movement(s).",
+    }
 
 
 @router.post("/movements/{movement_id}/reverse", response_model=StockMovementResponse)
@@ -1466,6 +2091,23 @@ def cancel_stock_count(count_id: int, db: Session = Depends(get_db)):
     sc.status = StockCountStatus.CANCELLED
     db.commit()
     return _enrich_count_response(sc)
+
+
+@router.delete("/stock-counts/{count_id}")
+def delete_draft_stock_count(
+    count_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sc = db.query(StockCount).filter(StockCount.id == count_id).first()
+    if not sc:
+        raise HTTPException(status_code=404, detail="Stock count session not found.")
+    if sc.status != StockCountStatus.DRAFT:
+        raise HTTPException(status_code=400, detail="Only Draft stock count sessions can be deleted. Cancel non-draft counts instead.")
+    db.query(StockCountItem).filter(StockCountItem.stock_count_id == sc.id).delete(synchronize_session=False)
+    db.delete(sc)
+    db.commit()
+    return {"message": "Draft stock count session deleted successfully."}
 
 
 # ==========================================

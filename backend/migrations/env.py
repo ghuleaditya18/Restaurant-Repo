@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -13,11 +14,13 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set database URL from environment configuration
-config.set_main_option(
-    "sqlalchemy.url",
-    settings.DATABASE_URL.replace("%", "%%")
-)
+# Set database URL from environment configuration if not explicitly provided
+custom_url = config.get_main_option("sqlalchemy.url")
+if not custom_url or "driver://user:pass@localhost/dbname" in custom_url:
+    config.set_main_option(
+        "sqlalchemy.url",
+        os.environ.get("DATABASE_URL", settings.DATABASE_URL).replace("%", "%%")
+    )
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

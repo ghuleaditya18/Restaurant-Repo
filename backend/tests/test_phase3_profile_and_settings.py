@@ -9,9 +9,9 @@ if str(BACKEND_DIR) not in sys.path:
 
 from starlette.testclient import TestClient
 
+from tests.base import IsolatedTestCase
 from app.main import app
 from app.core.config import settings
-from app.db.session import SessionLocal
 from app.models.entities import User, Staff
 
 
@@ -23,13 +23,9 @@ def get_token(user_id: int) -> str:
     )
 
 
-class Phase3ProfileAndSettingsTestCase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.client = TestClient(app)
-
+class Phase3ProfileAndSettingsTestCase(IsolatedTestCase):
     def setUp(self):
-        self.db = SessionLocal()
+        super().setUp()
         # Ensure user 1 (Manager/Receptionist) and user 2 exist
         self.manager_user = self.db.query(User).filter(User.id == 1).first()
         self.other_user = self.db.query(User).filter(User.id != 1).first()
@@ -38,18 +34,7 @@ class Phase3ProfileAndSettingsTestCase(unittest.TestCase):
         self.orig_phone = self.manager_user.staff_profile.phone if self.manager_user.staff_profile else None
 
     def tearDown(self):
-        try:
-            user = self.db.query(User).filter(User.id == 1).first()
-            if user:
-                user.full_name = self.orig_name
-                user.email = self.orig_email
-                if user.staff_profile:
-                    user.staff_profile.phone = self.orig_phone
-                self.db.commit()
-        except Exception:
-            self.db.rollback()
-        finally:
-            self.db.close()
+        super().tearDown()
 
     def test_get_current_user_profile(self):
         """

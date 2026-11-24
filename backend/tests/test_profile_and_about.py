@@ -10,9 +10,9 @@ if str(BACKEND_DIR) not in sys.path:
 
 from starlette.testclient import TestClient
 
+from tests.base import IsolatedTestCase
 from app.main import app
 from app.core.config import settings
-from app.db.session import SessionLocal
 from app.models.entities import User, BusinessProfile
 
 
@@ -24,13 +24,9 @@ def get_token(user_id: int) -> str:
     )
 
 
-class ProfileAndAboutTestCase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.client = TestClient(app)
-
+class ProfileAndAboutTestCase(IsolatedTestCase):
     def setUp(self):
-        self.db = SessionLocal()
+        super().setUp()
         # User 1: Restaurant Manager
         self.rest_manager = self.db.query(User).filter(User.id == 1).first()
         # User 2: Restaurant Staff
@@ -43,7 +39,7 @@ class ProfileAndAboutTestCase(unittest.TestCase):
         self.spa_token = get_token(self.spa_manager.id) if self.spa_manager else None
 
     def tearDown(self):
-        self.db.close()
+        super().tearDown()
 
     # 1. USER PROFILE RETRIEVAL & AVATAR
     def test_get_me_returns_avatar_url_field(self):

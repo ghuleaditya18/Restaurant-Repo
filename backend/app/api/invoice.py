@@ -12,6 +12,7 @@ from app.models.entities import (
     Order,
     OrderStatus,
     Invoice,
+    Payment,
     PaymentStatus,
 )
 
@@ -233,6 +234,28 @@ def get_invoice_by_order(
     invoice = get_invoice_record(db, invoice.id)
 
     return build_invoice_response(invoice)
+
+
+@router.delete("/{invoice_id}")
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+):
+    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).with_for_update().first()
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+
+    payment_count = db.query(Payment.id).filter(Payment.invoice_id == invoice.id).count()
+    if payment_count or invoice.payment_status != PaymentStatus.PENDING:
+        raise HTTPException(
+            status_code=409,
+            detail="Invoices with recorded payments or a completed payment status cannot be deleted.",
+        )
+
+    invoice_number = invoice.invoice_number
+    db.delete(invoice)
+    db.commit()
+    return {"message": f"Invoice {invoice_number} deleted successfully."}
 
 
 # ==========================================

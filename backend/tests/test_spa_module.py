@@ -484,7 +484,12 @@ class TestSpaModule(unittest.TestCase):
         self.assertEqual(inv_back.status_code, 400)
 
         # Stage 2 -> 3: In Progress -> Completed (Complete Session)
-        c2 = self.client.patch(f"/api/spa/bookings/{bkg_id}/status", headers=self.spa_headers, json={"status": "Completed"}).json()
+        before_session_end = datetime.combine(date.today(), time(14, 30), tzinfo=ZoneInfo("Asia/Kolkata"))
+        with patch("app.services.spa_service.get_kolkata_now", return_value=before_session_end):
+            too_early = self.client.patch(f"/api/spa/bookings/{bkg_id}/status", headers=self.spa_headers, json={"status": "Completed"})
+        self.assertEqual(too_early.status_code, 400)
+        with patch("app.services.spa_service.get_kolkata_now", return_value=datetime.combine(date.today(), time(14, 45), tzinfo=ZoneInfo("Asia/Kolkata"))):
+            c2 = self.client.patch(f"/api/spa/bookings/{bkg_id}/status", headers=self.spa_headers, json={"status": "Completed"}).json()
         self.assertEqual(c2["status"], "Completed")
 
         # Terminal state: Completed -> In Progress or Booked must fail with 400 Bad Request
@@ -622,17 +627,19 @@ class TestSpaModule(unittest.TestCase):
         slots = data["slots"]
         self.assertGreater(len(slots), 0)
 
-        # First slot starts at 10:00, ends at 11:00
+        # First slot starts at 10:00, ends at 11:00 (Buffer until 11:15)
         self.assertEqual(slots[0]["start_time"], "10:00")
         self.assertEqual(slots[0]["end_time"], "11:00")
 
-        # Second slot increments by 15 mins: 10:15 - 11:15
-        self.assertEqual(slots[1]["start_time"], "10:15")
-        self.assertEqual(slots[1]["end_time"], "11:15")
+        # Second fixed slot starts after 15 min break buffer: 11:15 - 12:15
+        self.assertEqual(slots[1]["start_time"], "11:15")
+        self.assertEqual(slots[1]["end_time"], "12:15")
 
-        # Last slot must not exceed 18:00 -> starts at 17:00, ends at 18:00
-        self.assertEqual(slots[-1]["start_time"], "17:00")
-        self.assertEqual(slots[-1]["end_time"], "18:00")
+        # Exactly 6 fixed non-overlapping slots between 10:00 and 18:00
+        self.assertEqual(len(slots), 6)
+        # Last slot starts at 16:15, ends at 17:15 (Buffer until 17:30 <= 18:00)
+        self.assertEqual(slots[-1]["start_time"], "16:15")
+        self.assertEqual(slots[-1]["end_time"], "17:15")
 
     def test_slots_past_time_exclusion_for_today(self):
         """Past slots on current date must be excluded."""
@@ -676,8 +683,8 @@ class TestSpaModule(unittest.TestCase):
             for s in slots:
                 st_time = time.fromisoformat(s["start_time"])
                 self.assertGreater(st_time, time(14, 15))
-            # First available slot should be 14:30
-            self.assertEqual(slots[0]["start_time"], "14:30")
+            # First available slot after 14:15 is fixed slot 5 at 15:00
+            self.assertEqual(slots[0]["start_time"], "15:00")
 
     def test_slots_active_booking_overlap_exclusion_and_reschedule(self):
         """Active bookings must exclude overlapping candidate slots; exclude_booking_id restores them."""
@@ -715,12 +722,12 @@ class TestSpaModule(unittest.TestCase):
 
         future_date = (date.today() + timedelta(days=3)).isoformat()
 
-        # Create booking for 11:00 - 12:00
+        # Create booking for 11:15 - 12:15
         bkg = self.client.post("/api/spa/bookings", headers=self.spa_headers, json={
             "customer_id": cust["id"],
             "staff_id": therapist["id"],
             "booking_date": future_date,
-            "start_time": "11:00",
+            "start_time": "11:15",
             "service_items": [{"service_id": svc["id"], "quantity": 1}],
         }).json()
         self.created_booking_ids.append(bkg["id"])
@@ -733,9 +740,8 @@ class TestSpaModule(unittest.TestCase):
         slots1 = res1.json()["slots"]
         slot_starts1 = [s["start_time"] for s in slots1]
 
-        # 11:00 is occupied, and candidate 60m slots that overlap [11:00, 12:00) must not appear:
-        for invalid_start in ["10:15", "10:30", "10:45", "11:00", "11:15", "11:30", "11:45"]:
-            self.assertNotIn(invalid_start, slot_starts1)
+        # 11:15 is occupied, so it must not appear in slots1:
+        self.assertNotIn("11:15", slot_starts1)
 
         # Query slots WITH exclude_booking_id (for rescheduling this same booking)
         res2 = self.client.get(
@@ -744,7 +750,7 @@ class TestSpaModule(unittest.TestCase):
         )
         slots2 = res2.json()["slots"]
         slot_starts2 = [s["start_time"] for s in slots2]
-        self.assertIn("11:00", slot_starts2)
+        self.assertIn("11:15", slot_starts2)
 
     def test_past_time_and_operating_hours_booking_validation(self):
         """Direct booking creation attempts in the past or outside operating hours must be rejected."""
@@ -931,10 +937,12 @@ class TestSpaModule(unittest.TestCase):
         })
         self.assertEqual(res_in_prog.status_code, 200)
 
-        res_completed = self.client.patch(f"/api/spa/bookings/{bkg_id}/status", headers=self.spa_headers, json={
-            "status": "Completed",
-            "note": "Treatment done.",
-        })
+        session_end = datetime.combine(date.today() + timedelta(days=5), time(12, 0), tzinfo=ZoneInfo("Asia/Kolkata"))
+        with patch("app.services.spa_service.get_kolkata_now", return_value=session_end):
+            res_completed = self.client.patch(f"/api/spa/bookings/{bkg_id}/status", headers=self.spa_headers, json={
+                "status": "Completed",
+                "note": "Treatment done.",
+            })
         self.assertEqual(res_completed.status_code, 200)
 
         # 5. Generate Invoice
@@ -1136,16 +1144,16 @@ class TestSpaModule(unittest.TestCase):
         slots = data["slots"]
         slot_starts = [s["start_time"] for s in slots]
 
-        # 10:00 (bkg1), 10:15, 10:30 (break), 10:45 (bkg2), 11:00, 11:15, 11:30, 11:45 (break) must be excluded
-        for invalid in ["10:00", "10:15", "10:30", "10:45", "11:00", "11:15", "11:30", "11:45"]:
+        # 10:00 (bkg1), 11:15 (bkg2) must be excluded
+        for invalid in ["10:00", "11:15"]:
             self.assertNotIn(invalid, slot_starts)
 
-        # Earliest available start time after bkg2 break (11:45 - 12:00) is 12:00!
-        self.assertIn("12:00", slot_starts)
-        slot_12 = next(s for s in slots if s["start_time"] == "12:00")
-        self.assertEqual(slot_12["end_time"], "13:00")
-        self.assertEqual(slot_12["buffer_end_time"], "13:15")
-        self.assertEqual(slot_12["display_text"], "12:00 PM - 01:00 PM")
+        # Earliest available fixed start time after bkg2 break (11:45 - 12:00) is 12:30!
+        self.assertIn("12:30", slot_starts)
+        slot_12 = next(s for s in slots if s["start_time"] == "12:30")
+        self.assertEqual(slot_12["end_time"], "13:30")
+        self.assertEqual(slot_12["buffer_end_time"], "13:45")
+        self.assertEqual(slot_12["display_text"], "12:30 PM - 01:30 PM")
 
         # 7. Multi-Service Duration Summing (30m + 60m = 90m)
         multi_slots_res = self.client.get(
@@ -1155,20 +1163,20 @@ class TestSpaModule(unittest.TestCase):
         self.assertEqual(multi_slots_res.status_code, 200)
         multi_data = multi_slots_res.json()
         self.assertEqual(multi_data["total_duration_minutes"], 90)
-        multi_slot_12 = next(s for s in multi_data["slots"] if s["start_time"] == "12:00")
-        self.assertEqual(multi_slot_12["end_time"], "13:30")
-        self.assertEqual(multi_slot_12["buffer_end_time"], "13:45")
-        self.assertEqual(multi_slot_12["display_text"], "12:00 PM - 01:30 PM")
+        multi_slot_12 = next(s for s in multi_data["slots"] if s["start_time"] == "12:30")
+        self.assertEqual(multi_slot_12["end_time"], "14:00")
+        self.assertEqual(multi_slot_12["buffer_end_time"], "14:15")
+        self.assertEqual(multi_slot_12["display_text"], "12:30 PM - 02:00 PM")
 
         # 8. Check-Conflict endpoint verification
         check_res = self.client.get(
-            f"/api/spa/bookings/check-conflict?staff_id={therapist['id']}&booking_date={booking_date}&start_time=12:00&duration_minutes=60",
+            f"/api/spa/bookings/check-conflict?staff_id={therapist['id']}&booking_date={booking_date}&start_time=12:30&duration_minutes=60",
             headers=self.spa_headers,
         )
         self.assertEqual(check_res.status_code, 200)
         chk = check_res.json()
         self.assertTrue(chk["available"])
-        self.assertEqual(chk["display_text"], "12:00 PM - 01:00 PM")
+        self.assertEqual(chk["display_text"], "12:30 PM - 01:30 PM")
 
         # Check conflict during break (11:45)
         check_conflict_res = self.client.get(

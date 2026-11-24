@@ -1,5 +1,6 @@
 import os
 from datetime import date
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
@@ -12,6 +13,7 @@ from app.models.entities import User
 from app.models.spa import (
     SpaInvoice,
     SpaInvoiceItem,
+    SpaPayment,
     SpaBooking,
     SpaCustomer,
 )
@@ -172,6 +174,29 @@ def get_invoice_detail(
     if not inv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found.")
     return build_invoice_response(inv, db)
+
+
+@router.delete("/invoices/{invoice_id}")
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_spa_context),
+):
+    inv = db.query(SpaInvoice).filter(SpaInvoice.id == invoice_id).with_for_update().first()
+    if not inv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found.")
+
+    payment_count = db.query(SpaPayment.id).filter(SpaPayment.invoice_id == inv.id).count()
+    if payment_count or Decimal(str(inv.paid_amount or 0)) > 0 or str(inv.payment_status).strip().lower() != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invoices with recorded payments or a completed payment status cannot be deleted.",
+        )
+
+    invoice_number = inv.invoice_number
+    db.delete(inv)
+    db.commit()
+    return {"message": f"Invoice {invoice_number} deleted successfully."}
 
 
 @router.get("/invoices/{invoice_id}/download")

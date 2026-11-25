@@ -5,7 +5,7 @@ import { MODAL_SIZES } from "../utils/themeTokens";
 /**
  * Standard Accessible Modal Component (A4 Standard)
  * - Backdrop dimmed and blurred
- * - Closes on Escape, X, and backdrop click (only if mousedown & mouseup both on backdrop)
+ * - Closes on Escape, X, and a click directly on the backdrop
  * - Never closes on inside clicks
  * - Focus trapped inside dialog
  * - Returns focus to previous element on close
@@ -27,7 +27,6 @@ export default function Modal({
   ariaLabelledBy = "modal-dialog-title",
 }) {
   const dialogRef = useRef(null);
-  const mouseDownTargetRef = useRef(null);
   const previousActiveElementRef = useRef(null);
 
   // Store trigger element on open
@@ -116,15 +115,10 @@ export default function Modal({
 
   const widthClass = MODAL_SIZES[size] || MODAL_SIZES.md;
 
-  const handleBackdropMouseDown = (e) => {
-    mouseDownTargetRef.current = e.target;
-  };
-
-  const handleBackdropMouseUp = (e) => {
-    if (closeOnBackdrop && mouseDownTargetRef.current === e.currentTarget && e.target === e.currentTarget) {
+  const handleBackdropClick = (e) => {
+    if (closeOnBackdrop && e.target === e.currentTarget) {
       handleRequestClose();
     }
-    mouseDownTargetRef.current = null;
   };
 
   return (
@@ -133,8 +127,7 @@ export default function Modal({
       aria-modal="true"
       aria-labelledby={ariaLabelledBy}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
-      onMouseDown={handleBackdropMouseDown}
-      onMouseUp={handleBackdropMouseUp}
+      onClick={handleBackdropClick}
     >
       <div
         ref={dialogRef}

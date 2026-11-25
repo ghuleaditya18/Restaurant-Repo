@@ -515,7 +515,7 @@ export default function InventoryWastage() {
 
       {/* VIEW MOVEMENT DETAILS MODAL */}
       {viewingMovement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setViewingMovement(null)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -584,7 +584,7 @@ export default function InventoryWastage() {
 
       {/* REVERSAL MODAL */}
       {reversingMovement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setReversingMovement(null)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -650,7 +650,7 @@ export default function InventoryWastage() {
 
       {/* LOG WASTAGE MODAL */}
       {wastageModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setWastageModalOpen(false)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -751,7 +751,7 @@ export default function InventoryWastage() {
 
       {/* RECORD ADJUSTMENT MODAL */}
       {adjustmentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setAdjustmentModalOpen(false)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">

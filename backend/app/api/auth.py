@@ -63,6 +63,18 @@ def login(
         )
 
     biz_context = getattr(user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if login_data.business_context:
+        requested_context = login_data.business_context.strip().upper()
+        context_aliases = {"VILLAS": "VILLA", "NIWARAAI": "VILLA"}
+        requested_context = context_aliases.get(requested_context, requested_context)
+        stored_context = str(getattr(biz_context, "value", biz_context)).strip().upper()
+        stored_context = context_aliases.get(stored_context, stored_context)
+        if requested_context not in {"RESTAURANT", "SPA", "VILLA"} or requested_context != stored_context:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
+
     access_token = create_access_token(
         data={
             "sub": str(user.id),

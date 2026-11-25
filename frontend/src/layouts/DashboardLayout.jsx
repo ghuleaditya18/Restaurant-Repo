@@ -38,7 +38,7 @@ function DashboardLayout() {
       <div className="min-w-0 flex-1 flex flex-col transition-all duration-300 ease-in-out">
         <Header onOpenMobileMenu={() => setMobileMenuOpen(true)} />
 
-        <main className="mx-auto w-full max-w-[1700px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8 flex-1">
+        <main className="mx-auto w-full max-w-[1700px] px-4 py-4 sm:px-5 sm:py-4 lg:px-6 flex-1">
           <Outlet />
         </main>
       </div>

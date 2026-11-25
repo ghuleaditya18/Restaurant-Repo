@@ -1,16 +1,25 @@
-import { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import {
   ChefHat,
+  Sparkles,
+  BedDouble,
   Mail,
   Lock,
   ArrowRight,
   Eye,
   EyeOff,
+  ArrowLeft,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
+import { APP_NAME, MODULE_NAMES } from "../config/branding";
+import {
+  clearSessionAuthStorage,
+  getModuleHomeRoute,
+  normalizeModuleContext,
+} from "../config/moduleRouting";
 
 // Keep this in sync with the password rules used at registration / backend.
 const MIN_PASSWORD_LENGTH = 6;
@@ -86,9 +95,35 @@ const validatePassword = (value) => {
 };
 
 
-function Login() {
+const MODULE_CHOICES = [
+  {
+    context: "RESTAURANT",
+    to: "/login/restaurant",
+    title: MODULE_NAMES.RESTAURANT || "Restaurant Management",
+    description: "Dining orders, tables, menu, inventory & invoices",
+    icon: ChefHat,
+  },
+  {
+    context: "SPA",
+    to: "/login/spa",
+    title: MODULE_NAMES.SPA || "Spa & Wellness",
+    description: "Therapist schedules, appointments & wellness billing",
+    icon: Sparkles,
+  },
+  {
+    context: "VILLA",
+    to: "/login/villas",
+    title: MODULE_NAMES.VILLA || "Villas & Units",
+    description: "Villas, guest units, stays, services & billing",
+    icon: BedDouble,
+  },
+];
+
+
+function Login({ moduleContext = null }) {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const activeContext = normalizeModuleContext(moduleContext);
 
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
@@ -101,6 +136,14 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState("");
+
+  useEffect(() => {
+    if (!sessionStorage.getItem("access_token")) {
+      clearSessionAuthStorage(sessionStorage);
+    }
+    setErrors({ email: "", password: "" });
+    setServerError("");
+  }, [activeContext]);
 
 
   // ---------- Input handlers ----------
@@ -158,12 +201,8 @@ function Login() {
     setSubmitting(true);
 
     try {
-      const loggedUser = await login(email.trim().toLowerCase(), password);
-      if (loggedUser?.business_context === "SPA") {
-        navigate("/spa/dashboard", { replace: true });
-      } else {
-        navigate("/", { replace: true });
-      }
+      const loggedUser = await login(email.trim().toLowerCase(), password, activeContext);
+      navigate(getModuleHomeRoute(loggedUser?.business_context), { replace: true });
     } catch (err) {
       const status = err.response?.status;
       const data = err.response?.data;
@@ -231,35 +270,87 @@ function Login() {
     }`;
 
 
+  const ActiveIcon =
+    activeContext === "SPA" ? Sparkles : activeContext === "VILLA" ? BedDouble : ChefHat;
+
   return (
     <div className="min-h-screen bg-[#F0F2F7] flex items-center justify-center p-5">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-[#E5E9F0] p-8 sm:p-10">
 
+        {activeContext && (
+          <Link
+            to="/login"
+            className="mb-5 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-50 hover:text-stone-900"
+          >
+            <ArrowLeft size={15} />
+            Back to Module Selection
+          </Link>
+        )}
+
         {/* Branding */}
         <div className="flex justify-center mb-7">
           <div className="bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold p-4 rounded-2xl shadow-xs">
-            <ChefHat size={30} />
+            <ActiveIcon size={30} />
           </div>
         </div>
 
         {/* Application Name */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">DineFlow</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">{APP_NAME}</h1>
           <p className="text-xs text-stone-500 mt-1 font-medium">
-            Restaurant Management System
+            {activeContext ? MODULE_NAMES[activeContext] : "Unified Resort Management"}
           </p>
         </div>
 
-        {/* Welcome Message */}
-        <div className="mb-7">
-          <h2 className="text-xl font-bold text-stone-900">Welcome Back</h2>
-          <p className="text-xs text-stone-500 mt-1 font-medium">
-            Sign in to access your operations dashboard.
-          </p>
-        </div>
+        {!activeContext ? (
+          <div>
+            <div className="mb-5 text-center">
+              <h2 className="text-xl font-bold text-stone-900">Select Business Module</h2>
+              <p className="text-xs text-stone-500 mt-1 font-medium">
+                Choose the operational module you want to sign in to.
+              </p>
+            </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <nav aria-label="Choose a business module" className="space-y-3">
+              {MODULE_CHOICES.map((mod) => {
+                const ModIcon = mod.icon;
+                return (
+                  <Link
+                    key={mod.context}
+                    to={mod.to}
+                    className="group flex items-center justify-between gap-3 rounded-2xl border border-[#E5E9F0] bg-[#F8FAFC] p-4 transition hover:border-[#F59E0B] hover:bg-[#FFF7E8]"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="rounded-xl bg-white border border-[#E5E9F0] p-2.5 text-[#D97706] shrink-0 group-hover:border-[#F59E0B]/50">
+                        <ModIcon size={20} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-stone-900 truncate">{mod.title}</p>
+                        <p className="text-xs text-stone-500 truncate">{mod.description}</p>
+                      </div>
+                    </div>
+                    <ArrowRight size={16} className="text-stone-400 group-hover:text-[#D97706] shrink-0" />
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <p className="text-center text-xs text-stone-400 mt-8">
+              Authorized personnel only.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Welcome Message */}
+            <div className="mb-7">
+              <h2 className="text-xl font-bold text-stone-900">Welcome Back</h2>
+              <p className="text-xs text-stone-500 mt-1 font-medium">
+                {`Sign in to access ${MODULE_NAMES[activeContext]}.`}
+              </p>
+            </div>
+
+            {/* Login Form */}
+            <form onSubmit={handleSubmit} noValidate className="space-y-5">
 
           {/* Email */}
           <div>
@@ -370,10 +461,12 @@ function Login() {
           </button>
         </form>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-stone-400 mt-8">
-          Authorized restaurant personnel only.
-        </p>
+            {/* Footer */}
+            <p className="text-center text-xs text-stone-400 mt-8">
+              Authorized personnel only.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

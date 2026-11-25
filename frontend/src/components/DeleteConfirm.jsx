@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, Loader2, X } from "lucide-react";
 
 /**
  * Standard Locked Delete Confirmation Modal (A4 Standard)
- * - Backdrop clicks are LOCKED (do nothing, cannot close by clicking outside)
+ * - Closes on outside click, Escape, or Cancel
  * - Cancel button receives initial focus
  * - Red destructive action button
  * - Loading spinner during async request
@@ -70,8 +70,9 @@ export default function DeleteConfirm({
       aria-modal="true"
       aria-labelledby="delete-confirm-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 overflow-y-auto"
-      // Explicitly lock backdrop: clicks outside do nothing!
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        if (!loading && e.target === e.currentTarget) onClose?.();
+      }}
     >
       <div
         ref={dialogRef}

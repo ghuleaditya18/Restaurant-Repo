@@ -20,6 +20,9 @@ def create_manager():
 
         full_name = input("Manager Name: ").strip()
         email = input("Manager Email: ").strip().lower()
+        business_context = (input("Business context [RESTAURANT/SPA/VILLA] (default RESTAURANT): ").strip().upper() or "RESTAURANT")
+        if business_context not in {"RESTAURANT", "SPA", "VILLA"}:
+            raise ValueError("Business context must be RESTAURANT, SPA, or VILLA.")
 
         password = getpass("Manager Password: ")
         confirm_password = getpass("Confirm Password: ")
@@ -49,6 +52,7 @@ def create_manager():
             email=email,
             password_hash=hash_password(password),
             role=manager_role,
+            business_context=business_context,
             is_active=True
         )
 
@@ -61,6 +65,7 @@ def create_manager():
         print("Name:", manager.full_name)
         print("Email:", manager.email)
         print("Role:", manager.role)
+        print("Business context:", manager.business_context)
 
     except Exception as error:
         db.rollback()

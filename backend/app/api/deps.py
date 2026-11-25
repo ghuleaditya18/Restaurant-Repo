@@ -124,6 +124,18 @@ def require_spa_context(
     return current_user
 
 
+def require_villa_context(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if str(biz_context).upper() not in {"VILLA", "VILLAS", "NIWARAAI"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Villas account required"
+        )
+    return current_user
+
+
 def require_restaurant_context_image(
     current_user: User = Depends(require_restaurant_context)
 ) -> User:

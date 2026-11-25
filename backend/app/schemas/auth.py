@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class LoginRequest(BaseModel):
     email: str
     password: str
+    business_context: str | None = None
 
 
 class TokenResponse(BaseModel):

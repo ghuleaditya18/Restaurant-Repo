@@ -45,7 +45,7 @@ export default function StatCard({
         type={onClick ? "button" : undefined}
         onClick={onClick}
         aria-pressed={onClick ? active : undefined}
-        className={`text-left w-full rounded-xl border bg-white dark:bg-[#101722] p-2.5 sm:p-3.5 md:p-4 shadow-xs transition-all duration-200 min-h-[84px] sm:min-h-[88px] flex items-center gap-2.5 sm:gap-3.5 ${
+        className={`text-left w-full rounded-xl border bg-white dark:bg-[#101722] p-3 sm:p-3.5 shadow-xs transition-all duration-200 min-h-[72px] flex items-center gap-3 ${
           active
             ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-[#FFF7E8]/40 dark:bg-[#30251C]/40"
             : "border-[#E5E9F0] dark:border-[#1E293B] hover:border-stone-300 dark:hover:border-stone-700"
@@ -53,7 +53,7 @@ export default function StatCard({
       >
         {Icon && (
           <div
-            className={`flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl border ${tileColor}`}
+            className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border ${tileColor}`}
           >
             {renderIcon()}
           </div>
@@ -83,20 +83,20 @@ export default function StatCard({
       type={onClick ? "button" : undefined}
       onClick={onClick}
       aria-pressed={onClick ? active : undefined}
-      className={`text-left w-full rounded-xl border bg-white dark:bg-[#101722] p-2.5 sm:p-3.5 md:p-4 shadow-xs transition-all duration-200 min-h-[84px] sm:min-h-[88px] flex flex-col justify-between ${
+      className={`text-left w-full rounded-xl border bg-white dark:bg-[#101722] p-3 sm:p-3.5 shadow-xs transition-all duration-200 min-h-[72px] flex flex-col justify-between ${
         active
           ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-[#FFF7E8]/40 dark:bg-[#30251C]/40"
           : "border-[#E5E9F0] dark:border-[#1E293B] hover:border-stone-300 dark:hover:border-stone-700"
       } ${onClick ? "cursor-pointer hover:shadow-xs" : ""} ${className}`}
     >
-      <div className="flex items-start justify-between gap-2 sm:gap-3 w-full">
+      <div className="flex items-start justify-between gap-2.5 w-full">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] sm:text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2] truncate">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2] truncate">
             {title}
           </p>
 
-          <div className="mt-1 flex items-baseline gap-1.5 sm:gap-2">
-            <h3 className="text-lg sm:text-xl md:text-2xl font-semibold leading-tight sm:leading-8 tracking-tight tabular-nums text-stone-900 dark:text-white truncate">
+          <div className="mt-0.5 flex items-baseline gap-1.5 sm:gap-2">
+            <h3 className="text-lg sm:text-xl font-semibold leading-7 tracking-tight tabular-nums text-stone-900 dark:text-white truncate">
               {value}
             </h3>
 
@@ -122,7 +122,7 @@ export default function StatCard({
 
         {Icon && (
           <div
-            className={`flex h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-xl border ${tileColor}`}
+            className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border ${tileColor}`}
           >
             {renderIcon()}
           </div>

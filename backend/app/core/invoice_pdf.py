@@ -18,6 +18,7 @@ from reportlab.platypus import (
     TableStyle,
     HRFlowable,
 )
+from app.core.branding import APP_NAME
 
 # ==========================================
 # DIRECTORY CONFIGURATION
@@ -113,7 +114,7 @@ def generate_invoice_pdf(invoice):
     # HEADER
     # ======================================
 
-    story.append(Paragraph("DINEFLOW RESTAURANT", title_style))
+    story.append(Paragraph(f"{APP_NAME} RESTAURANT", title_style))
 
     story.append(
         Paragraph(

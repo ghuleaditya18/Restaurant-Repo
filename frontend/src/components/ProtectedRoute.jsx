@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getModuleHomeRoute, normalizeModuleContext } from "../config/moduleRouting";
 
 function ProtectedRoute({
   children,
@@ -34,13 +35,15 @@ function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  const userContext = (user.business_context || "RESTAURANT").toUpperCase();
+  const userContext = normalizeModuleContext(user.business_context);
+  if (!userContext) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (allowedContext) {
-    const requiredContext = allowedContext.toUpperCase();
-    if (requiredContext !== userContext) {
-      // Cross-business redirection: Spa user attempting restaurant route -> /spa/dashboard; Restaurant user -> /
-      return <Navigate to={userContext === "SPA" ? "/spa/dashboard" : "/"} replace />;
+    const requiredContext = normalizeModuleContext(allowedContext);
+    if (!requiredContext || requiredContext !== userContext) {
+      return <Navigate to={getModuleHomeRoute(userContext)} replace />;
     }
   }
 

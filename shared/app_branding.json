@@ -1,0 +1,8 @@
+{
+  "product_name": "NewaraAI",
+  "modules": {
+    "RESTAURANT": "Restaurant Management",
+    "SPA": "Spa & Wellness",
+    "VILLA": "Villas & Units"
+  }
+}

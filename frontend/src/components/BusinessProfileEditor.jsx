@@ -500,7 +500,7 @@ export default function BusinessProfileEditor({
                 value={formData.business_email}
                 onChange={handleChange}
                 maxLength={150}
-                placeholder="e.g. contact@dineflow.com"
+                placeholder="e.g. contact@example.com"
                 className={INPUT_STYLES.base}
               />
             </div>

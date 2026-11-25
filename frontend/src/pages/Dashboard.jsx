@@ -104,7 +104,7 @@ function Dashboard() {
   const periodLabel = stats?.date_filter_label || "Today";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Dashboard"
@@ -359,13 +359,13 @@ function Dashboard() {
           </div>
 
           {/* Main Content: Recent Orders and Live Table Status */}
-          <section className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+          <section className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
             <div className="xl:col-span-2">
               <RecentOrders orders={data.recent_orders} loading={loading} />
             </div>
 
             {/* Live Table Status */}
-            <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs">
+            <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 shadow-xs">
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">

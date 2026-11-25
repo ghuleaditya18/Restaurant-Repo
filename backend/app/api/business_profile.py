@@ -5,6 +5,7 @@ from app.db.session import get_db
 from app.models import User, BusinessProfile
 from app.api.deps import get_current_user
 from app.core.image_upload import save_founder_image, remove_founder_image
+from app.core.branding import APP_NAME
 from app.schemas.business_profile import (
     BusinessProfileResponse,
     BusinessProfileUpdateRequest,
@@ -90,7 +91,7 @@ def get_business_profile(
     if not profile:
         profile = BusinessProfile(
             business_context=biz_context,
-            business_name=f"DineFlow {biz_context.capitalize()}",
+            business_name=f"{APP_NAME} {biz_context.capitalize()}",
             is_profile_complete=False,
         )
         db.add(profile)
@@ -185,7 +186,7 @@ async def upload_founder_image(
     if not profile:
         profile = BusinessProfile(
             business_context=biz_context,
-            business_name=f"DineFlow {biz_context.capitalize()}",
+            business_name=f"{APP_NAME} {biz_context.capitalize()}",
             is_profile_complete=False,
         )
         db.add(profile)

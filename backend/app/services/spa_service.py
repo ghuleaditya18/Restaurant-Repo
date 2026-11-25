@@ -25,6 +25,7 @@ from reportlab.platypus import (
 )
 
 from app.core.config import settings
+from app.core.branding import APP_NAME, MODULE_NAMES
 from app.core.date_utils import get_kolkata_now, get_kolkata_today
 from app.models.spa import (
     SpaBooking,
@@ -785,7 +786,7 @@ def generate_spa_invoice_pdf(invoice: SpaInvoice) -> str:
     brand_table = Table(
         [
             [
-                Paragraph("<b>DINEFLOW SPA & WELLNESS</b>", header_style),
+                Paragraph(f"<b>{APP_NAME} {MODULE_NAMES['SPA'].upper()}</b>", header_style),
                 Paragraph(f"<b>INVOICE</b><br/><font color='#78716C'>{escape(invoice.invoice_number)}</font>", right_bold),
             ],
             [
@@ -889,7 +890,7 @@ def generate_spa_invoice_pdf(invoice: SpaInvoice) -> str:
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#E7E5E4")))
     story.append(Spacer(1, 4 * mm))
     footer_text = Paragraph(
-        "Thank you for visiting DineFlow Spa & Wellness. For inquiries or re-booking, please contact reception.",
+        f"Thank you for visiting {APP_NAME} {MODULE_NAMES['SPA']}. For inquiries or re-booking, please contact reception.",
         ParagraphStyle("Footer", parent=styles["Normal"], alignment=TA_CENTER, fontName="Helvetica", fontSize=8, textColor=colors.HexColor("#A8A29E"))
     )
     story.append(footer_text)

@@ -720,7 +720,7 @@ export default function InventoryStock() {
 
       {/* CREATE / EDIT ITEM MODAL */}
       {itemModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setItemModalOpen(false)}>
           <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -869,7 +869,7 @@ export default function InventoryStock() {
 
       {/* CATEGORIES MANAGEMENT MODAL */}
       {categoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setCategoryModalOpen(false)}>
           <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -927,7 +927,7 @@ export default function InventoryStock() {
 
       {/* MOVEMENTS AUDIT MODAL */}
       {movementsModalOpen && activeItemMovements && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setMovementsModalOpen(false)}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
@@ -1032,7 +1032,7 @@ export default function InventoryStock() {
 
       {/* SINGLE ITEM ELIGIBILITY / DELETE / ARCHIVE MODAL */}
       {eligibilityModal.open && eligibilityModal.item && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setEligibilityModal({ open: false, loading: false, item: null, eligibility: null, archiveReason: "" })}>
           <div className="w-full max-w-lg bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div className="flex items-center gap-2">
@@ -1146,7 +1146,7 @@ export default function InventoryStock() {
 
       {/* BULK ACTION CONFIRMATION MODAL */}
       {bulkModal.open && bulkModal.checkResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setBulkModal({ open: false, loading: false, checkResult: null, archiveReason: "" })}>
           <div className="w-full max-w-xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div className="flex items-center gap-2">

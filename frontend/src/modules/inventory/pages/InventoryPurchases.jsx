@@ -720,7 +720,12 @@ export default function InventoryPurchases() {
 
       {/* CREATE / EDIT PURCHASE ORDER MODAL */}
       {createPoOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setCreatePoOpen(false);
+            setEditingPo(null);
+          }
+        }}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -898,7 +903,7 @@ export default function InventoryPurchases() {
 
       {/* VIEW PURCHASE ORDER MODAL */}
       {viewingPo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setViewingPo(null)}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
@@ -989,7 +994,7 @@ export default function InventoryPurchases() {
 
       {/* VIEW GOODS RECEIPT MODAL */}
       {viewingGrn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setViewingGrn(null)}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
@@ -1082,7 +1087,7 @@ export default function InventoryPurchases() {
 
       {/* RECEIVE GOODS MODAL */}
       {receiveModalOpen && selectedPoForReceive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setReceiveModalOpen(false)}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
@@ -1216,7 +1221,7 @@ export default function InventoryPurchases() {
 
       {/* UPLOAD BILL MODAL */}
       {uploadBillModalOpen && selectedGrnForUpload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setUploadBillModalOpen(false)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -1260,7 +1265,7 @@ export default function InventoryPurchases() {
 
       {/* EDIT GOODS RECEIPT MODAL */}
       {editingGrn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setEditingGrn(null)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -1335,7 +1340,7 @@ export default function InventoryPurchases() {
 
       {/* REVERSE GOODS RECEIPT MODAL */}
       {reversingGrn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && !reversingLoading && setReversingGrn(null)}>
           <div className="w-full max-w-md bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <h3 className="text-lg font-bold text-red-600 dark:text-red-400">

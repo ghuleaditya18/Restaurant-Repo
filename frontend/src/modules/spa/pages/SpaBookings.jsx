@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -11,6 +11,7 @@ import {
   Sparkles,
   Eye,
   X,
+  ChevronDown,
 } from "lucide-react";
 import spaApi from "../services/spaApi";
 import { BookingStatusBadge } from "../components/StatusBadges";
@@ -55,6 +56,8 @@ export default function SpaBookings() {
   const [customers, setCustomers] = useState([]);
   const [therapists, setTherapists] = useState([]);
   const [availableServices, setAvailableServices] = useState([]);
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+  const serviceDropdownRef = useRef(null);
   const [loading, setLoading] = useState(true);
 
   // Filter state
@@ -104,6 +107,28 @@ export default function SpaBookings() {
   const [cancelReason, setCancelReason] = useState("");
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
   const [clockNow, setClockNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!serviceDropdownOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!serviceDropdownRef.current?.contains(event.target)) setServiceDropdownOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setServiceDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("touchstart", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("touchstart", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [serviceDropdownOpen]);
+
+  useEffect(() => {
+    if (!createModalOpen) setServiceDropdownOpen(false);
+  }, [createModalOpen]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setClockNow(new Date()), 15000);
@@ -763,7 +788,7 @@ export default function SpaBookings() {
 
       {/* CREATE BOOKING MODAL */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto" onClick={(e) => e.target === e.currentTarget && setCreateModalOpen(false)}>
           <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 my-8">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-2">
@@ -904,7 +929,38 @@ export default function SpaBookings() {
                 <label className="block font-semibold text-stone-700 dark:text-stone-300 mb-1">
                   Select Treatments / Services *
                 </label>
-                <div className="max-h-44 overflow-y-auto space-y-1.5 border border-stone-200 dark:border-stone-700 rounded-xl p-2 bg-stone-50/50 dark:bg-stone-800/40">
+                <div ref={serviceDropdownRef} className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={serviceDropdownOpen}
+                    aria-controls="booking-service-options"
+                    onClick={() => setServiceDropdownOpen((open) => !open)}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-left text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-[#F59E0B] focus:outline-none"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {bookingForm.selected_services.length
+                          ? `${bookingForm.selected_services.length} treatment${bookingForm.selected_services.length === 1 ? "" : "s"} selected`
+                          : "Choose treatments / services"}
+                      </span>
+                      {bookingForm.selected_services.length > 0 && (
+                        <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                          {bookingForm.selected_services
+                            .map((selected) => availableServices.find((svc) => svc.id === Number(selected.service_id))?.name)
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>
+                      )}
+                    </span>
+                    <ChevronDown size={16} className={`shrink-0 transition-transform ${serviceDropdownOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {serviceDropdownOpen && (
+                    <div
+                      id="booking-service-options"
+                      role="group"
+                      aria-label="Available treatments and services"
+                      className="absolute left-0 right-0 top-full z-30 mt-1.5 max-h-52 overflow-y-auto space-y-1 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-2 shadow-xl"
+                    >
                   {availableServices.map((svc) => {
                     const isSelected = bookingForm.selected_services.some(
                       (s) => Number(s.service_id) === svc.id
@@ -956,6 +1012,8 @@ export default function SpaBookings() {
                       </div>
                     );
                   })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1081,7 +1139,7 @@ export default function SpaBookings() {
 
       {/* RESCHEDULE MODAL */}
       {rescheduleModalOpen && selectedBookingForReschedule && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs" onClick={(e) => e.target === e.currentTarget && setRescheduleModalOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
@@ -1211,7 +1269,7 @@ export default function SpaBookings() {
 
       {/* CANCEL BOOKING MODAL */}
       {cancelModalOpen && bookingToCancel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs" onClick={(e) => e.target === e.currentTarget && setCancelModalOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6">
             <h2 className="text-lg font-bold text-rose-600 dark:text-rose-400">
               Cancel Appointment #{bookingToCancel.booking_number}
@@ -1256,7 +1314,7 @@ export default function SpaBookings() {
 
       {/* DETAILS MODAL */}
       {detailsModalOpen && selectedBookingDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs" onClick={(e) => e.target === e.currentTarget && setDetailsModalOpen(false)}>
           <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
               <div>

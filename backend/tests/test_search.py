@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
+
+os.environ["DINEFLOW_TEST_MODE"] = "1"
 from decimal import Decimal
 from pathlib import Path
 
@@ -33,6 +36,15 @@ from app.models.spa import (
     SpaService,
     SpaServiceCategory,
     SpaStaff,
+)
+from app.models.villas import (
+    StayBooking,
+    Unit,
+    UnitCategory,
+    Villa,
+    VillaGuest,
+    VillaInvoice,
+    VillaService,
 )
 
 TEST_DB_URL = "sqlite:///:memory:"
@@ -91,6 +103,25 @@ class TestGlobalSearch(unittest.TestCase):
             is_active=True,
         )
         self.db.add(self.spa_user)
+
+        # Create Villa Manager and Unknown-context Manager
+        self.villa_user = User(
+            full_name="Villa Manager",
+            email="villa_mgr@dineflow.com",
+            password_hash=hash_password("Secret123!"),
+            role=UserRole.MANAGER,
+            business_context="VILLA",
+            is_active=True,
+        )
+        self.unknown_user = User(
+            full_name="Unknown Context Manager",
+            email="unknown_mgr@dineflow.com",
+            password_hash=hash_password("Secret123!"),
+            role=UserRole.MANAGER,
+            business_context="HOTEL",
+            is_active=True,
+        )
+        self.db.add_all([self.villa_user, self.unknown_user])
 
         # Create sample Restaurant records
         self.rest_customer = Customer(
@@ -233,6 +264,62 @@ class TestGlobalSearch(unittest.TestCase):
         )
         self.db.add(self.spa_invoice)
 
+        # Villas records
+        from datetime import timedelta
+
+        self.villa = Villa(name="Sahyadri Ridge Villa", address="Lonavala Hills", is_active=True)
+        self.villa_cat = UnitCategory(name="Pool Suite", is_active=True)
+        self.db.add_all([self.villa, self.villa_cat])
+        self.db.flush()
+
+        self.villa_unit = Unit(
+            villa_id=self.villa.id,
+            category_id=self.villa_cat.id,
+            name="Banyan Canopy Suite",
+            capacity=4,
+            bedrooms=2,
+            base_rate=Decimal("6500.00"),
+            is_active=True,
+        )
+        self.villa_guest = VillaGuest(
+            full_name="Meera Kulkarni",
+            phone="9811122233",
+            email="meera.villa@example.com",
+        )
+        self.villa_service = VillaService(
+            name="Private Bonfire Setup",
+            description="Evening courtyard bonfire",
+            price=Decimal("1200.00"),
+            is_active=True,
+        )
+        self.db.add_all([self.villa_unit, self.villa_guest, self.villa_service])
+        self.db.flush()
+
+        self.villa_booking = StayBooking(
+            booking_number="STAY-2026-0001",
+            unit_id=self.villa_unit.id,
+            guest_id=self.villa_guest.id,
+            created_by=self.villa_user.id,
+            check_in=date.today() + timedelta(days=2),
+            check_out=date.today() + timedelta(days=4),
+            guests=2,
+            nightly_rate=Decimal("6500.00"),
+            total_amount=Decimal("13000.00"),
+            status="Confirmed",
+        )
+        self.db.add(self.villa_booking)
+        self.db.flush()
+
+        self.villa_invoice = VillaInvoice(
+            invoice_number="V-INV-9001",
+            booking_id=self.villa_booking.id,
+            subtotal=Decimal("13000.00"),
+            tax_rate=Decimal("18.00"),
+            tax_amount=Decimal("2340.00"),
+            total_amount=Decimal("15340.00"),
+        )
+        self.db.add(self.villa_invoice)
+
         self.db.commit()
 
         # Tokens
@@ -241,6 +328,12 @@ class TestGlobalSearch(unittest.TestCase):
         )
         self.spa_token = create_access_token(
             data={"sub": str(self.spa_user.id), "role": "manager"}
+        )
+        self.villa_token = create_access_token(
+            data={"sub": str(self.villa_user.id), "role": "manager", "business_context": "VILLA"}
+        )
+        self.unknown_token = create_access_token(
+            data={"sub": str(self.unknown_user.id), "role": "manager", "business_context": "HOTEL"}
         )
 
     def tearDown(self):
@@ -345,6 +438,41 @@ class TestGlobalSearch(unittest.TestCase):
     def test_unauthenticated_search_rejected(self):
         res = self.client.get("/api/search?q=test")
         self.assertEqual(res.status_code, 401)
+
+    def test_villa_search_isolated_from_restaurant_and_spa(self):
+        headers = {"Authorization": f"Bearer {self.villa_token}"}
+
+        # Villas user cannot see Restaurant customer, menu, order, invoice, inventory, or supplier
+        for query in ["Sanjay", "Butter", "ORD-2026", "INV-2026", "RAW-BTR", "Metro", "Swedish", "SPA-INV"]:
+            res = self.client.get(f"/api/search?q={query}", headers=headers)
+            self.assertEqual(res.status_code, 200, res.text)
+            self.assertEqual(res.json()["total_matches"], 0, f"Unexpected match for {query}: {res.json()}")
+
+        # Villas user sees only Villas entities
+        for query, expected_title in [
+            ("Sahyadri", "Sahyadri Ridge Villa"),
+            ("Banyan", "Banyan Canopy Suite"),
+            ("STAY-2026", "STAY-2026-0001 · Meera Kulkarni"),
+            ("Meera", "STAY-2026-0001 · Meera Kulkarni"),
+            ("Bonfire", "Private Bonfire Setup"),
+            ("V-INV-9001", "V-INV-9001"),
+        ]:
+            res = self.client.get(f"/api/search?q={query}", headers=headers)
+            self.assertEqual(res.status_code, 200, res.text)
+            titles = [item["title"] for group in res.json()["groups"] for item in group["items"]]
+            self.assertIn(expected_title, titles)
+
+        # Restaurant and Spa users cannot retrieve Villas records or VillaGuests
+        for other_token in [self.rest_token, self.spa_token]:
+            for query in ["Sahyadri", "Banyan", "STAY-2026", "Meera", "Bonfire", "V-INV-9001"]:
+                res = self.client.get(f"/api/search?q={query}", headers={"Authorization": f"Bearer {other_token}"})
+                self.assertEqual(res.status_code, 200)
+                self.assertEqual(res.json()["total_matches"], 0)
+
+    def test_unknown_business_context_rejected(self):
+        headers = {"Authorization": f"Bearer {self.unknown_token}"}
+        res = self.client.get("/api/search?q=Butter", headers=headers)
+        self.assertEqual(res.status_code, 403)
 
 
 if __name__ == "__main__":

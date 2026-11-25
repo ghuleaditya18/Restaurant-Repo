@@ -32,6 +32,7 @@ import { useNotification } from "../../../context/NotificationContext";
 import { formatTimeRange12Hour } from "../utils/timeFormat";
 import BulkSelectionBar from "../../../components/BulkSelectionBar";
 import useBulkSelection from "../../../hooks/useBulkSelection";
+import { APP_NAME, MODULE_NAMES } from "../../../config/branding";
 
 // ==========================================
 // CONSTANTS
@@ -94,7 +95,7 @@ const getSpaInvoiceShareText = (invoice) =>
   `Paid: ${formatCurrency(invoice.paid_amount)}\n` +
   `Balance Due: ${formatCurrency(invoice.balance_due)}\n` +
   `Payment Status: ${invoice.payment_status}\n\n` +
-  "Thank you for choosing DineFlow Spa!";
+  `Thank you for choosing ${APP_NAME} ${MODULE_NAMES.SPA}!`;
 
 const toPdfBlob = (value) => {
   if (value instanceof Blob) {
@@ -1256,7 +1257,7 @@ export default function SpaInvoices() {
 
       {/* MODAL 1: GENERATE INVOICE */}
       {showGenerateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setShowGenerateModal(false)}>
           <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-2.5">
@@ -1434,7 +1435,7 @@ export default function SpaInvoices() {
 
       {/* MODAL 2: INVOICE DETAILS MODAL (FOLLOWING RESTAURANT FLOW) */}
       {showDetailsModal && selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && closeDetailsModal()}>
           <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
@@ -1697,7 +1698,7 @@ export default function SpaInvoices() {
 
       {/* MODAL 3: RECORD PAYMENT MODAL */}
       {showPaymentModal && selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setShowPaymentModal(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#101722] border border-stone-200 dark:border-stone-800 shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800">
               <h2 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">

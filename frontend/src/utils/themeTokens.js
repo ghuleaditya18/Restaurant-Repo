@@ -76,9 +76,9 @@ export const INPUT_STYLES = {
 };
 
 export const CARD_STYLES = {
-  base: "rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs transition-all duration-200 text-[#172033] dark:text-[#F8FAFC]",
+  base: "rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 shadow-xs transition-all duration-200 text-[#172033] dark:text-[#F8FAFC]",
   interactive:
-    "rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs transition-all duration-200 hover:border-[#CBD5E1] dark:hover:border-[#334155] hover:shadow-sm cursor-pointer text-[#172033] dark:text-[#F8FAFC]",
+    "rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 shadow-xs transition-all duration-200 hover:border-[#CBD5E1] dark:hover:border-[#334155] hover:shadow-sm cursor-pointer text-[#172033] dark:text-[#F8FAFC]",
 };
 
 export const TABLE_STYLES = {

@@ -145,74 +145,83 @@ export function NotificationProvider({ children }) {
     >
       {children}
 
-      {/* FLOATING TOAST STACK (Bottom Right, 3000ms Auto-Dismiss) */}
+      {/* FLOATING COMPACT TOAST STACK (Bottom Right, 3000ms Auto-Dismiss) */}
       <div
-        className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"
+        className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-1.5 max-w-md w-[calc(100vw-2rem)] sm:w-auto pointer-events-none"
         role="region"
         aria-live="polite"
         aria-label="Notifications"
       >
         {toasts.map((toast) => {
           const styles = {
-            // A. Create - Green (#ECFDF5, text #065F46, border #A7F3D0, icon #10B981)
             success: {
-              card: "border-[#A7F3D0] dark:border-emerald-800 bg-[#ECFDF5] dark:bg-emerald-950/90 text-[#065F46] dark:text-emerald-100 shadow-md",
-              icon: <CheckCircle2 className="h-5 w-5 text-[#10B981] dark:text-emerald-400 shrink-0 mt-0.5" />,
+              card: "border-[#A7F3D0] dark:border-emerald-800 bg-[#ECFDF5] dark:bg-emerald-950/95 text-[#065F46] dark:text-emerald-100",
+              icon: <CheckCircle2 className="h-4 w-4 text-[#10B981] dark:text-emerald-400 shrink-0" />,
               closeBtn: "text-[#065F46] dark:text-emerald-300 hover:bg-[#D1FAE5] dark:hover:bg-emerald-900/50",
             },
-            // B. Update - Amber/Orange (#FFF7E8, text #9A3412, border #FCD34D, icon #F59E0B)
             update: {
-              card: "border-[#FCD34D] dark:border-amber-800 bg-[#FFF7E8] dark:bg-amber-950/90 text-[#9A3412] dark:text-amber-100 shadow-md",
-              icon: <RefreshCw className="h-5 w-5 text-[#F59E0B] dark:text-amber-400 shrink-0 mt-0.5" />,
+              card: "border-[#FCD34D] dark:border-amber-800 bg-[#FFF7E8] dark:bg-amber-950/95 text-[#9A3412] dark:text-amber-100",
+              icon: <RefreshCw className="h-4 w-4 text-[#F59E0B] dark:text-amber-400 shrink-0" />,
               closeBtn: "text-[#9A3412] dark:text-amber-300 hover:bg-[#FEF3C7] dark:hover:bg-amber-900/50",
             },
-            // C. Delete - Red (#FEF2F2, text #991B1B, border #FECACA, icon #DC2626)
             delete: {
-              card: "border-[#FECACA] dark:border-rose-800 bg-[#FEF2F2] dark:bg-rose-950/90 text-[#991B1B] dark:text-rose-100 shadow-md",
-              icon: <Trash2 className="h-5 w-5 text-[#DC2626] dark:text-rose-400 shrink-0 mt-0.5" />,
+              card: "border-[#FECACA] dark:border-rose-800 bg-[#FEF2F2] dark:bg-rose-950/95 text-[#991B1B] dark:text-rose-100",
+              icon: <Trash2 className="h-4 w-4 text-[#DC2626] dark:text-rose-400 shrink-0" />,
               closeBtn: "text-[#991B1B] dark:text-rose-300 hover:bg-[#FEE2E2] dark:hover:bg-rose-900/50",
             },
-            // D. Error - Red (#FEF2F2, text #991B1B, border #FECACA, icon #DC2626)
             error: {
-              card: "border-[#FECACA] dark:border-rose-800 bg-[#FEF2F2] dark:bg-rose-950/90 text-[#991B1B] dark:text-rose-100 shadow-md",
-              icon: <AlertCircle className="h-5 w-5 text-[#DC2626] dark:text-rose-400 shrink-0 mt-0.5" />,
+              card: "border-[#FECACA] dark:border-rose-800 bg-[#FEF2F2] dark:bg-rose-950/95 text-[#991B1B] dark:text-rose-100",
+              icon: <AlertCircle className="h-4 w-4 text-[#DC2626] dark:text-rose-400 shrink-0" />,
               closeBtn: "text-[#991B1B] dark:text-rose-300 hover:bg-[#FEE2E2] dark:hover:bg-rose-900/50",
             },
             warning: {
-              card: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/90 text-amber-900 dark:text-amber-100 shadow-md",
-              icon: <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />,
+              card: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/95 text-amber-900 dark:text-amber-100",
+              icon: <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />,
               closeBtn: "text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50",
             },
             info: {
-              card: "border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/90 text-sky-900 dark:text-sky-100 shadow-md",
-              icon: <Info className="h-5 w-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />,
+              card: "border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/95 text-sky-900 dark:text-sky-100",
+              icon: <Info className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />,
               closeBtn: "text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/50",
             },
           }[toast.type] || {
-            card: "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-md",
-            icon: <Info className="h-5 w-5 text-stone-600 dark:text-stone-400 shrink-0 mt-0.5" />,
+            card: "border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100",
+            icon: <Info className="h-4 w-4 text-stone-600 dark:text-stone-400 shrink-0" />,
             closeBtn: "text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800",
           };
+
+          const showSeparateTitle =
+            toast.title &&
+            !["Success", "Error", "Warning", "Notice", "Updated", "Deleted", "Created", "Archived"].includes(
+              toast.title
+            );
 
           return (
             <div
               key={toast.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border p-4 shadow-lg transition-all duration-200 ease-in-out animate-in fade-in slide-in-from-bottom-2 ${styles.card}`}
+              title={toast.message}
+              className={`pointer-events-auto flex items-center gap-2.5 min-w-[260px] max-w-md rounded-xl border px-3.5 py-2.5 text-xs shadow-md transition-all duration-200 ease-in-out animate-in fade-in slide-in-from-bottom-2 ${styles.card}`}
             >
               {styles.icon}
-              <div className="flex-1 text-sm">
-                {toast.title && <p className="font-semibold">{toast.title}</p>}
-                <p className={toast.title ? "text-xs opacity-90 mt-0.5 leading-relaxed" : "leading-relaxed"}>
-                  {toast.message}
-                </p>
+              <div className="flex-1 min-w-0 leading-snug">
+                {showSeparateTitle ? (
+                  <p className="truncate">
+                    <span className="font-bold mr-1.5">{toast.title}:</span>
+                    <span className="font-medium opacity-95">{toast.message}</span>
+                  </p>
+                ) : (
+                  <p className={toast.type === "error" ? "font-medium line-clamp-2" : "font-medium truncate"}>
+                    {toast.message}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => removeToast(toast.id)}
-                className={`p-1 rounded-lg transition-colors ${styles.closeBtn} cursor-pointer`}
+                className={`p-1 rounded-lg transition-colors shrink-0 ${styles.closeBtn} cursor-pointer`}
                 aria-label="Dismiss notification"
               >
-                <X size={15} />
+                <X size={14} />
               </button>
             </div>
           );
@@ -225,7 +234,9 @@ export function NotificationProvider({ children }) {
           role="dialog"
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) confirmDialog.onCancel();
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}

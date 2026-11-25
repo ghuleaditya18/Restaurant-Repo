@@ -380,7 +380,7 @@ export default function InventoryRecipes() {
 
       {/* VIEW RECIPE MODAL */}
       {viewingRecipe && selectedMenuItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setViewingRecipe(null)}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>
@@ -486,7 +486,7 @@ export default function InventoryRecipes() {
 
       {/* RECIPE BOM EDITOR MODAL */}
       {editorOpen && selectedMenuItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={(e) => e.target === e.currentTarget && setEditorOpen(false)}>
           <div className="w-full max-w-2xl bg-white dark:bg-[#101722] rounded-2xl shadow-2xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
               <div>

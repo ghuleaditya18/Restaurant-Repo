@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { APP_NAME } from "../config/branding";
 import {
   User,
   HelpCircle,
@@ -40,6 +41,8 @@ import { resolveImageUrl } from "../utils/mediaUtils";
 import BusinessProfileEditor from "../components/BusinessProfileEditor";
 import PageHeader from "../components/PageHeader";
 import { SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
+import { VILLAS_HELP_SECTIONS, VILLAS_ABOUT_CONFIG } from "../config/villasSettingsConfig";
+import { villasApi, villaMoney, villaError, formatTime12h } from "../modules/villas/villasApi";
 import {
   BUTTON_VARIANTS,
   INPUT_STYLES,
@@ -57,7 +60,7 @@ const HELP_SECTIONS = [
     description: "System access, roles, and core navigation basics",
     items: [
       {
-        q: "How do I log in to DineFlow?",
+        q: `How do I log in to ${APP_NAME}?`,
         a: "Navigate to the /login page, enter your registered Receptionist or Manager email address and password, and click 'Sign In'. Operational access is restricted to authorized roles.",
       },
       {
@@ -85,7 +88,7 @@ const HELP_SECTIONS = [
       },
       {
         q: "Why do previous-day orders not keep tables occupied today?",
-        a: "DineFlow uses date-aware table occupancy strictly evaluated against the current restaurant business date (Asia/Kolkata). Orders from yesterday or earlier days remain preserved in order history and do not block today's tables.",
+        a: `${APP_NAME} uses date-aware table occupancy strictly evaluated against the current restaurant business date (Asia/Kolkata). Orders from yesterday or earlier days remain preserved in order history and do not block today's tables.`,
       },
       {
         q: "Can multiple active orders exist on the same table?",
@@ -164,7 +167,7 @@ const HELP_SECTIONS = [
         a: "An invoice can only be generated once the order reaches the 'Served' stage. Invoices cannot be created for unfinished orders in Ordered or In Progress.",
       },
       {
-        q: "How is GST calculated on DineFlow invoices?",
+        q: `How is GST calculated on ${APP_NAME} invoices?`,
         a: "GST is calculated at 5% (comprising 2.5% CGST and 2.5% SGST) applied on the order subtotal, rounded to two decimal places. Total Amount = Subtotal + GST Amount.",
       },
       {
@@ -196,7 +199,7 @@ const HELP_SECTIONS = [
       },
       {
         q: "How do I change the application theme?",
-        a: "Click the Moon/Sun toggle icon located on the right side of the top navigation header. DineFlow instantly switches between Light and Dark mode, saving your preference automatically across reloads and future logins.",
+        a: `Click the Moon/Sun toggle icon located on the right side of the top navigation header. ${APP_NAME} instantly switches between Light and Dark mode, saving your preference automatically across reloads and future logins.`,
       },
       {
         q: "Can staff accounts access this system?",
@@ -227,7 +230,12 @@ export default function Settings() {
   const { showSuccess, showError, confirm } = useNotification();
 
   const isSpaContext = user?.business_context === "SPA";
-  const currentHelpSections = isSpaContext ? SPA_HELP_SECTIONS : HELP_SECTIONS;
+  const isVillaContext = user?.business_context === "VILLA";
+  const currentHelpSections = isSpaContext
+    ? SPA_HELP_SECTIONS
+    : isVillaContext
+      ? VILLAS_HELP_SECTIONS
+      : HELP_SECTIONS;
   const isManager = (user?.role || "").toLowerCase() === "manager" || (user?.role || "").toLowerCase() === "admin";
 
   const { themeMode, setThemeMode } = useTheme();
@@ -317,9 +325,10 @@ export default function Settings() {
     }
   };
 
-  // DYNAMIC ABOUT BUSINESS PROFILE
+  // DYNAMIC ABOUT & PROPERTY BUSINESS PROFILE
   const [bizProfile, setBizProfile] = useState(null);
   const [bizLoading, setBizLoading] = useState(false);
+  const [bizLoadedOnce, setBizLoadedOnce] = useState(false);
   const [bizEditing, setBizEditing] = useState(false);
 
   const loadBizProfile = async () => {
@@ -330,21 +339,97 @@ export default function Settings() {
     } catch (err) {
       console.error("Failed to load business profile:", err);
     } finally {
+      setBizLoadedOnce(true);
       setBizLoading(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === "about" && !bizProfile && !bizLoading) {
+    if (["profile", "help", "about"].includes(activeTab) && !bizLoadedOnce && !bizLoading) {
       loadBizProfile();
     }
-  }, [activeTab, bizProfile, bizLoading]);
+  }, [activeTab, bizLoadedOnce, bizLoading]);
 
   const handleBizSave = async (formData) => {
     const updated = await updateBusinessProfile(formData);
     setBizProfile(updated);
     setBizEditing(false);
     showSuccess("Business profile updated successfully.", "Profile Saved");
+  };
+
+  // VILLAS OPERATIONAL CHECK-IN / CHECK-OUT POLICY
+  const [villaPolicy, setVillaPolicy] = useState(null);
+  const [villaPolicyLoading, setVillaPolicyLoading] = useState(false);
+  const [villaPolicyLoaded, setVillaPolicyLoaded] = useState(false);
+  const [villaPolicyEditing, setVillaPolicyEditing] = useState(false);
+  const [villaPolicySaving, setVillaPolicySaving] = useState(false);
+  const [villaPolicyError, setVillaPolicyError] = useState("");
+  const [villaPolicyForm, setVillaPolicyForm] = useState({
+    default_check_in_time: "14:00",
+    default_check_out_time: "11:00",
+    late_checkout_grace_minutes: 30,
+    default_late_checkout_fee: "",
+  });
+
+  const loadVillaPolicy = async () => {
+    try {
+      setVillaPolicyLoading(true);
+      const { data } = await villasApi.settings();
+      setVillaPolicy(data);
+      setVillaPolicyForm({
+        default_check_in_time: data.default_check_in_time || "14:00",
+        default_check_out_time: data.default_check_out_time || "11:00",
+        late_checkout_grace_minutes: data.late_checkout_grace_minutes ?? 30,
+        default_late_checkout_fee:
+          data.default_late_checkout_fee !== null && data.default_late_checkout_fee !== undefined
+            ? String(data.default_late_checkout_fee)
+            : "",
+      });
+    } catch (err) {
+      console.error("Failed to load Villas timing policy:", err);
+    } finally {
+      setVillaPolicyLoaded(true);
+      setVillaPolicyLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isVillaContext && activeTab === "profile" && !villaPolicyLoaded && !villaPolicyLoading) {
+      loadVillaPolicy();
+    }
+  }, [isVillaContext, activeTab, villaPolicyLoaded, villaPolicyLoading]);
+
+  const handleSaveVillaPolicy = async (e) => {
+    e.preventDefault();
+    setVillaPolicyError("");
+    const grace = Number(villaPolicyForm.late_checkout_grace_minutes);
+    if (!Number.isInteger(grace) || grace < 0 || grace > 720) {
+      setVillaPolicyError("Late checkout grace period must be a whole number between 0 and 720 minutes.");
+      return;
+    }
+    const feeRaw = String(villaPolicyForm.default_late_checkout_fee ?? "").trim();
+    if (feeRaw !== "" && (Number.isNaN(Number(feeRaw)) || Number(feeRaw) < 0)) {
+      setVillaPolicyError("Default late checkout fee must be a valid non-negative INR amount.");
+      return;
+    }
+    setVillaPolicySaving(true);
+    try {
+      const { data } = await villasApi.updateSettings({
+        default_check_in_time: villaPolicyForm.default_check_in_time,
+        default_check_out_time: villaPolicyForm.default_check_out_time,
+        late_checkout_grace_minutes: grace,
+        default_late_checkout_fee: feeRaw === "" ? null : Number(feeRaw),
+      });
+      setVillaPolicy(data);
+      setVillaPolicyEditing(false);
+      showSuccess("Check-in / Check-out Policy saved successfully.", "Policy Updated");
+    } catch (err) {
+      const msg = villaError(err);
+      setVillaPolicyError(msg);
+      showError(msg, "Save Failed");
+    } finally {
+      setVillaPolicySaving(false);
+    }
   };
 
   useEffect(() => {
@@ -474,11 +559,11 @@ export default function Settings() {
   }, [helpSearch, currentHelpSections]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* STANDARDIZED PAGE HEADER WITH TAB CONTROLS */}
       <PageHeader
-        title={isSpaContext ? "Spa Facility Settings" : "System Settings"}
-        description={`Manage your account profile, theme appearance, operational help, and ${isSpaContext ? "spa facility" : "restaurant"} information.`}
+        title={isSpaContext ? "Spa Facility Settings" : isVillaContext ? "Villas & Units Settings" : "System Settings"}
+        description={`Manage your account profile, theme appearance, operational help, and ${isSpaContext ? "spa facility" : isVillaContext ? "villas property" : "restaurant"} information.`}
         actions={
           <div className="flex flex-wrap sm:inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1 shadow-2xs gap-1 max-w-full">
             <button
@@ -540,9 +625,9 @@ export default function Settings() {
           TAB 1: RECEPTIONIST PROFILE SETTINGS (READ-ONLY BY DEFAULT)
          ========================================================================= */}
       {activeTab === "profile" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* PROFILE SUMMARY HERO CARD */}
-          <div className="rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 sm:p-6 shadow-xs">
+          <div className="rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 sm:p-5 shadow-xs">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-w-0 flex-1">
                 {/* Profile Photo with Upload Controls */}
@@ -605,7 +690,7 @@ export default function Settings() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg sm:text-xl font-bold text-stone-900 dark:text-stone-100 truncate">
-                      {user?.full_name || (isSpaContext ? "Spa Receptionist" : "Receptionist User")}
+                      {user?.full_name || (isSpaContext ? "Spa Receptionist" : isVillaContext ? "Villas Manager" : "Receptionist User")}
                     </h2>
                   </div>
                   <p className="mt-0.5 text-xs sm:text-sm text-stone-500 dark:text-stone-400 truncate">
@@ -616,7 +701,7 @@ export default function Settings() {
                       {isSpaContext ? "Role: Spa Receptionist" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
                     </span>
                     <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
-                      {isSpaContext ? "Context: Spa & Wellness" : "Context: Restaurant"}
+                      {isSpaContext ? "Context: Spa & Wellness" : isVillaContext ? "Context: Villas & Units" : "Context: Restaurant"}
                     </span>
                     {user?.phone ? (
                       <span className="inline-flex items-center gap-1 text-stone-500 dark:text-stone-400">
@@ -693,34 +778,30 @@ export default function Settings() {
                   </p> */}
                 </div>
 
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
+                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                     Contact Number
                   </p>
                   <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     <Phone size={14} className="text-stone-400 shrink-0" />
-                    <span>{user?.phone || (isSpaContext ? "Not configured" : "Not provided")}</span>
+                    <span>{user?.phone || (isSpaContext || isVillaContext ? "Not configured" : "Not provided")}</span>
                   </div>
-                  {/* <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
-                    {isSpaContext
-                      ? "Direct mobile number for internal wellness coordination."
-                      : "Direct mobile number for internal restaurant coordination."}
-                  </p> */}
                 </div>
 
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
+                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                     Operational Role
                   </p>
                   <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     <ShieldCheck size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span>{isSpaContext ? "Spa Receptionist" : (user?.role || "Receptionist")}</span>
+                    <span>
+                      {isSpaContext
+                        ? "Spa Receptionist"
+                        : isVillaContext
+                          ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
+                          : (user?.role || "Receptionist")}
+                    </span>
                   </div>
-                  {/* <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
-                    {isSpaContext
-                      ? "Authorized for Spa Appointments, Therapies, Invoices, and Billing."
-                      : "Authorized for Orders, Tables, Invoices, and Billing."}
-                  </p> */}
                 </div>
               </div>
             </div>
@@ -784,7 +865,7 @@ export default function Settings() {
                         required
                         maxLength={150}
                         disabled={profileSaving}
-                        placeholder="e.g. receptionist@dineflow.com"
+                        placeholder="e.g. receptionist@example.com"
                         className={INPUT_STYLES.base}
                       />
                       <Mail size={16} className="pointer-events-none absolute right-3 top-2.5 text-stone-400" />
@@ -824,7 +905,13 @@ export default function Settings() {
                     </label>
                     <input
                       type="text"
-                      value={isSpaContext ? "Spa Receptionist" : "Receptionist"}
+                      value={
+                        isSpaContext
+                          ? "Spa Receptionist"
+                          : isVillaContext
+                            ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
+                            : (user?.role || "Receptionist")
+                      }
                       disabled
                       className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-850 px-3 py-2 text-sm text-stone-500 dark:text-stone-400 cursor-not-allowed"
                     />
@@ -857,6 +944,292 @@ export default function Settings() {
               </form>
             </div>
           )}
+
+          {/* PROPERTY / BUSINESS PROFILE CARD (INLINE DISPLAY & EDIT) */}
+          {bizEditing ? (
+            <BusinessProfileEditor
+              profile={bizProfile}
+              onSave={handleBizSave}
+              onCancel={() => setBizEditing(false)}
+              notify={(msg, type) => (type === "error" ? showError(msg) : showSuccess(msg))}
+            />
+          ) : (
+            <div className={CARD_STYLES.base}>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200/80 dark:border-stone-800 pb-3.5 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Building2 size={17} className="text-[#F59E0B]" />
+                    <span>{isSpaContext ? "Spa Facility Profile" : isVillaContext ? "Property & Resorts Profile" : "Establishment Profile"}</span>
+                  </h3>
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                    Public property contact information used on guest folios and module settings.
+                  </p>
+                </div>
+                {isManager && !bizLoading && (
+                  <button
+                    type="button"
+                    onClick={() => setBizEditing(true)}
+                    className={BUTTON_VARIANTS.secondary}
+                  >
+                    <Edit3 size={14} />
+                    <span>{bizProfile?.business_name ? "Edit Property Details" : "Configure Property"}</span>
+                  </button>
+                )}
+              </div>
+
+              {bizLoading ? (
+                <div className="flex items-center gap-2 py-4 text-xs text-stone-500 dark:text-stone-400">
+                  <Loader2 size={15} className="animate-spin text-[#F59E0B]" />
+                  <span>Loading property details...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Property Name
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
+                      {bizProfile?.business_name || "Not configured"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Official Email
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
+                      {bizProfile?.business_email || "Not configured"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Contact Phone
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
+                      {bizProfile?.business_phone || "Not configured"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3 sm:col-span-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Address &amp; City
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-stone-800 dark:text-stone-200 truncate">
+                      {[bizProfile?.address_line, bizProfile?.city, bizProfile?.state].filter(Boolean).join(", ") || "Not configured"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Property Photo / Lead Avatar
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {bizProfile?.founder_image_url ? (
+                        <img
+                          src={resolveImageUrl(bizProfile.founder_image_url)}
+                          alt={bizProfile?.founder_name || "Property lead"}
+                          className="h-7 w-7 rounded-md object-cover border border-stone-200 dark:border-stone-700"
+                        />
+                      ) : null}
+                      <span className="font-medium text-stone-700 dark:text-stone-300 truncate">
+                        {bizProfile?.founder_name || (bizProfile?.founder_image_url ? "Configured" : "Not configured")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* VILLAS CHECK-IN / CHECK-OUT POLICY CARD */}
+          {isVillaContext && (
+            <div className={CARD_STYLES.base}>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200/80 dark:border-stone-800 pb-3.5 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                    <Clock size={17} className="text-[#F59E0B]" />
+                    <span>Check-in / Check-out Policy</span>
+                  </h3>
+                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                    Property-level default timings (Asia/Kolkata), grace period, and late checkout fee. Individual Villas and Units can override these defaults.
+                  </p>
+                </div>
+                {isManager && !villaPolicyLoading && !villaPolicyEditing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVillaPolicyError("");
+                      setVillaPolicyEditing(true);
+                    }}
+                    className={BUTTON_VARIANTS.secondary}
+                  >
+                    <Edit3 size={14} />
+                    <span>Edit Policy</span>
+                  </button>
+                )}
+              </div>
+
+              {villaPolicyLoading ? (
+                <div className="flex items-center gap-2 py-4 text-xs text-stone-500 dark:text-stone-400">
+                  <Loader2 size={15} className="animate-spin text-[#F59E0B]" />
+                  <span>Loading operational timing policy...</span>
+                </div>
+              ) : villaPolicyEditing ? (
+                <form onSubmit={handleSaveVillaPolicy} className="space-y-4">
+                  {villaPolicyError && (
+                    <div className="rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 p-3 text-xs text-red-800 dark:text-red-300 flex items-start gap-2">
+                      <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                      <span>{villaPolicyError}</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                        Default Check-in Time *
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={villaPolicyForm.default_check_in_time}
+                        onChange={(e) =>
+                          setVillaPolicyForm({ ...villaPolicyForm, default_check_in_time: e.target.value })
+                        }
+                        disabled={villaPolicySaving}
+                        className={INPUT_STYLES.base}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                        Default Check-out Time *
+                      </label>
+                      <input
+                        type="time"
+                        required
+                        value={villaPolicyForm.default_check_out_time}
+                        onChange={(e) =>
+                          setVillaPolicyForm({ ...villaPolicyForm, default_check_out_time: e.target.value })
+                        }
+                        disabled={villaPolicySaving}
+                        className={INPUT_STYLES.base}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                        Grace Period (Minutes) *
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={720}
+                        step={1}
+                        required
+                        value={villaPolicyForm.late_checkout_grace_minutes}
+                        onChange={(e) =>
+                          setVillaPolicyForm({
+                            ...villaPolicyForm,
+                            late_checkout_grace_minutes: e.target.value,
+                          })
+                        }
+                        disabled={villaPolicySaving}
+                        className={INPUT_STYLES.base}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                        Default Late Checkout Fee (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={villaPolicyForm.default_late_checkout_fee}
+                        onChange={(e) =>
+                          setVillaPolicyForm({
+                            ...villaPolicyForm,
+                            default_late_checkout_fee: e.target.value,
+                          })
+                        }
+                        disabled={villaPolicySaving}
+                        placeholder="Not configured"
+                        className={INPUT_STYLES.base}
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVillaPolicyEditing(false);
+                        setVillaPolicyError("");
+                        if (villaPolicy) {
+                          setVillaPolicyForm({
+                            default_check_in_time: villaPolicy.default_check_in_time || "14:00",
+                            default_check_out_time: villaPolicy.default_check_out_time || "11:00",
+                            late_checkout_grace_minutes: villaPolicy.late_checkout_grace_minutes ?? 30,
+                            default_late_checkout_fee:
+                              villaPolicy.default_late_checkout_fee !== null &&
+                              villaPolicy.default_late_checkout_fee !== undefined
+                                ? String(villaPolicy.default_late_checkout_fee)
+                                : "",
+                          });
+                        }
+                      }}
+                      disabled={villaPolicySaving}
+                      className={BUTTON_VARIANTS.secondary}
+                    >
+                      <X size={14} />
+                      <span>Cancel</span>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={villaPolicySaving}
+                      className={BUTTON_VARIANTS.primary}
+                    >
+                      <Save size={14} />
+                      <span>{villaPolicySaving ? "Saving..." : "Save Policy"}</span>
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Default Check-in Time
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      {villaPolicy?.default_check_in_time_display ||
+                        formatTime12h(villaPolicy?.default_check_in_time || "14:00")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Default Check-out Time
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      {villaPolicy?.default_check_out_time_display ||
+                        formatTime12h(villaPolicy?.default_check_out_time || "11:00")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Late Checkout Grace Period
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      {villaPolicy?.late_checkout_grace_minutes ?? 30} minutes
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                      Default Late Checkout Fee
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                      {villaPolicy?.default_late_checkout_fee !== null &&
+                      villaPolicy?.default_late_checkout_fee !== undefined
+                        ? villaMoney(villaPolicy.default_late_checkout_fee)
+                        : "Not configured"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -864,8 +1237,8 @@ export default function Settings() {
           TAB: THEME & APPEARANCE (A2 STANDARD)
          ========================================================================= */}
       {activeTab === "appearance" && (
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 shadow-xs">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-5 shadow-xs">
             <div>
               <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
                 Application Appearance
@@ -995,19 +1368,21 @@ export default function Settings() {
           TAB 2: HELP & SUPPORT CENTRE
          ========================================================================= */}
       {activeTab === "help" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* SEARCH HERO */}
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 shadow-xs">
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-5 shadow-xs">
             <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-              {isSpaContext ? "Help Centre" : "Help Centre"}
+              Help Centre
             </h3>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               {isSpaContext
                 ? "Search operational guides, therapy slot booking rules, check-in flows, staff schedules, and billing policies."
-                : "Search operational guides, workflow explanations, troubleshooting steps, and billing policies."}
+                : isVillaContext
+                  ? "Search operational guides for villa inventory, unit image management, booking lifecycle, housekeeping readiness, refunds, and GST folios."
+                  : "Search operational guides, workflow explanations, troubleshooting steps, and billing policies."}
             </p>
 
-            <div className="relative mt-4 w-full sm:max-w-[500px]">
+            <div className="relative mt-3.5 w-full sm:max-w-[500px]">
               <input
                 type="text"
                 value={helpSearch}
@@ -1015,9 +1390,11 @@ export default function Settings() {
                 placeholder={
                   isSpaContext
                     ? "Search topics, e.g. time slots, check-in, complete session, GST invoice..."
-                    : "Search topics, e.g. table occupied, cancel stale order, GST invoice, dark mode..."
+                    : isVillaContext
+                      ? "Search topics, e.g. villa image, seasonal rate, check-in, housekeeping, refund..."
+                      : "Search topics, e.g. table occupied, cancel stale order, GST invoice, dark mode..."
                 }
-                className="h-11 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850 pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F59E0B] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="h-10 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850 pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F59E0B] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F59E0B]/30"
               />
               <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
               {helpSearch && (
@@ -1039,7 +1416,12 @@ export default function Settings() {
                 <HelpCircle size={36} className="mx-auto text-stone-400 mb-2" />
                 <h4 className="font-bold text-stone-800 dark:text-stone-200">No matching help topics found</h4>
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                  Try searching with different keywords like {isSpaContext ? "'booking', 'slots', 'therapist', or 'invoice'" : "'invoice', 'orders', 'table', or 'payment'"}.
+                  Try searching with different keywords like{" "}
+                  {isSpaContext
+                    ? "'booking', 'slots', 'therapist', or 'invoice'"
+                    : isVillaContext
+                      ? "'villa', 'unit', 'check-in', 'housekeeping', or 'refund'"
+                      : "'invoice', 'orders', 'table', or 'payment'"}.
                 </p>
                 <button
                   type="button"
@@ -1098,6 +1480,30 @@ export default function Settings() {
               })
             )}
           </div>
+
+          {/* SUPPORT CONTACT & ISSUE REPORTING */}
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-4 sm:p-5 shadow-xs">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                  Property Support Contact &amp; Issue Reporting
+                </h4>
+                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                  When reporting an operational or folio issue, include the booking or invoice ID, module route, and a screenshot of the screen.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs shrink-0">
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 px-3 py-1.5 font-medium text-stone-700 dark:text-stone-300">
+                  <Mail size={13} className="text-[#F59E0B]" />
+                  {bizProfile?.business_email || "Not configured"}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-900 px-3 py-1.5 font-medium text-stone-700 dark:text-stone-300">
+                  <Phone size={13} className="text-[#F59E0B]" />
+                  {bizProfile?.business_phone || "Not configured"}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1105,75 +1511,119 @@ export default function Settings() {
           TAB 3: ABOUT (DYNAMIC CONTEXT-AWARE BUSINESS INFORMATION)
          ========================================================================= */}
       {activeTab === "about" && (
-        bizLoading ? (
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-12 text-center shadow-xs">
-            <Loader2 size={32} className="animate-spin text-[#F59E0B] mx-auto mb-3" />
-            <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">
-              Loading business profile...
-            </p>
-          </div>
-        ) : bizEditing ? (
-          <BusinessProfileEditor
-            profile={bizProfile}
-            onSave={handleBizSave}
-            onCancel={() => setBizEditing(false)}
-            notify={(msg, type) => (type === "error" ? showError(msg) : showSuccess(msg))}
-          />
-        ) : !bizProfile?.is_profile_complete ? (
-          /* PROFILE COMPLETION CALLOUT STATE */
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-white dark:bg-[#101722] p-8 text-center space-y-4 shadow-xs">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
-              <Building2 size={32} />
-            </div>
-            <div>
-              <h3 className="text-xl sm:text-2xl font-bold text-stone-900 dark:text-stone-100">
-                Complete Your Business Profile
-              </h3>
-              <p className="mt-1.5 text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
-                Some business information still needs to be added before your {isSpaContext ? "spa facility" : "restaurant"} profile is fully configured.
-              </p>
-            </div>
-
-            {bizProfile?.missing_fields?.length > 0 && (
-              <div className="pt-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
-                  Pending Required Information:
+        <div className="space-y-4">
+          {/* APPLICATION OVERVIEW CARD */}
+          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-4 sm:p-5 shadow-xs">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-stone-100 dark:border-stone-800 pb-3 mb-3">
+              <div>
+                <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">
+                  {APP_NAME} Hospitality Platform
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  Unified multi-module hospitality console for Restaurant, Spa &amp; Wellness, and Villas &amp; Units.
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-2 max-w-md mx-auto">
-                  {bizProfile.missing_fields.map((mf) => (
-                    <span
-                      key={mf}
-                      className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-300"
-                    >
-                      {mf}
-                    </span>
-                  ))}
-                </div>
               </div>
-            )}
-
-            {isManager ? (
-              <div className="pt-3">
-                <button
-                  type="button"
-                  onClick={() => setBizEditing(true)}
-                  className={BUTTON_VARIANTS.primary}
-                >
-                  <Edit3 size={15} />
-                  <span>Update Business Information</span>
-                </button>
+              <span className="inline-flex w-fit items-center rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                v{VILLAS_ABOUT_CONFIG.version}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+              <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Active Context</p>
+                <p className="mt-0.5 font-semibold text-stone-900 dark:text-stone-100">
+                  {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : "Restaurant"}
+                </p>
               </div>
-            ) : (
-              <p className="text-xs text-stone-400 italic pt-2">
-                Authorized business managers can configure establishment details.
-              </p>
-            )}
+              <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">System Timezone</p>
+                <p className="mt-0.5 font-semibold text-stone-900 dark:text-stone-100">
+                  {VILLAS_ABOUT_CONFIG.timezone}
+                </p>
+              </div>
+              <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Default Tax Config</p>
+                <p className="mt-0.5 font-semibold text-stone-900 dark:text-stone-100">
+                  {VILLAS_ABOUT_CONFIG.defaultTaxRate}
+                </p>
+              </div>
+              <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Platform Notice</p>
+                <p className="mt-0.5 font-semibold text-stone-900 dark:text-stone-100">
+                  {VILLAS_ABOUT_CONFIG.copyright}
+                </p>
+              </div>
+            </div>
           </div>
-        ) : (
-          /* COMPLETED DYNAMIC ABOUT PRESENTATION */
-          <div className="space-y-6">
-            {/* A. OVERVIEW HERO BANNER */}
-            <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-6 sm:p-8 shadow-xs">
+
+          {bizLoading ? (
+            <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-10 text-center shadow-xs">
+              <Loader2 size={28} className="animate-spin text-[#F59E0B] mx-auto mb-2" />
+              <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">
+                Loading business profile...
+              </p>
+            </div>
+          ) : bizEditing ? (
+            <BusinessProfileEditor
+              profile={bizProfile}
+              onSave={handleBizSave}
+              onCancel={() => setBizEditing(false)}
+              notify={(msg, type) => (type === "error" ? showError(msg) : showSuccess(msg))}
+            />
+          ) : !bizProfile?.is_profile_complete ? (
+            /* PROFILE COMPLETION CALLOUT STATE */
+            <div className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-white dark:bg-[#101722] p-6 text-center space-y-4 shadow-xs">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
+                <Building2 size={28} />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-stone-900 dark:text-stone-100">
+                  Complete Your Business Profile
+                </h3>
+                <p className="mt-1.5 text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
+                  Some business information still needs to be added before your {isSpaContext ? "spa facility" : isVillaContext ? "villas property" : "restaurant"} profile is fully configured.
+                </p>
+              </div>
+
+              {bizProfile?.missing_fields?.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400 mb-2">
+                    Pending Required Information:
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 max-w-md mx-auto">
+                    {bizProfile.missing_fields.map((mf) => (
+                      <span
+                        key={mf}
+                        className="rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-300"
+                      >
+                        {mf}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isManager ? (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setBizEditing(true)}
+                    className={BUTTON_VARIANTS.primary}
+                  >
+                    <Edit3 size={15} />
+                    <span>Update Business Information</span>
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-stone-400 italic pt-1">
+                  Authorized business managers can configure establishment details.
+                </p>
+              )}
+            </div>
+          ) : (
+            /* COMPLETED DYNAMIC ABOUT PRESENTATION */
+            <div className="space-y-4">
+              {/* A. OVERVIEW HERO BANNER */}
+              <div className="relative overflow-hidden rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-5 sm:p-6 shadow-xs">
               <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#F59E0B]/10 blur-3xl dark:bg-[#F59E0B]/5" />
 
               <div className="relative z-10 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
@@ -1181,7 +1631,7 @@ export default function Settings() {
                   <div className="flex flex-wrap items-center gap-2">
                     {bizProfile.business_type && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF7E8] dark:bg-[#30251C] border border-[#FFEDD5] dark:border-[#9A3412]/40 px-3 py-0.5 text-xs font-semibold text-[#9A3412] dark:text-[#FFB02E]">
-                        {isSpaContext ? <Sparkles size={13} /> : <Utensils size={13} />}
+                        {isSpaContext ? <Sparkles size={13} /> : isVillaContext ? <Building2 size={13} /> : <Utensils size={13} />}
                         {bizProfile.business_type}
                       </span>
                     )}
@@ -1232,10 +1682,10 @@ export default function Settings() {
 
                   <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#101722] p-5 text-center w-48 shadow-2xs">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
-                      {isSpaContext ? <Sparkles size={24} /> : <ChefHat size={24} />}
+                      {isSpaContext ? <Sparkles size={24} /> : isVillaContext ? <Building2 size={24} /> : <ChefHat size={24} />}
                     </div>
                     <h4 className="mt-2.5 text-xs font-bold text-stone-900 dark:text-stone-100">
-                      {isSpaContext ? "Spa & Wellness" : "Restaurant & Dining"}
+                      {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : "Restaurant & Dining"}
                     </h4>
                     <p className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400 leading-tight">
                       Verified Business Identity
@@ -1416,7 +1866,8 @@ export default function Settings() {
               </div>
             </div>
           </div>
-        )
+          )}
+        </div>
       )}
 
     </div>

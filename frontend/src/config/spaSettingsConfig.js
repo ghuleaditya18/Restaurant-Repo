@@ -39,7 +39,7 @@ export const SPA_HELP_SECTIONS = [
     items: [
       {
         q: "How do I log in to the Spa Management System?",
-        a: "Navigate to /login, enter your registered Spa Receptionist or Manager credentials (e.g. priya.sharma@dineflow.com), and sign in. The system automatically detects your SPA business context and routes you to the Spa module.",
+        a: "Navigate to /login/spa and sign in with an active Spa account. The selected login route checks the account's SPA business context before granting access.",
       },
       {
         q: "What is the Spa Dashboard?",

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, desc
@@ -21,6 +21,12 @@ from app.models import (
     SpaService,
     SpaStaff,
     SpaInvoice,
+    Villa,
+    Unit,
+    VillaGuest,
+    StayBooking,
+    VillaService,
+    VillaInvoice,
 )
 
 router = APIRouter(prefix="/api/search", tags=["Global Search"])
@@ -55,15 +61,23 @@ def global_search(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Search records within the user's authorized business context (RESTAURANT vs SPA).
-    Strict isolation is enforced: Spa users only search Spa entities, Restaurant users only search Restaurant entities.
+    Search records within the user's authorized business context (RESTAURANT, SPA, or VILLA).
+    Strict isolation is enforced across modules; unsupported contexts are rejected.
     """
     query_text = q.strip()
     if not query_text:
         return SearchResponse(query="", total_matches=0, groups=[])
 
     pattern = f"%{query_text}%"
-    biz_context = (getattr(current_user, "business_context", None) or "RESTAURANT").upper()
+    raw_context = getattr(current_user, "business_context", None)
+    biz_context = str(getattr(raw_context, "value", raw_context) or "").strip().upper()
+    biz_context = {"VILLAS": "VILLA", "NIWARAAI": "VILLA"}.get(biz_context, biz_context)
+    if biz_context not in {"RESTAURANT", "SPA", "VILLA"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: unsupported business context.",
+        )
+
     groups: List[SearchGroup] = []
     total_count = 0
 
@@ -210,7 +224,171 @@ def global_search(
             groups.append(SearchGroup(category="Invoices", entity_type="invoice", items=items))
             total_count += len(items)
 
-    else:
+    elif biz_context == "VILLA":
+        # VILLA CONTEXT - Only Villas & Units entities (never query shared/Restaurant tables directly)
+        # 1. Villas
+        villas = (
+            db.query(Villa)
+            .filter(
+                or_(
+                    Villa.name.ilike(pattern),
+                    Villa.address.ilike(pattern),
+                )
+            )
+            .order_by(Villa.name.asc())
+            .limit(5)
+            .all()
+        )
+        if villas:
+            items = [
+                SearchItem(
+                    id=v.id,
+                    title=v.name,
+                    subtitle=f"Villa · {v.address or 'Property'}",
+                    entity_type="villa",
+                    status="Active" if v.is_active else "Inactive",
+                    route="/villas/inventory",
+                )
+                for v in villas
+            ]
+            groups.append(SearchGroup(category="Villas", entity_type="villa", items=items))
+            total_count += len(items)
+
+        # 2. Units
+        units = (
+            db.query(Unit)
+            .filter(Unit.name.ilike(pattern))
+            .order_by(Unit.name.asc())
+            .limit(5)
+            .all()
+        )
+        if units:
+            items = [
+                SearchItem(
+                    id=u.id,
+                    title=u.name,
+                    subtitle=f"Unit · {u.villa.name if u.villa else 'Villa'} · Capacity {u.capacity}",
+                    entity_type="unit",
+                    status=u.housekeeping_status if u.is_active else "Inactive",
+                    route="/villas/inventory",
+                )
+                for u in units
+            ]
+            groups.append(SearchGroup(category="Units", entity_type="unit", items=items))
+            total_count += len(items)
+
+        # 3. Villas Guests (strictly module-scoped villa_guests table)
+        villa_guests = (
+            db.query(VillaGuest)
+            .filter(
+                or_(
+                    VillaGuest.full_name.ilike(pattern),
+                    VillaGuest.phone.ilike(pattern),
+                    VillaGuest.email.ilike(pattern),
+                    VillaGuest.guest_reference.ilike(pattern),
+                )
+            )
+            .order_by(VillaGuest.full_name.asc())
+            .limit(5)
+            .all()
+        )
+        if villa_guests:
+            items = [
+                SearchItem(
+                    id=vg.id,
+                    title=vg.full_name,
+                    subtitle=f"Guest · {vg.phone} · {vg.guest_reference}",
+                    entity_type="customer",
+                    status="Active" if vg.is_active else "Inactive",
+                    route=f"/villas/guests?search={vg.full_name}",
+                )
+                for vg in villa_guests
+            ]
+            groups.append(SearchGroup(category="Guests", entity_type="customer", items=items))
+            total_count += len(items)
+
+        # 4. Stay Bookings (joined strictly to villa_guests)
+        stays = (
+            db.query(StayBooking)
+            .outerjoin(VillaGuest, StayBooking.guest_id == VillaGuest.id)
+            .filter(
+                or_(
+                    StayBooking.booking_number.ilike(pattern),
+                    VillaGuest.full_name.ilike(pattern),
+                    VillaGuest.phone.ilike(pattern),
+                )
+            )
+            .order_by(desc(StayBooking.id))
+            .limit(5)
+            .all()
+        )
+        if stays:
+            items = [
+                SearchItem(
+                    id=s.id,
+                    title=f"{s.booking_number} · {s.guest.full_name if s.guest else (s.customer.full_name if s.customer else 'Guest')}",
+                    subtitle=f"{s.unit.name if s.unit else 'Unit'} · {s.check_in} to {s.check_out}",
+                    entity_type="booking",
+                    status=s.status,
+                    route="/villas/bookings",
+                )
+                for s in stays
+            ]
+            groups.append(SearchGroup(category="Stay Bookings", entity_type="booking", items=items))
+            total_count += len(items)
+
+        # 4. Villa Guest Services
+        villa_services = (
+            db.query(VillaService)
+            .filter(
+                or_(
+                    VillaService.name.ilike(pattern),
+                    VillaService.description.ilike(pattern),
+                )
+            )
+            .order_by(VillaService.name.asc())
+            .limit(5)
+            .all()
+        )
+        if villa_services:
+            items = [
+                SearchItem(
+                    id=vs.id,
+                    title=vs.name,
+                    subtitle=f"Guest Service · ₹{float(vs.price):.2f}",
+                    entity_type="service",
+                    status="Active" if vs.is_active else "Inactive",
+                    route="/villas/services",
+                )
+                for vs in villa_services
+            ]
+            groups.append(SearchGroup(category="Guest Services", entity_type="service", items=items))
+            total_count += len(items)
+
+        # 5. Villa Invoices
+        villa_invoices = (
+            db.query(VillaInvoice)
+            .filter(VillaInvoice.invoice_number.ilike(pattern))
+            .order_by(desc(VillaInvoice.id))
+            .limit(5)
+            .all()
+        )
+        if villa_invoices:
+            items = [
+                SearchItem(
+                    id=vi.id,
+                    title=vi.invoice_number,
+                    subtitle=f"Villa Invoice · ₹{float(vi.total_amount):.2f}",
+                    entity_type="invoice",
+                    status=vi.payment_status,
+                    route="/villas/invoices",
+                )
+                for vi in villa_invoices
+            ]
+            groups.append(SearchGroup(category="Invoices", entity_type="invoice", items=items))
+            total_count += len(items)
+
+    elif biz_context == "RESTAURANT":
         # RESTAURANT CONTEXT
         # 1. Orders
         orders = (

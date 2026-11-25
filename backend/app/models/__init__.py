@@ -49,6 +49,11 @@ from app.models.inventory import (
     StockCount,
     StockCountItem,
 )
+from app.models.villas import (
+    VillaPropertySettings, Villa, UnitCategory, Unit, SeasonalRate, UnitBlock, VillaGuest, StayBooking,
+    VillaBookingStatusHistory, VillaService, ServiceRequest,
+    VillaInvoice, VillaInvoiceItem, VillaPayment, VillaPaymentReversal, StayStatus,
+)
 
 __all__ = [
     "User",
@@ -96,4 +101,7 @@ __all__ = [
     "StockMovement",
     "StockCount",
     "StockCountItem",
+    "VillaPropertySettings", "Villa", "UnitCategory", "Unit", "SeasonalRate", "UnitBlock", "VillaGuest", "StayBooking",
+    "VillaBookingStatusHistory", "VillaService", "ServiceRequest",
+    "VillaInvoice", "VillaInvoiceItem", "VillaPayment", "VillaPaymentReversal", "StayStatus",
 ]

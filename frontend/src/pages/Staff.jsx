@@ -767,7 +767,7 @@ export default function Staff() {
               type="email"
               value={form.email}
               onChange={handleChange}
-              placeholder="employee@dineflow.com"
+              placeholder="employee@example.com"
               error={fieldErrors.email}
               autoComplete="off"
             />

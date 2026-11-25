@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { resolveImageUrl } from "../utils/mediaUtils";
+import { APP_NAME } from "../config/branding";
+import { normalizeModuleContext } from "../config/moduleRouting";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -19,6 +21,10 @@ import {
   Package,
   ChevronUp,
   User,
+  BedDouble,
+  CalendarDays,
+  Wrench,
+  BarChart3,
 } from "lucide-react";
 
 const restaurantMenuItems = [
@@ -43,6 +49,17 @@ const spaMenuItems = [
   { name: "Settings", path: "/settings", icon: Settings },
 ];
 
+const villasMenuItems = [
+  { name: "Dashboard", path: "/villas/dashboard", icon: LayoutDashboard, end: true },
+  { name: "Villas & Units", path: "/villas/inventory", icon: BedDouble },
+  { name: "Stays & Bookings", path: "/villas/bookings", icon: CalendarDays },
+  { name: "Guests", path: "/villas/guests", icon: Users },
+  { name: "Guest Services", path: "/villas/services", icon: Wrench },
+  { name: "Invoices", path: "/villas/invoices", icon: FileText },
+  { name: "Reports", path: "/villas/reports", icon: BarChart3 },
+  { name: "Settings", path: "/villas/settings", icon: Settings },
+];
+
 function formatRole(role, context) {
   if (!role) {
     return context === "SPA" ? "Spa Staff" : "Staff";
@@ -57,7 +74,7 @@ function formatRole(role, context) {
 
 function SidebarNav({ items, onClose, collapsed = false }) {
   return (
-    <nav className="space-y-1.5" aria-label="Main Navigation">
+    <nav className="space-y-1" aria-label="Main Navigation">
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -68,10 +85,10 @@ function SidebarNav({ items, onClose, collapsed = false }) {
             onClick={onClose}
             title={collapsed ? item.name : undefined}
             className={({ isActive }) =>
-              `group relative flex items-center rounded-xl text-xs sm:text-sm font-medium transition-all duration-200 cursor-pointer ${
+              `group relative flex items-center rounded-xl text-xs sm:text-[13px] font-medium transition-all duration-200 cursor-pointer ${
                 collapsed
-                  ? "justify-center p-2.5"
-                  : "gap-3 px-3.5 py-2.5"
+                  ? "justify-center p-2"
+                  : "gap-2.5 px-3 py-2"
               } ${
                 isActive
                   ? "bg-[#30251C] text-[#FFB02E] font-semibold border-l-3 border-[#F59E0B] shadow-xs"
@@ -82,7 +99,7 @@ function SidebarNav({ items, onClose, collapsed = false }) {
             {({ isActive }) => (
               <>
                 <Icon
-                  size={collapsed ? 20 : 18}
+                  size={collapsed ? 19 : 17}
                   className={`shrink-0 transition-transform group-hover:scale-105 ${
                     isActive ? "text-[#F59E0B]" : "text-[#8A9AB2] group-hover:text-white"
                   }`}
@@ -147,7 +164,7 @@ function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
   const avatarUrl = resolveImageUrl(user?.avatar_url);
 
   const Avatar = (
-    <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-[#FFB02E] to-[#D97706] border border-[#F59E0B]/50 text-sm font-bold text-[#0D1420] shadow-2xs">
+    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-[#FFB02E] to-[#D97706] border border-[#F59E0B]/50 text-xs font-bold text-[#0D1420] shadow-2xs">
       {avatarUrl ? (
         <img
           src={avatarUrl}
@@ -212,7 +229,8 @@ function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                onNavigate("/settings?tab=profile");
+                const ctx = normalizeModuleContext(user?.business_context);
+                onNavigate(ctx === "VILLA" ? "/villas/settings?tab=profile" : "/settings?tab=profile");
               }}
               className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[36px]"
             >
@@ -259,7 +277,7 @@ function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
         <button
           type="button"
           onClick={() => setOpen((prev) => !prev)}
-          className="flex w-full items-center justify-between gap-2.5 rounded-xl px-2.5 py-2 hover:bg-[#151D29] transition cursor-pointer min-h-[44px] text-left"
+          className="flex w-full items-center justify-between gap-2 rounded-xl px-2 py-1.5 hover:bg-[#151D29] transition cursor-pointer min-h-[38px] text-left"
           aria-haspopup="menu"
           aria-expanded={open}
         >
@@ -306,11 +324,13 @@ function Sidebar({
     navigate(path);
   };
 
-  const isSpa = user?.business_context === "SPA";
-  const visibleMenuItems = isSpa ? spaMenuItems : restaurantMenuItems;
-  const brandTitle = isSpa ? "DineFlow Spa" : "DineFlow";
-  const brandLink = isSpa ? "/spa/dashboard" : "/";
-  const BrandIcon = isSpa ? Sparkles : ChefHat;
+  const normalizedContext = normalizeModuleContext(user?.business_context);
+  const isSpa = normalizedContext === "SPA";
+  const isVilla = normalizedContext === "VILLA";
+  const visibleMenuItems = isSpa ? spaMenuItems : isVilla ? villasMenuItems : restaurantMenuItems;
+  const brandTitle = APP_NAME;
+  const brandLink = isSpa ? "/spa/dashboard" : isVilla ? "/villas/dashboard" : "/";
+  const BrandIcon = isSpa ? Sparkles : isVilla ? BedDouble : ChefHat;
 
   return (
     <>
@@ -330,18 +350,18 @@ function Sidebar({
         }`}
       >
         {/* Branding & Close Button */}
-        <div className="flex items-center justify-between border-b border-[#1E293B]/70 px-4 py-4">
+        <div className="flex h-14 items-center justify-between border-b border-[#1E293B]/70 px-4">
           <Link
             to={brandLink}
             onClick={onClose}
             className="group flex items-center gap-2.5 transition-opacity hover:opacity-95 min-w-0 cursor-pointer"
             title={`${brandTitle} - Dashboard`}
           >
-            <div className="rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-2 text-[#0D1420] shadow-xs transition-opacity shrink-0 font-bold">
-              <BrandIcon size={19} />
+            <div className="rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-1.5 text-[#0D1420] shadow-xs transition-opacity shrink-0 font-bold">
+              <BrandIcon size={18} />
             </div>
             <div className="min-w-0">
-              <span className="block text-base font-bold tracking-wide text-white truncate">{brandTitle}</span>
+              <span className="block text-sm font-bold tracking-wide text-white truncate">{brandTitle}</span>
             </div>
           </Link>
 
@@ -357,15 +377,15 @@ function Sidebar({
         </div>
 
         {/* Navigation */}
-        <div className="flex-1 overflow-y-auto px-3.5 py-4">
-          <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
-            {isSpa ? "Spa Navigation" : "Main Navigation"}
+        <div className="flex-1 overflow-y-auto px-3 py-2.5">
+          <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
+            {isSpa ? "Spa Navigation" : isVilla ? "Villas Navigation" : "Restaurant Navigation"}
           </p>
           <SidebarNav items={visibleMenuItems} onClose={onClose} collapsed={false} />
         </div>
 
         {/* Bottom Profile & Actions */}
-        <div className="border-t border-[#1E293B]/70 p-3">
+        <div className="border-t border-[#1E293B]/70 p-2">
           <SidebarProfile
             user={user}
             collapsed={false}
@@ -383,38 +403,38 @@ function Sidebar({
       >
         {/* Branding & Hamburger Header */}
         {collapsed ? (
-          <div className="flex flex-col items-center justify-center gap-2.5 border-b border-[#1E293B]/70 py-3.5 px-2">
+          <div className="flex flex-col items-center justify-center gap-2 border-b border-[#1E293B]/70 py-2.5 px-2">
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="rounded-lg p-2 text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition-colors cursor-pointer"
+              className="rounded-lg p-1.5 text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition-colors cursor-pointer"
               title="Expand Sidebar"
               aria-label="Expand Sidebar"
             >
-              <Menu size={20} />
+              <Menu size={19} />
             </button>
 
             <Link
               to={brandLink}
-              className="group flex items-center justify-center rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-2 text-[#0D1420] shadow-xs transition-opacity cursor-pointer font-bold"
+              className="group flex items-center justify-center rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-1.5 text-[#0D1420] shadow-xs transition-opacity cursor-pointer font-bold"
               title={`${brandTitle} - Dashboard`}
               aria-label={`${brandTitle} - Dashboard`}
             >
-              <BrandIcon size={20} />
+              <BrandIcon size={18} />
             </Link>
           </div>
         ) : (
-          <div className="flex items-center justify-between border-b border-[#1E293B]/70 px-4 py-4">
+          <div className="flex h-14 items-center justify-between border-b border-[#1E293B]/70 px-4">
             <Link
               to={brandLink}
               className="group flex items-center gap-2.5 transition-opacity hover:opacity-95 min-w-0 cursor-pointer"
               title={`${brandTitle} - Dashboard`}
             >
-              <div className="rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-2 text-[#0D1420] shrink-0 shadow-xs font-bold">
-                <BrandIcon size={20} />
+              <div className="rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-1.5 text-[#0D1420] shrink-0 shadow-xs font-bold">
+                <BrandIcon size={18} />
               </div>
               <div className="min-w-0 overflow-hidden">
-                <span className="block text-base font-bold tracking-wide text-white truncate">{brandTitle}</span>
+                <span className="block text-sm font-bold tracking-wide text-white truncate">{brandTitle}</span>
               </div>
             </Link>
 
@@ -425,16 +445,16 @@ function Sidebar({
               title="Collapse Sidebar"
               aria-label="Collapse Sidebar"
             >
-              <Menu size={20} />
+              <Menu size={18} />
             </button>
           </div>
         )}
 
         {/* Navigation */}
-        <div className={`flex-1 overflow-y-auto overflow-x-hidden py-4 ${collapsed ? "px-2" : "px-3.5"}`}>
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden py-2.5 ${collapsed ? "px-2" : "px-3"}`}>
           {!collapsed && (
-            <p className="mb-2.5 px-3 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
-              {isSpa ? "Spa Navigation" : "Main Navigation"}
+            <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
+              {isSpa ? "Spa Navigation" : isVilla ? "Villas Navigation" : "Restaurant Navigation"}
             </p>
           )}
 
@@ -442,7 +462,7 @@ function Sidebar({
         </div>
 
         {/* Bottom Profile & Actions */}
-        <div className={`border-t border-[#1E293B]/70 ${collapsed ? "p-2 flex flex-col items-center" : "p-3"}`}>
+        <div className={`border-t border-[#1E293B]/70 ${collapsed ? "p-2 flex flex-col items-center" : "p-2"}`}>
           <SidebarProfile
             user={user}
             collapsed={collapsed}

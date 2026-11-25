@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { APP_NAME } from "../config/branding";
 
 /**
  * Standardized PageHeader Component (A1 Standard)
  * - Renders exactly one H1 page title (24px / 32px / 600)
  * - Optional subtitle / description (14px / 20px / 400)
  * - Aligned responsive actions container
- * - Sets browser tab document title: "DineFlow | <title>"
+ * - Sets the browser tab title using the shared product brand.
  */
 export default function PageHeader({
   title,
@@ -18,14 +19,14 @@ export default function PageHeader({
 }) {
   useEffect(() => {
     if (title) {
-      document.title = `DineFlow | ${title}`;
+      document.title = `${APP_NAME} | ${title}`;
     } else {
-      document.title = "DineFlow – Restaurant & Spa Management System";
+      document.title = `${APP_NAME} | Unified Resort Management`;
     }
   }, [title]);
 
   return (
-    <div className={`mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center ${className}`}>
+    <div className={`mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center ${className}`}>
       <div className="min-w-0 flex-1">
         {/* Optional Breadcrumbs */}
         {breadcrumbs && breadcrumbs.length > 0 && (

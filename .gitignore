@@ -36,5 +36,8 @@ Thumbs.db
 # Runtime uploaded images
 backend/uploads/
 
+# Isolated local Niwaraai Villas development database
+backend/.local/
+
 # Generated private invoice PDFs
 backend/private/

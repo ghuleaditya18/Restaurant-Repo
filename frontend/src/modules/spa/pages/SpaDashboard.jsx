@@ -51,7 +51,7 @@ export default function SpaDashboard() {
   const schedule = data?.today_schedule || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Spa Dashboard"

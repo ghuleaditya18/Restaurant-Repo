@@ -20,10 +20,12 @@ from app.api.spa import spa_router
 from app.api.inventory import router as inventory_router
 from app.api.search import router as search_router
 from app.api.business_profile import router as business_profile_router
+from app.api.villas import router as villas_router
 
 from app.core.image_upload import UPLOAD_ROOT
-from app.db.session import get_db
+from app.db.session import engine, get_db
 from app.services.order_service import stale_orders_background_worker
+from app.core.branding import APP_NAME
 
 
 @asynccontextmanager
@@ -41,8 +43,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Restaurant Management System",
-    description="Restaurant Management System API",
+    title=f"{APP_NAME} Unified Resort Management API",
+    description=f"{APP_NAME} APIs for Restaurant, Spa & Wellness, and Villas & Units",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -52,6 +54,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -84,13 +88,15 @@ app.include_router(search_router)
 
 app.include_router(business_profile_router, prefix="/api/business-profile", tags=["Business Profile"])
 
+app.include_router(villas_router, prefix="/api/villas", tags=["Villas & Units"])
+
 # Serves uploaded menu photos and supplier bills
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
 
 
 @app.get("/")
 def root():
-    return {"message": "Restaurant Management System API is running"}
+    return {"message": f"{APP_NAME} Unified Resort Management API is running"}
 
 
 @app.get("/health")
@@ -106,9 +112,9 @@ def database_health(db: Session = Depends(get_db)):
 
         return {
             "status": "healthy",
-            "database": "PostgreSQL",
+            "database": engine.dialect.name,
             "connection": "successful",
         }
 
     except Exception:
-        return {"status": "unhealthy", "database": "PostgreSQL", "connection": "failed"}
+        return {"status": "unhealthy", "database": engine.dialect.name, "connection": "failed"}

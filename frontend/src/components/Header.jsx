@@ -42,17 +42,17 @@ function Header({ onOpenMobileMenu }) {
   }, [notificationsOpen]);
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[#1E293B] bg-[#0D1420] text-white px-4 sm:px-6 transition-colors duration-200">
+    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-[#1E293B] bg-[#0D1420] text-white px-4 sm:px-5 transition-colors duration-200">
       {/* Left: Mobile Navigation Drawer Toggle */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="flex h-10 w-10 items-center justify-center rounded-xl text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition lg:hidden cursor-pointer"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-[#8A9AB2] hover:bg-[#151D29] hover:text-white transition lg:hidden cursor-pointer"
           aria-label="Open navigation menu"
           title="Open menu"
         >
-          <Menu size={20} />
+          <Menu size={19} />
         </button>
       </div>
 
@@ -62,21 +62,21 @@ function Header({ onOpenMobileMenu }) {
       </div>
 
       {/* Right: Date, Notifications & Mobile Search */}
-      <div className="flex items-center gap-2.5 sm:gap-3">
-        {/* Mobile Search Button (>=40px touch target) */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Mobile Search Button (>=36px touch target) */}
         <button
           type="button"
           onClick={() => setMobileSearchOpen(true)}
-          className="md:hidden flex h-10 w-10 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B] transition cursor-pointer"
+          className="md:hidden flex h-9 w-9 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B] transition cursor-pointer"
           aria-label="Open global search"
           title="Search records"
         >
-          <Search size={18} />
+          <Search size={17} />
         </button>
 
         {/* Dynamic Date Badge */}
-        <div className="hidden sm:flex h-10 items-center gap-2 text-xs font-semibold text-stone-200 px-3.5 rounded-xl bg-[#151D29] border border-[#1E293B] tabular-nums shadow-xs">
-          <Calendar size={14} className="text-[#F59E0B]" />
+        <div className="hidden sm:flex h-9 items-center gap-2 text-xs font-semibold text-stone-200 px-3 rounded-xl bg-[#151D29] border border-[#1E293B] tabular-nums shadow-xs">
+          <Calendar size={13} className="text-[#F59E0B]" />
           <span>{today}</span>
         </div>
 
@@ -85,12 +85,12 @@ function Header({ onOpenMobileMenu }) {
           <button
             type="button"
             onClick={() => setNotificationsOpen((prev) => !prev)}
-            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B] transition cursor-pointer shadow-xs"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-[#151D29] text-[#8A9AB2] hover:bg-[#1E293B] hover:text-white border border-[#1E293B] transition cursor-pointer shadow-xs"
             aria-label="View notifications"
             aria-expanded={notificationsOpen}
             title="Notifications"
           >
-            <Bell size={18} />
+            <Bell size={17} />
             {/* Show indicator ONLY when actual unread notifications exist */}
             {unreadCount > 0 && (
               <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#F59E0B] ring-2 ring-[#0D1420]" />

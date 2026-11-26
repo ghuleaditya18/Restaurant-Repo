@@ -97,8 +97,9 @@ export default function SpaDashboard() {
       )}
 
       {/* KPI Metric Cards */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
         <StatCard
+          compact
           title="Today's Bookings"
           value={loading ? "--" : String(data?.total_bookings_today || 0).padStart(2, "0")}
           // subtext={loading ? null : `${data?.completed_appointments_today || 0} done`}
@@ -107,6 +108,7 @@ export default function SpaDashboard() {
         />
 
         <StatCard
+          compact
           title="In-Progress"
           value={loading ? "--" : String(data?.in_progress_appointments || 0).padStart(2, "0")}
           // subtext={loading ? null : `${data?.upcoming_bookings || 0} upcoming`}
@@ -115,6 +117,7 @@ export default function SpaDashboard() {
         />
 
         <StatCard
+          compact
           title="Available Therapists"
           value={loading ? "--" : `${data?.available_therapists || 0}/${data?.total_therapists || 0}`}
           // subtext="on duty"
@@ -123,6 +126,7 @@ export default function SpaDashboard() {
         />
 
         <StatCard
+          compact
           title="Today's Revenue"
           value={loading ? "--" : formatCurrency(data?.today_revenue)}
           // subtext={loading ? null : `${data?.pending_payments_count || 0} pending`}

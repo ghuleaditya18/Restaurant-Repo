@@ -34,6 +34,7 @@ const CATEGORY_ICONS = {
   booking: Calendar,
   service: Sparkles,
   therapist: UserCheck,
+  package: Package,
 };
 
 export default function GlobalSearch({

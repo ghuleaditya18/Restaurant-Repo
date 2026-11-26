@@ -150,9 +150,35 @@ class BlockInput(DateRangeInput):
         return self
 
 
+STRICT_EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$"
+)
+
+
+def _validate_villa_phone(value: str) -> str:
+    trimmed = value.strip()
+    digits = re.sub(r"\D", "", trimmed)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    if not re.fullmatch(r"[6-9][0-9]{9}", digits):
+        raise ValueError("Phone number must be a valid 10-digit mobile number starting with 6, 7, 8, or 9.")
+    return digits
+
+
+def _validate_villa_email(value: str | None) -> str | None:
+    if value is None:
+        return None
+    trimmed = value.strip().lower()
+    if not trimmed:
+        return None
+    if len(trimmed) > 150 or ".." in trimmed or not STRICT_EMAIL_RE.fullmatch(trimmed):
+        raise ValueError("Enter a valid email address (e.g. name@example.com).")
+    return trimmed
+
+
 class GuestInput(BaseModel):
     full_name: str = Field(min_length=2, max_length=150)
-    phone: str = Field(min_length=7, max_length=20)
+    phone: str = Field(min_length=10, max_length=20)
     email: str | None = Field(default=None, max_length=150)
     address: str | None = None
     city: str | None = Field(default=None, max_length=100)
@@ -173,28 +199,17 @@ class GuestInput(BaseModel):
     @field_validator("phone")
     @classmethod
     def clean_phone(cls, value: str) -> str:
-        trimmed = value.strip()
-        digits = re.sub(r"\D", "", trimmed)
-        if len(digits) < 7 or len(digits) > 15:
-            raise ValueError("Phone number must contain between 7 and 15 digits.")
-        return trimmed
+        return _validate_villa_phone(value)
 
     @field_validator("email")
     @classmethod
     def clean_email(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip().lower()
-        if not trimmed:
-            return None
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", trimmed):
-            raise ValueError("Enter a valid email address.")
-        return trimmed
+        return _validate_villa_email(value)
 
 
 class GuestUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=2, max_length=150)
-    phone: str | None = Field(default=None, min_length=7, max_length=20)
+    phone: str | None = Field(default=None, min_length=10, max_length=20)
     email: str | None = Field(default=None, max_length=150)
     address: str | None = None
     city: str | None = Field(default=None, max_length=100)
@@ -219,23 +234,12 @@ class GuestUpdate(BaseModel):
     def clean_opt_phone(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        trimmed = value.strip()
-        digits = re.sub(r"\D", "", trimmed)
-        if len(digits) < 7 or len(digits) > 15:
-            raise ValueError("Phone number must contain between 7 and 15 digits.")
-        return trimmed
+        return _validate_villa_phone(value)
 
     @field_validator("email")
     @classmethod
     def clean_opt_email(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip().lower()
-        if not trimmed:
-            return None
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", trimmed):
-            raise ValueError("Enter a valid email address.")
-        return trimmed
+        return _validate_villa_email(value)
 
 
 class BookingInput(BaseModel):
@@ -941,6 +945,7 @@ def availability(start_date: date, end_date: date, guests: int = Query(default=1
         nights = (end_date - start_date).days
         total = sum((effective_rate(db, u, date.fromordinal(start_date.toordinal() + n)) for n in range(nights)), Decimal("0.00"))
         policy = resolve_stay_policy(db, unit=u, settings_row=settings_row)
+        avail_info = _describe_unit_availability(db, u, start_date, end_date, policy)
         results.append({
             **as_dict(u),
             "villa_name": u.villa.name,
@@ -952,12 +957,7 @@ def availability(start_date: date, end_date: date, guests: int = Query(default=1
             "effective_check_out_time": policy["check_out_time"],
             "effective_check_out_time_display": policy["check_out_time_display"],
             "effective_late_checkout_fee": policy["late_checkout_fee"],
-            "available": (
-                u.is_active
-                and bool(u.villa and u.villa.is_active)
-                and unit_can_be_booked(u, start_date)
-                and unit_availability(db, u.id, start_date, end_date)
-            ),
+            **avail_info,
         })
     return results
 
@@ -1250,6 +1250,51 @@ def get_booking_history(booking_id: int, db: Session = Depends(get_db)):
     ]
 
 
+def _purge_villa_bookings(db: Session, booking_ids: list[int]) -> None:
+    """Remove bookings and all dependent financial/operational records in FK order."""
+    if not booking_ids:
+        return
+    invoice_ids = [
+        row[0]
+        for row in db.query(VillaInvoice.id).filter(VillaInvoice.booking_id.in_(booking_ids)).all()
+    ]
+    if invoice_ids:
+        db.query(VillaPaymentReversal).filter(VillaPaymentReversal.invoice_id.in_(invoice_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(VillaPayment).filter(VillaPayment.invoice_id.in_(invoice_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(VillaInvoiceItem).filter(
+            or_(
+                VillaInvoiceItem.invoice_id.in_(invoice_ids),
+                VillaInvoiceItem.booking_id.in_(booking_ids),
+            )
+        ).delete(synchronize_session=False)
+        db.query(VillaInvoice).filter(VillaInvoice.id.in_(invoice_ids)).delete(synchronize_session=False)
+    else:
+        db.query(VillaInvoiceItem).filter(VillaInvoiceItem.booking_id.in_(booking_ids)).delete(
+            synchronize_session=False
+        )
+    db.query(ServiceRequest).filter(ServiceRequest.booking_id.in_(booking_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(VillaBookingStatusHistory).filter(
+        VillaBookingStatusHistory.booking_id.in_(booking_ids)
+    ).delete(synchronize_session=False)
+    db.query(StayBooking).filter(StayBooking.id.in_(booking_ids)).delete(synchronize_session=False)
+
+
+@router.delete("/bookings/{booking_id}")
+def delete_booking(booking_id: int, db: Session = Depends(get_db)):
+    row = db.get(StayBooking, booking_id)
+    if not row:
+        raise HTTPException(404, "Booking not found.")
+    _purge_villa_bookings(db, [booking_id])
+    db.commit()
+    return {"message": "Stay booking and all linked records removed."}
+
+
 def _guest_summary_view(guest: VillaGuest, db: Session) -> dict:
     bookings = sorted(
         guest.bookings or [],
@@ -1450,15 +1495,14 @@ def delete_guest(guest_id: int, db: Session = Depends(get_db)):
     row = db.get(VillaGuest, guest_id)
     if not row:
         raise HTTPException(404, "Guest not found.")
-    has_bookings = db.query(StayBooking).filter(StayBooking.guest_id == guest_id).first()
-    if has_bookings:
-        raise HTTPException(
-            409,
-            "Cannot delete a guest who has stay history. Deactivate the guest profile instead.",
-        )
+    booking_ids = [
+        b_id[0]
+        for b_id in db.query(StayBooking.id).filter(StayBooking.guest_id == guest_id).all()
+    ]
+    _purge_villa_bookings(db, booking_ids)
     db.delete(row)
     db.commit()
-    return {"message": "Guest removed."}
+    return {"message": "Guest and all linked records removed."}
 
 
 @router.get("/customers")
@@ -1721,6 +1765,162 @@ def save_record(db, row):
 def effective_rate(db, unit, stay_date):
     seasonal = db.query(SeasonalRate).filter(SeasonalRate.unit_id == unit.id, SeasonalRate.start_date <= stay_date, SeasonalRate.end_date > stay_date).order_by(SeasonalRate.nightly_rate.desc()).first()
     return seasonal.nightly_rate if seasonal else unit.base_rate
+
+
+def _format_short_date(d: date | None) -> str:
+    if not d:
+        return "—"
+    return f"{d.day:02d} {d.strftime('%b %Y')}"
+
+
+def _find_next_open_start(
+    min_start: date,
+    nights: int,
+    intervals: list[tuple[date, date]],
+) -> date:
+    """Return the earliest date >= min_start where [d, d + nights) has no interval overlap."""
+    candidate = min_start
+    span = timedelta(days=max(1, nights))
+    for iv_start, iv_end in sorted(intervals):
+        if iv_end <= candidate:
+            continue
+        if iv_start < candidate + span:
+            if iv_end > candidate:
+                candidate = iv_end
+        else:
+            break
+    return candidate
+
+
+def _describe_unit_availability(
+    db: Session,
+    unit: Unit,
+    start_date: date,
+    end_date: date,
+    policy: dict,
+) -> dict:
+    """Return boolean availability plus conflict timing and next available date/time details."""
+    today = get_kolkata_today()
+    nights = max(1, (end_date - start_date).days)
+    active_unit = bool(unit.is_active and unit.villa and unit.villa.is_active)
+    can_book_hk = unit_can_be_booked(unit, start_date)
+
+    bookings = (
+        db.query(StayBooking)
+        .filter(
+            StayBooking.unit_id == unit.id,
+            StayBooking.status.in_(ACTIVE_STAY_STATUSES),
+            StayBooking.check_out > start_date,
+        )
+        .order_by(StayBooking.check_in.asc(), StayBooking.check_out.asc())
+        .all()
+    )
+    blocks = (
+        db.query(UnitBlock)
+        .filter(
+            UnitBlock.unit_id == unit.id,
+            UnitBlock.end_date > start_date,
+        )
+        .order_by(UnitBlock.start_date.asc(), UnitBlock.end_date.asc())
+        .all()
+    )
+
+    overlapping_bookings = [
+        b for b in bookings if b.check_in < end_date and b.check_out > start_date
+    ]
+    overlapping_blocks = [
+        blk for blk in blocks if blk.start_date < end_date and blk.end_date > start_date
+    ]
+    schedule_free = not overlapping_bookings and not overlapping_blocks
+    available = active_unit and can_book_hk and schedule_free
+
+    if available:
+        return {
+            "available": True,
+            "unavailable_reason": None,
+            "allocated_until": None,
+            "allocated_until_display": None,
+            "next_available_date": None,
+            "next_available_time": None,
+            "next_available_display": None,
+        }
+
+    intervals: list[tuple[date, date]] = [
+        *((b.check_in, b.check_out) for b in bookings),
+        *((blk.start_date, blk.end_date) for blk in blocks),
+    ]
+    check_in_display = policy.get("check_in_time_display") or format_time_12h(policy.get("check_in_time"))
+
+    reasons: list[str] = []
+    allocated_until: date | None = None
+    allocated_until_display: str | None = None
+
+    if not active_unit:
+        reasons.append("Unit or villa is inactive")
+    if unit.housekeeping_status == "Out of Order":
+        reasons.append("Out of Order")
+    elif not can_book_hk:
+        reasons.append(f"Housekeeping: {unit.housekeeping_status} (same-day check-in blocked)")
+
+    if overlapping_bookings:
+        first_b = overlapping_bookings[0]
+        last_b_end = max(b.check_out for b in overlapping_bookings)
+        co_display = policy.get("check_out_time_display") or format_time_12h(policy.get("check_out_time")) or "11:00 AM"
+        reasons.append(
+            f"{first_b.status} ({_format_short_date(first_b.check_in)} – {_format_short_date(first_b.check_out)} · Out {co_display})"
+        )
+        allocated_until = last_b_end
+        allocated_until_display = f"{_format_short_date(last_b_end)} · {co_display}"
+
+    if overlapping_blocks:
+        first_blk = overlapping_blocks[0]
+        last_blk_end = max(blk.end_date for blk in overlapping_blocks)
+        blk_label = first_blk.block_type or "Blocked"
+        blk_detail = f" ({first_blk.reason})" if first_blk.reason else ""
+        reasons.append(
+            f"{blk_label} block{blk_detail} ({_format_short_date(first_blk.start_date)} – {_format_short_date(first_blk.end_date)})"
+        )
+        if allocated_until is None or last_blk_end > allocated_until:
+            allocated_until = last_blk_end
+            allocated_until_display = _format_short_date(last_blk_end)
+
+    min_search_start = start_date
+    if start_date == today and not can_book_hk:
+        min_search_start = max(min_search_start, today + timedelta(days=1))
+
+    next_open = _find_next_open_start(min_search_start, nights, intervals) if active_unit else None
+
+    if not active_unit:
+        next_available_date = None
+        next_available_time = None
+        next_available_display = "Unit inactive"
+    elif unit.housekeeping_status == "Out of Order":
+        next_available_date = None
+        next_available_time = None
+        if overlapping_blocks or overlapping_bookings:
+            next_available_display = f"After {_format_short_date(next_open)} (pending maintenance clearance)"
+        else:
+            next_available_display = "Pending maintenance clearance"
+    else:
+        next_available_date = next_open.isoformat() if next_open else None
+        next_available_time = policy.get("check_in_time")
+        next_available_display = (
+            f"{_format_short_date(next_open)} · {check_in_display}".strip(" ·")
+            if next_open
+            else "Check calendar"
+        )
+        if not can_book_hk and schedule_free:
+            next_available_display = f"Once Ready/Inspected · or {next_available_display}"
+
+    return {
+        "available": False,
+        "unavailable_reason": " · ".join(reasons) if reasons else "Unavailable for selected dates",
+        "allocated_until": allocated_until.isoformat() if allocated_until else None,
+        "allocated_until_display": allocated_until_display,
+        "next_available_date": next_available_date,
+        "next_available_time": next_available_time,
+        "next_available_display": next_available_display,
+    }
 
 
 def unit_availability(db, unit_id, check_in, check_out, exclude_booking_id=None):

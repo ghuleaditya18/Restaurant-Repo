@@ -25,6 +25,9 @@ import {
   CalendarDays,
   Wrench,
   BarChart3,
+  Tag,
+  Compass,
+  UserCheck,
 } from "lucide-react";
 
 const restaurantMenuItems = [
@@ -58,6 +61,29 @@ const villasMenuItems = [
   { name: "Invoices", path: "/villas/invoices", icon: FileText },
   { name: "Reports", path: "/villas/reports", icon: BarChart3 },
   { name: "Settings", path: "/villas/settings", icon: Settings },
+];
+
+const packagesMenuItems = [
+  { name: "Dashboard", path: "/packages/dashboard", icon: LayoutDashboard, end: true },
+  { name: "Packages", path: "/packages/catalog", icon: Package },
+  { name: "Package Bookings", path: "/packages/bookings", icon: CalendarDays },
+  { name: "Seasonal Offers", path: "/packages/offers", icon: Tag },
+  { name: "Customers", path: "/packages/customers", icon: Users },
+  { name: "Invoices", path: "/packages/invoices", icon: FileText },
+  { name: "Reports", path: "/packages/reports", icon: BarChart3 },
+  { name: "Settings", path: "/packages/settings", icon: Settings },
+];
+
+const activitiesMenuItems = [
+  { name: "Dashboard", path: "/activities/dashboard", icon: LayoutDashboard, end: true },
+  { name: "Activities", path: "/activities/catalog", icon: Compass },
+  { name: "Schedule", path: "/activities/schedule", icon: CalendarDays },
+  { name: "Bookings", path: "/activities/bookings", icon: ClipboardList },
+  { name: "Session Roster", path: "/activities/roster", icon: UserCheck },
+  { name: "Customers", path: "/activities/customers", icon: Users },
+  { name: "Invoices", path: "/activities/invoices", icon: FileText },
+  { name: "Reports", path: "/activities/reports", icon: BarChart3 },
+  { name: "Settings", path: "/activities/settings", icon: Settings },
 ];
 
 function formatRole(role, context) {
@@ -230,7 +256,15 @@ function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
               onClick={() => {
                 setOpen(false);
                 const ctx = normalizeModuleContext(user?.business_context);
-                onNavigate(ctx === "VILLA" ? "/villas/settings?tab=profile" : "/settings?tab=profile");
+                onNavigate(
+                  ctx === "VILLA"
+                    ? "/villas/settings?tab=profile"
+                    : ctx === "PACKAGE"
+                      ? "/packages/settings?tab=profile"
+                      : ctx === "ACTIVITY"
+                        ? "/activities/settings?tab=profile"
+                        : "/settings?tab=profile"
+                );
               }}
               className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[36px]"
             >
@@ -327,10 +361,45 @@ function Sidebar({
   const normalizedContext = normalizeModuleContext(user?.business_context);
   const isSpa = normalizedContext === "SPA";
   const isVilla = normalizedContext === "VILLA";
-  const visibleMenuItems = isSpa ? spaMenuItems : isVilla ? villasMenuItems : restaurantMenuItems;
+  const isPackage = normalizedContext === "PACKAGE";
+  const isActivity = normalizedContext === "ACTIVITY";
+  const visibleMenuItems = isSpa
+    ? spaMenuItems
+    : isVilla
+      ? villasMenuItems
+      : isPackage
+        ? packagesMenuItems
+        : isActivity
+          ? activitiesMenuItems
+          : restaurantMenuItems;
   const brandTitle = APP_NAME;
-  const brandLink = isSpa ? "/spa/dashboard" : isVilla ? "/villas/dashboard" : "/";
-  const BrandIcon = isSpa ? Sparkles : isVilla ? BedDouble : ChefHat;
+  const brandLink = isSpa
+    ? "/spa/dashboard"
+    : isVilla
+      ? "/villas/dashboard"
+      : isPackage
+        ? "/packages/dashboard"
+        : isActivity
+          ? "/activities/dashboard"
+          : "/";
+  const BrandIcon = isSpa
+    ? Sparkles
+    : isVilla
+      ? BedDouble
+      : isPackage
+        ? Package
+        : isActivity
+          ? Compass
+          : ChefHat;
+  const navHeading = isSpa
+    ? "Spa Navigation"
+    : isVilla
+      ? "Villas Navigation"
+      : isPackage
+        ? "Packages Navigation"
+        : isActivity
+          ? "Activities Navigation"
+          : "Restaurant Navigation";
 
   return (
     <>
@@ -379,7 +448,7 @@ function Sidebar({
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-3 py-2.5">
           <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
-            {isSpa ? "Spa Navigation" : isVilla ? "Villas Navigation" : "Restaurant Navigation"}
+            {navHeading}
           </p>
           <SidebarNav items={visibleMenuItems} onClose={onClose} collapsed={false} />
         </div>
@@ -404,6 +473,15 @@ function Sidebar({
         {/* Branding & Hamburger Header */}
         {collapsed ? (
           <div className="flex flex-col items-center justify-center gap-2 border-b border-[#1E293B]/70 py-2.5 px-2">
+            <Link
+              to={brandLink}
+              className="group flex items-center justify-center rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-1.5 text-[#0D1420] shadow-xs transition-opacity cursor-pointer font-bold"
+              title={`${brandTitle} - Dashboard`}
+              aria-label={`${brandTitle} - Dashboard`}
+            >
+              <BrandIcon size={18} />
+            </Link>
+
             <button
               type="button"
               onClick={onToggleCollapse}
@@ -413,15 +491,6 @@ function Sidebar({
             >
               <Menu size={19} />
             </button>
-
-            <Link
-              to={brandLink}
-              className="group flex items-center justify-center rounded-xl bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] p-1.5 text-[#0D1420] shadow-xs transition-opacity cursor-pointer font-bold"
-              title={`${brandTitle} - Dashboard`}
-              aria-label={`${brandTitle} - Dashboard`}
-            >
-              <BrandIcon size={18} />
-            </Link>
           </div>
         ) : (
           <div className="flex h-14 items-center justify-between border-b border-[#1E293B]/70 px-4">
@@ -454,7 +523,7 @@ function Sidebar({
         <div className={`flex-1 overflow-y-auto overflow-x-hidden py-2.5 ${collapsed ? "px-2" : "px-3"}`}>
           {!collapsed && (
             <p className="mb-1.5 px-2.5 text-[10px] font-bold uppercase tracking-[1.5px] text-[#8A9AB2]">
-              {isSpa ? "Spa Navigation" : isVilla ? "Villas Navigation" : "Restaurant Navigation"}
+              {navHeading}
             </p>
           )}
 

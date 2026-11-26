@@ -2,23 +2,31 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  ACTIVITIES_API_BASE_URL,
   clearSessionAuthStorage,
   DEFAULT_API_BASE_URL,
   getModuleApiBaseUrl,
   getModuleHomeRoute,
   normalizeModuleContext,
+  PACKAGES_API_BASE_URL,
   VILLAS_API_BASE_URL,
 } from "./moduleRouting.js";
 
-test("module API routing sends Restaurant and Spa to port 8000 and Villas to port 8001", () => {
+test("module API routing sends Restaurant and Spa to port 8000, Villas to port 8001, Packages to port 8002, and Activities to port 8003", () => {
   assert.equal(getModuleApiBaseUrl("RESTAURANT"), DEFAULT_API_BASE_URL);
   assert.equal(getModuleApiBaseUrl("SPA"), DEFAULT_API_BASE_URL);
   assert.equal(getModuleApiBaseUrl("VILLA"), VILLAS_API_BASE_URL);
   assert.equal(getModuleApiBaseUrl("VILLAS"), VILLAS_API_BASE_URL);
   assert.equal(getModuleApiBaseUrl("NIWARAAI"), VILLAS_API_BASE_URL);
+  assert.equal(getModuleApiBaseUrl("PACKAGE"), PACKAGES_API_BASE_URL);
+  assert.equal(getModuleApiBaseUrl("PACKAGES"), PACKAGES_API_BASE_URL);
+  assert.equal(getModuleApiBaseUrl("ACTIVITY"), ACTIVITIES_API_BASE_URL);
+  assert.equal(getModuleApiBaseUrl("ACTIVITIES"), ACTIVITIES_API_BASE_URL);
 
   assert.equal(DEFAULT_API_BASE_URL, "http://127.0.0.1:8000");
   assert.equal(VILLAS_API_BASE_URL, "http://127.0.0.1:8001");
+  assert.equal(PACKAGES_API_BASE_URL, "http://127.0.0.1:8002");
+  assert.equal(ACTIVITIES_API_BASE_URL, "http://127.0.0.1:8003");
 });
 
 test("unknown or missing module context is rejected and never defaults to Restaurant", () => {
@@ -38,6 +46,10 @@ test("module home routes and aliases normalize consistently", () => {
   assert.equal(getModuleHomeRoute("SPA"), "/spa/dashboard");
   assert.equal(getModuleHomeRoute("VILLA"), "/villas/dashboard");
   assert.equal(getModuleHomeRoute("NIWARAAI"), "/villas/dashboard");
+  assert.equal(getModuleHomeRoute("PACKAGE"), "/packages/dashboard");
+  assert.equal(normalizeModuleContext("packages"), "PACKAGE");
+  assert.equal(getModuleHomeRoute("ACTIVITY"), "/activities/dashboard");
+  assert.equal(normalizeModuleContext("activities"), "ACTIVITY");
 });
 
 test("clearSessionAuthStorage removes token, api_base_url, and auth_context on logout or module switch", () => {

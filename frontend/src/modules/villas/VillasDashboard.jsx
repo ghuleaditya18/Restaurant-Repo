@@ -142,9 +142,10 @@ export default function VillasDashboard() {
         />
       )}
 
-      {/* TOP PORTFOLIO & FINANCIAL KPI ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* PORTFOLIO & OPERATIONS KPI GRID (6 CARDS PER ROW, FULL WIDTH) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 w-full">
         <StatCard
+          compact
           title="Active Villas"
           value={loading ? "—" : data?.villas ?? 0}
           description={`${data?.units ?? 0} active units across portfolio`}
@@ -153,6 +154,7 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/inventory?tab=villas")}
         />
         <StatCard
+          compact
           title="Available Today"
           value={loading ? "—" : data?.available_units ?? 0}
           description={`${data?.occupied_units ?? 0} occupied · ${data?.out_of_order_units ?? 0} out of order`}
@@ -161,6 +163,7 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/inventory?tab=units")}
         />
         <StatCard
+          compact
           title="Occupancy Rate"
           value={loading ? "—" : `${data?.occupancy_rate ?? 0}%`}
           description={`${data?.checked_in ?? 0} active in-house stays`}
@@ -169,6 +172,7 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/reports")}
         />
         <StatCard
+          compact
           title="Net Revenue Received"
           value={loading ? "—" : villaMoney(data?.revenue_received)}
           description={`Outstanding: ${villaMoney(data?.outstanding_balance)}`}
@@ -176,11 +180,8 @@ export default function VillasDashboard() {
           color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
           onClick={() => navigate("/villas/invoices")}
         />
-      </div>
-
-      {/* SECOND ROW: FRONT-DESK & HOUSEKEEPING OPERATIONS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
+          compact
           title="Arrivals Today"
           value={loading ? "—" : data?.arrivals_today ?? 0}
           description="Expected check-ins today"
@@ -189,6 +190,7 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/bookings")}
         />
         <StatCard
+          compact
           title="Departures Today"
           value={loading ? "—" : data?.departures_today ?? 0}
           description="Scheduled check-outs today"
@@ -197,6 +199,7 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/bookings")}
         />
         <StatCard
+          compact
           title="Needs Housekeeping"
           value={loading ? "—" : data?.needs_housekeeping_units ?? 0}
           description={`${data?.out_of_order_units ?? 0} marked Out of Order`}
@@ -209,6 +212,7 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/inventory?tab=housekeeping")}
         />
         <StatCard
+          compact
           title="Outstanding Balance"
           value={loading ? "—" : villaMoney(data?.outstanding_balance)}
           description="Pending guest invoice settlements"

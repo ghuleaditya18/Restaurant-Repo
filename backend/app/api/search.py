@@ -27,6 +27,8 @@ from app.models import (
     StayBooking,
     VillaService,
     VillaInvoice,
+    Package,
+    PackageBooking,
 )
 
 router = APIRouter(prefix="/api/search", tags=["Global Search"])
@@ -71,8 +73,8 @@ def global_search(
     pattern = f"%{query_text}%"
     raw_context = getattr(current_user, "business_context", None)
     biz_context = str(getattr(raw_context, "value", raw_context) or "").strip().upper()
-    biz_context = {"VILLAS": "VILLA", "NIWARAAI": "VILLA"}.get(biz_context, biz_context)
-    if biz_context not in {"RESTAURANT", "SPA", "VILLA"}:
+    biz_context = {"VILLAS": "VILLA", "NIWARAAI": "VILLA", "PACKAGES": "PACKAGE"}.get(biz_context, biz_context)
+    if biz_context not in {"RESTAURANT", "SPA", "VILLA", "PACKAGE"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: unsupported business context.",
@@ -504,7 +506,11 @@ def global_search(
         # 5. Invoices
         invoices = (
             db.query(Invoice)
-            .filter(Invoice.invoice_number.ilike(pattern))
+            .filter(
+                Invoice.source_module == "RESTAURANT",
+                Invoice.order_id.isnot(None),
+                Invoice.invoice_number.ilike(pattern),
+            )
             .order_by(desc(Invoice.id))
             .limit(5)
             .all()
@@ -640,6 +646,123 @@ def global_search(
                 for po in pos
             ]
             groups.append(SearchGroup(category="Purchase Orders", entity_type="purchase_order", items=items))
+            total_count += len(items)
+
+    elif biz_context == "PACKAGE":
+        pkgs = (
+            db.query(Package)
+            .filter(
+                Package.is_deleted.is_(False),
+                or_(
+                    Package.name.ilike(pattern),
+                    Package.package_code.ilike(pattern),
+                    Package.category.ilike(pattern),
+                ),
+            )
+            .order_by(Package.name.asc())
+            .limit(5)
+            .all()
+        )
+        if pkgs:
+            items = [
+                SearchItem(
+                    id=p.id,
+                    title=f"{p.name} ({p.package_code})",
+                    subtitle=f"{p.category} · {p.duration_nights}N · ₹{float(p.price):.2f} ({p.pricing_type})",
+                    entity_type="package",
+                    status=p.status,
+                    route=f"/packages/catalog?search={p.package_code}",
+                )
+                for p in pkgs
+            ]
+            groups.append(SearchGroup(category="Packages", entity_type="package", items=items))
+            total_count += len(items)
+
+        pkg_bookings = (
+            db.query(PackageBooking)
+            .outerjoin(Customer, PackageBooking.customer_id == Customer.id)
+            .filter(
+                PackageBooking.is_deleted.is_(False),
+                or_(
+                    PackageBooking.booking_number.ilike(pattern),
+                    PackageBooking.package_name_snapshot.ilike(pattern),
+                    Customer.full_name.ilike(pattern),
+                    Customer.phone.ilike(pattern),
+                ),
+            )
+            .order_by(desc(PackageBooking.id))
+            .limit(5)
+            .all()
+        )
+        if pkg_bookings:
+            items = [
+                SearchItem(
+                    id=b.id,
+                    title=f"{b.booking_number} · {b.customer.full_name if b.customer else 'Guest'}",
+                    subtitle=f"{b.package_name_snapshot} · Start {b.start_date}",
+                    entity_type="booking",
+                    status=b.status,
+                    route=f"/packages/bookings?search={b.booking_number}",
+                )
+                for b in pkg_bookings
+            ]
+            groups.append(SearchGroup(category="Package Bookings", entity_type="booking", items=items))
+            total_count += len(items)
+
+        customers = (
+            db.query(Customer)
+            .filter(
+                or_(
+                    Customer.full_name.ilike(pattern),
+                    Customer.phone.ilike(pattern),
+                    Customer.email.ilike(pattern),
+                )
+            )
+            .order_by(Customer.full_name.asc())
+            .limit(5)
+            .all()
+        )
+        if customers:
+            items = [
+                SearchItem(
+                    id=c.id,
+                    title=c.full_name,
+                    subtitle=f"Customer · {c.phone or c.email or 'Registered Customer'}",
+                    entity_type="customer",
+                    status=None,
+                    route=f"/packages/customers?search={c.full_name}",
+                )
+                for c in customers
+            ]
+            groups.append(SearchGroup(category="Customers", entity_type="customer", items=items))
+            total_count += len(items)
+
+        pkg_invoices = (
+            db.query(Invoice)
+            .filter(
+                Invoice.source_module == "PACKAGE",
+                or_(
+                    Invoice.invoice_number.ilike(pattern),
+                    Invoice.source_reference_number.ilike(pattern),
+                ),
+            )
+            .order_by(desc(Invoice.id))
+            .limit(5)
+            .all()
+        )
+        if pkg_invoices:
+            items = [
+                SearchItem(
+                    id=inv.id,
+                    title=inv.invoice_number,
+                    subtitle=f"Booking {inv.source_reference_number or '—'} · ₹{float(inv.total_amount):.2f}",
+                    entity_type="invoice",
+                    status=getattr(inv.payment_status, "value", str(inv.payment_status)),
+                    route=f"/packages/invoices?search={inv.invoice_number}",
+                )
+                for inv in pkg_invoices
+            ]
+            groups.append(SearchGroup(category="Invoices", entity_type="invoice", items=items))
             total_count += len(items)
 
     return SearchResponse(

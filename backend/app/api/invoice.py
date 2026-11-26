@@ -50,7 +50,11 @@ def get_invoice_record(db: Session, invoice_id: int):
             joinedload(Invoice.order).joinedload(Order.table),
             joinedload(Invoice.order).selectinload(Order.items),
         )
-        .filter(Invoice.id == invoice_id)
+        .filter(
+            Invoice.id == invoice_id,
+            Invoice.source_module == "RESTAURANT",
+            Invoice.order_id.isnot(None),
+        )
         .first()
     )
 
@@ -188,6 +192,7 @@ def get_all_invoices(
             joinedload(Invoice.order).joinedload(Order.table),
             joinedload(Invoice.order).selectinload(Order.items),
         )
+        .filter(Invoice.source_module == "RESTAURANT", Invoice.order_id.isnot(None))
     )
 
     start_dt, end_dt = get_date_range(preset, start_date, end_date)
@@ -241,7 +246,16 @@ def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    invoice = db.query(Invoice).filter(Invoice.id == invoice_id).with_for_update().first()
+    invoice = (
+        db.query(Invoice)
+        .filter(
+            Invoice.id == invoice_id,
+            Invoice.source_module == "RESTAURANT",
+            Invoice.order_id.isnot(None),
+        )
+        .with_for_update()
+        .first()
+    )
     if invoice is None:
         raise HTTPException(status_code=404, detail="Invoice not found.")
 

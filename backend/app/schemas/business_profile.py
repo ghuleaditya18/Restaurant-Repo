@@ -88,8 +88,17 @@ class BusinessProfileUpdateRequest(BaseModel):
         if not v:
             return None
         s = v.strip().lower()
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", s):
-            raise ValueError("Please provide a valid official email address.")
+        if not s:
+            return None
+        if (
+            len(s) > 150
+            or ".." in s
+            or not re.fullmatch(
+                r"[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}",
+                s,
+            )
+        ):
+            raise ValueError("Please provide a valid official email address (e.g. contact@example.com).")
         return s
 
     @field_validator("business_phone")
@@ -98,6 +107,13 @@ class BusinessProfileUpdateRequest(BaseModel):
         if not v:
             return None
         s = v.strip()
-        if len(s) < 8 or len(s) > 20:
-            raise ValueError("Please provide a valid phone number (8-20 digits).")
-        return s
+        if not s:
+            return None
+        digits = re.sub(r"\D", "", s)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if not re.fullmatch(r"[6-9][0-9]{9}", digits):
+            raise ValueError(
+                "Contact phone must be a valid 10-digit mobile number starting with 6, 7, 8, or 9."
+            )
+        return digits

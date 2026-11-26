@@ -606,10 +606,42 @@ class Invoice(TimestampMixin, Base):
         nullable=False
     )
 
-    order_id: Mapped[int] = mapped_column(
+    order_id: Mapped[int | None] = mapped_column(
         ForeignKey("orders.id", ondelete="RESTRICT"),
         unique=True,
+        nullable=True
+    )
+
+    source_module: Mapped[str] = mapped_column(
+        String(30),
+        default="RESTAURANT",
+        server_default="RESTAURANT",
+        index=True,
         nullable=False
+    )
+
+    source_reference_id: Mapped[int | None] = mapped_column(
+        Integer,
+        index=True,
+        nullable=True
+    )
+
+    source_reference_number: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True
+    )
+
+    package_booking_id: Mapped[int | None] = mapped_column(
+        ForeignKey("package_bookings.id", ondelete="RESTRICT"),
+        unique=True,
+        index=True,
+        nullable=True
+    )
+
+    customer_id: Mapped[int | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        index=True,
+        nullable=True
     )
 
     subtotal: Mapped[Decimal] = mapped_column(
@@ -632,6 +664,20 @@ class Invoice(TimestampMixin, Base):
         nullable=False
     )
 
+    paid_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        default=Decimal("0.00"),
+        server_default="0.00",
+        nullable=False
+    )
+
+    balance_due: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2),
+        default=Decimal("0.00"),
+        server_default="0.00",
+        nullable=False
+    )
+
     payment_status: Mapped[PaymentStatus] = mapped_column(
         SQLAlchemyEnum(PaymentStatus, native_enum=False),
         default=PaymentStatus.PENDING,
@@ -643,9 +689,16 @@ class Invoice(TimestampMixin, Base):
         nullable=True
     )
 
-    order: Mapped[Order] = relationship(
+    notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    order: Mapped[Order | None] = relationship(
         back_populates="invoice"
     )
+
+    customer: Mapped[Customer | None] = relationship()
 
     payments: Mapped[list[Payment]] = relationship(
         back_populates="invoice"
@@ -697,9 +750,30 @@ class Payment(TimestampMixin, Base):
         nullable=True
     )
 
+    source_module: Mapped[str] = mapped_column(
+        String(30),
+        default="RESTAURANT",
+        server_default="RESTAURANT",
+        nullable=False
+    )
+
+    payment_type: Mapped[str] = mapped_column(
+        String(30),
+        default="Full",
+        server_default="Full",
+        nullable=False
+    )
+
+    received_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
     invoice: Mapped[Invoice] = relationship(
         back_populates="payments"
     )
+
+    receiver: Mapped[User | None] = relationship()
 
 
 # ==========================================

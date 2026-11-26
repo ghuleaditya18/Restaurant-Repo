@@ -465,8 +465,9 @@ export default function Staff() {
       />
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-3.5">
+      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 w-full">
         <StatCard
+          compact
           title="Total Staff"
           value={staff.length}
           icon={<Users size={18} />}
@@ -475,19 +476,21 @@ export default function Staff() {
         />
 
         <StatCard
+          compact
           title="Active Personnel"
           value={activeCount}
           icon={<UserCheck size={18} />}
-          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+          color="emerald"
           active={statusFilter === "ACTIVE"}
           onClick={() => setStatusFilter("ACTIVE")}
         />
 
         <StatCard
+          compact
           title="Inactive Accounts"
           value={inactiveCount}
           icon={<UserX size={18} />}
-          badgeColor="bg-stone-100 text-stone-600 border-stone-200"
+          color="stone"
           active={statusFilter === "INACTIVE"}
           onClick={() => setStatusFilter("INACTIVE")}
         />

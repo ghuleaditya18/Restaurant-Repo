@@ -825,24 +825,27 @@ export default function Invoices() {
 
       {/* SUMMARY CARDS */}
 
-      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
         <StatCard
+          compact
           title="Total Invoices"
           value={invoices.length}
           icon={<Receipt size={20} />}
         />
 
         <StatCard
+          compact
           title="Total Amount"
           value={formatCurrency(totalAmount)}
           icon={<IndianRupee size={20} />}
         />
 
         <StatCard
+          compact
           title="Paid Invoices"
           value={paidInvoices}
           icon={<CheckCircle2 size={20} />}
-          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+          color="emerald"
           active={paymentStatusFilter === "PAID"}
           onClick={() => {
             setActiveTab("invoices");
@@ -851,10 +854,11 @@ export default function Invoices() {
         />
 
         <StatCard
+          compact
           title="Pending Invoices"
           value={pendingInvoices}
           icon={<Clock size={20} />}
-          badgeColor="bg-amber-50 text-amber-800 border-amber-200"
+          color="amber"
           active={paymentStatusFilter === "PENDING"}
           onClick={() => {
             setActiveTab("invoices");
@@ -1084,7 +1088,7 @@ export default function Invoices() {
 
       {/* PAYMENT TRANSACTIONS TABLE */}
       {activeTab === "transactions" && (
-        <div className="overflow-hidden rounded-xl border border-[#E7E5E4] bg-white">
+        <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722]">
           <div className="flex flex-col justify-between gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center">
             <div>
               <h2 className="font-semibold text-stone-900 dark:text-white">
@@ -1625,7 +1629,7 @@ export default function Invoices() {
                   !preparedPdf ||
                   Number(preparedPdf.invoiceId) !== Number(selectedInvoice.id)
                 }
-                className="flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 shadow-xs disabled:opacity-50 cursor-pointer transition"
+                className="flex items-center gap-2 rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#1E293B] shadow-xs disabled:opacity-50 cursor-pointer transition"
               >
                 <Share2 size={16} />
                 Share PDF

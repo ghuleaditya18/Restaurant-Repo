@@ -48,6 +48,7 @@ export const villasApi = {
   bookingStatus: (id, status, reason = null) =>
     api.patch(`${base}/bookings/${id}/status`, reason ? { status, reason } : { status }),
   bookingHistory: (id) => api.get(`${base}/bookings/${id}/history`),
+  deleteBooking: (id) => api.delete(`${base}/bookings/${id}`),
   settings: () => api.get(`${base}/settings`),
   updateSettings: (data) => api.put(`${base}/settings`, data),
   guests: (params) => api.get(`${base}/guests`, { params }),

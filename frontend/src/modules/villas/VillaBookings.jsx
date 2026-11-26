@@ -14,12 +14,14 @@ import {
   LogIn,
   Plus,
   Search,
+  Trash2,
   UserPlus,
   Wrench,
   XCircle,
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
@@ -30,6 +32,7 @@ import {
   CARD_STYLES,
   INPUT_STYLES,
 } from "../../utils/themeTokens";
+import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
 import VillaDataTable from "./VillaDataTable";
 import {
   addDaysIso,
@@ -147,6 +150,15 @@ export default function VillaBookings() {
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Delete / Clear Stay State
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [selectedBookingIds, setSelectedBookingIds] = useState(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
+
   const todayKolkata = kolkataTodayIso(0);
 
   const loadData = useCallback(async () => {
@@ -231,16 +243,14 @@ export default function VillaBookings() {
       setInlineGuestError("Guest name must contain at least 2 characters.");
       return;
     }
-    const digits = inlineGuestForm.phone.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 15) {
-      setInlineGuestError("Phone number must contain 7 to 15 digits.");
+    const phoneCheck = validateMobileNumber(inlineGuestForm.phone, { required: true });
+    if (!phoneCheck.valid) {
+      setInlineGuestError(phoneCheck.error);
       return;
     }
-    if (
-      inlineGuestForm.email.trim() &&
-      !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(inlineGuestForm.email.trim())
-    ) {
-      setInlineGuestError("Enter a valid email address.");
+    const emailCheck = validateEmailAddress(inlineGuestForm.email, { required: false });
+    if (!emailCheck.valid) {
+      setInlineGuestError(emailCheck.error);
       return;
     }
 
@@ -248,8 +258,8 @@ export default function VillaBookings() {
     try {
       const { data } = await villasApi.createGuest({
         full_name: inlineGuestForm.full_name.trim(),
-        phone: inlineGuestForm.phone.trim(),
-        email: inlineGuestForm.email.trim() || null,
+        phone: phoneCheck.normalized,
+        email: emailCheck.normalized || null,
         address: inlineGuestForm.address.trim() || null,
         city: inlineGuestForm.city.trim() || null,
         state: inlineGuestForm.state.trim() || null,
@@ -464,6 +474,76 @@ export default function VillaBookings() {
     };
   }, [bookings]);
 
+  useEffect(() => {
+    setSelectedBookingIds(new Set());
+    setBulkFailures([]);
+  }, [searchQuery, statusFilter, villaFilter, unitFilter, dateFrom, dateTo, safePage]);
+
+  const handleDeleteBooking = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    try {
+      await villasApi.deleteBooking(deleteTarget.id);
+      showSuccess(`Deleted stay ${deleteTarget.booking_number}.`);
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err) {
+      setDeleteError(villaError(err));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleBulkDeleteBookings = async () => {
+    setBulkDeleting(true);
+    const failures = [];
+    let deleted = 0;
+    for (const id of selectedBookingIds) {
+      const booking = bookings.find((b) => b.id === id);
+      try {
+        await villasApi.deleteBooking(id);
+        deleted += 1;
+      } catch (err) {
+        failures.push({
+          id,
+          name: booking?.booking_number || `#${id}`,
+          reason: villaError(err),
+        });
+      }
+    }
+    setSelectedBookingIds(new Set(failures.map((f) => f.id)));
+    setBulkFailures(failures);
+    setBulkDeleteOpen(false);
+    await loadData();
+    if (deleted) {
+      showSuccess(`Deleted ${deleted} stay${deleted !== 1 ? "s" : ""}.`);
+    }
+    if (failures.length) {
+      showError(`${failures.length} stay${failures.length !== 1 ? "s" : ""} could not be deleted.`);
+    }
+    setBulkDeleting(false);
+  };
+
+  const handleSelectBooking = (id) => {
+    setBulkFailures([]);
+    setSelectedBookingIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllBookings = (ids) => {
+    setBulkFailures([]);
+    setSelectedBookingIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => prev.has(id));
+      ids.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+      return next;
+    });
+  };
+
   const nights = diffNights(stayForm.check_in, stayForm.check_out);
   const estimatedSubtotal = Number(selectedUnit?.total || 0);
   const estimatedTax = estimatedSubtotal * 0.18;
@@ -474,25 +554,22 @@ export default function VillaBookings() {
     {
       key: "booking_number",
       label: "Booking Reference",
-      cellClassName: "whitespace-nowrap font-mono font-bold",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5 whitespace-nowrap font-mono font-bold",
       render: (b) => b.booking_number,
     },
     {
       key: "guest",
       label: "Guest",
-      width: "min-w-[180px]",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5",
       render: (b) => (
         <div>
           <div className="font-semibold text-[#172033] dark:text-[#F8FAFC] whitespace-nowrap">
             {b.guest_name || b.customer_name}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[#64748B] dark:text-[#8A9AB2]">
-            <span className="whitespace-nowrap">{b.guest_phone || b.customer_phone}</span>
-            {b.guest_reference && (
-              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800 whitespace-nowrap">
-                {b.guest_reference}
-              </span>
-            )}
+          <div className="mt-0.5 text-xs text-[#64748B] dark:text-[#8A9AB2] whitespace-nowrap">
+            {b.guest_phone || b.customer_phone}
           </div>
         </div>
       ),
@@ -500,7 +577,8 @@ export default function VillaBookings() {
     {
       key: "unit",
       label: "Unit & Villa",
-      width: "min-w-[180px]",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5",
       render: (b) => (
         <div>
           <div className="font-medium text-[#172033] dark:text-[#F8FAFC] whitespace-nowrap">
@@ -513,7 +591,8 @@ export default function VillaBookings() {
     {
       key: "dates",
       label: "Stay Dates & Timings",
-      cellClassName: "whitespace-nowrap tabular-nums",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5 whitespace-nowrap tabular-nums",
       render: (b) => (
         <div className="space-y-0.5 text-xs">
           <div className="font-medium text-[#172033] dark:text-[#F8FAFC]">
@@ -530,20 +609,24 @@ export default function VillaBookings() {
       key: "guests",
       label: "Guest Count",
       align: "right",
-      cellClassName: "whitespace-nowrap tabular-nums",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5 whitespace-nowrap tabular-nums",
       render: (b) => `${b.guests} guest${b.guests === 1 ? "" : "s"}`,
     },
     {
       key: "status",
       label: "Status",
       align: "center",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5",
       render: (b) => <StatusBadge status={b.status} label={b.status} size="sm" />,
     },
     {
       key: "billing",
       label: "Billing",
       align: "right",
-      cellClassName: "whitespace-nowrap tabular-nums",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5 whitespace-nowrap tabular-nums",
       render: (b) => {
         const balance = Number(b.invoice_balance_due || 0);
         return (
@@ -568,16 +651,21 @@ export default function VillaBookings() {
       key: "actions",
       label: "Actions",
       align: "right",
-      cellClassName: "whitespace-nowrap",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5 whitespace-nowrap",
       render: (b) => {
         const canEdit = ["Reserved", "Confirmed"].includes(b.status);
+        const hasPrimaryCta =
+          b.status === "Reserved" ||
+          (b.status === "Confirmed" && Boolean(b.can_check_in)) ||
+          (b.status === "Checked In" && Boolean(b.can_check_out));
         return (
           <div className="inline-flex items-center justify-end gap-1">
             {b.status === "Reserved" && (
               <button
                 type="button"
                 onClick={() => handleConfirmStatusChange(b, "Confirmed")}
-                className="rounded-lg bg-sky-50 dark:bg-sky-950/40 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 cursor-pointer"
+                className="rounded-lg bg-sky-50 dark:bg-sky-950/40 px-2 py-1 text-[11px] font-semibold text-sky-700 dark:text-sky-300 hover:bg-sky-100 cursor-pointer"
               >
                 Confirm
               </button>
@@ -587,7 +675,7 @@ export default function VillaBookings() {
               <button
                 type="button"
                 onClick={() => openActionModal(b, "Checked In")}
-                className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 cursor-pointer"
+                className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 cursor-pointer"
               >
                 Check In
               </button>
@@ -597,9 +685,20 @@ export default function VillaBookings() {
               <button
                 type="button"
                 onClick={() => openActionModal(b, "Checked Out")}
-                className="rounded-lg bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 cursor-pointer"
+                className="rounded-lg bg-amber-50 dark:bg-amber-950/40 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300 hover:bg-amber-100 cursor-pointer"
               >
                 Check Out
+              </button>
+            )}
+
+            {!hasPrimaryCta && b.invoice_number && (
+              <button
+                type="button"
+                onClick={() => navigate(`/villas/invoices?search=${b.invoice_number}`)}
+                title="Open Invoice"
+                className="rounded-lg p-1 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                <FileText size={14} />
               </button>
             )}
 
@@ -607,71 +706,50 @@ export default function VillaBookings() {
               type="button"
               onClick={() => setDetailBooking(b)}
               title="View Stay Details"
-              className="rounded-lg p-1.5 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
+              className="rounded-lg p-1 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
             >
               <Eye size={14} />
             </button>
 
-            {canEdit && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => openEditBooking(b)}
-                  title="Edit Stay"
-                  className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                >
-                  <Edit3 size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openActionModal(b, "Cancelled")}
-                  title="Cancel Stay"
-                  className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
-                >
-                  <XCircle size={14} />
-                </button>
-                {Boolean(b.can_mark_no_show) && (
-                  <button
-                    type="button"
-                    onClick={() => openActionModal(b, "No Show")}
-                    title="Mark No Show"
-                    className="rounded-lg px-2 py-1 text-[11px] font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-                  >
-                    No Show
-                  </button>
-                )}
-              </>
-            )}
-
-            {b.invoice_number && (
+            {canEdit ? (
               <button
                 type="button"
-                onClick={() => navigate(`/villas/invoices?search=${b.invoice_number}`)}
-                title="Open Invoice"
-                className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                onClick={() => openEditBooking(b)}
+                title="Edit Stay"
+                className="rounded-lg p-1 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
               >
-                <FileText size={14} />
+                <Edit3 size={14} />
               </button>
-            )}
-
-            {b.status === "Checked In" && (
+            ) : b.status === "Checked In" ? (
               <button
                 type="button"
                 onClick={() => navigate(`/villas/services?bookingId=${b.id}`)}
                 title="Manage Guest Services"
-                className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                className="rounded-lg p-1 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
               >
                 <Wrench size={14} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openHistoryModal(b)}
+                title="Status History"
+                className="rounded-lg p-1 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              >
+                <History size={14} />
               </button>
             )}
 
             <button
               type="button"
-              onClick={() => openHistoryModal(b)}
-              title="Status History"
-              className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+              onClick={() => {
+                setDeleteError("");
+                setDeleteTarget(b);
+              }}
+              title="Delete Stay"
+              className="rounded-lg p-1 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
             >
-              <History size={14} />
+              <Trash2 size={14} />
             </button>
           </div>
         );
@@ -682,8 +760,7 @@ export default function VillaBookings() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Stays & Reservations"
-        description="Manage unit availability checks, guest stay bookings, check-in/check-out handoffs, cancellations, and stay status history."
+        title="Stays & Bookings"
         actions={
           <button
             type="button"
@@ -706,8 +783,9 @@ export default function VillaBookings() {
       )}
 
       {/* KPI SUMMARY */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
         <StatCard
+          compact
           title="Reserved"
           value={stats.reserved}
           description="Awaiting confirmation"
@@ -717,6 +795,7 @@ export default function VillaBookings() {
           onClick={() => setStatusFilter((s) => (s === "Reserved" ? "" : "Reserved"))}
         />
         <StatCard
+          compact
           title="Confirmed"
           value={stats.confirmed}
           description="Ready for arrival"
@@ -726,6 +805,7 @@ export default function VillaBookings() {
           onClick={() => setStatusFilter((s) => (s === "Confirmed" ? "" : "Confirmed"))}
         />
         <StatCard
+          compact
           title="In-House"
           value={stats.checkedIn}
           description="Currently checked in"
@@ -735,6 +815,7 @@ export default function VillaBookings() {
           onClick={() => setStatusFilter((s) => (s === "Checked In" ? "" : "Checked In"))}
         />
         <StatCard
+          compact
           title="Checked Out"
           value={stats.checkedOut}
           description="Completed stays"
@@ -895,7 +976,7 @@ export default function VillaBookings() {
                         key={u.id}
                         className={`rounded-xl border p-4 transition flex flex-col justify-between gap-3 ${
                           !u.available
-                            ? "border-stone-200 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-900/30 opacity-60"
+                            ? "border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-[#0B111C]"
                             : isSelected
                             ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 ring-1 ring-amber-500"
                             : "border-stone-200 dark:border-stone-800 bg-white dark:bg-[#0D1420] hover:border-amber-400"
@@ -924,6 +1005,20 @@ export default function VillaBookings() {
                           <div className="text-[11px] text-stone-500 dark:text-stone-400">
                             Check-in {u.effective_check_in_time_display || "2:00 PM"} · Check-out {u.effective_check_out_time_display || "11:00 AM"}
                           </div>
+                          {!u.available && (u.unavailable_reason || u.next_available_display) && (
+                            <div className="mt-1.5 rounded-lg border border-rose-200/80 dark:border-rose-500/20 bg-rose-50/80 dark:bg-rose-950/25 px-2.5 py-2 text-[11px] leading-snug space-y-0.5">
+                              {u.unavailable_reason && (
+                                <div className="text-rose-700 dark:text-rose-300 font-medium">
+                                  {u.unavailable_reason}
+                                </div>
+                              )}
+                              {u.next_available_display && (
+                                <div className="text-amber-700 dark:text-amber-300 font-semibold">
+                                  Available: {u.next_available_display}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between border-t border-stone-100 dark:border-stone-800 pt-3">
@@ -1142,10 +1237,10 @@ export default function VillaBookings() {
         </div>
       )}
 
-      {/* RESPONSIVE FILTER TOOLBAR (NO OVERFLOW) */}
-      <div className={`${CARD_STYLES.base} space-y-3`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
-          <div className="sm:col-span-2 lg:col-span-4 min-w-0">
+      {/* COMPACT FILTER TOOLBAR */}
+      <div className={`${CARD_STYLES.base} !p-2.5 w-fit max-w-full space-y-2`}>
+        <div className="flex flex-wrap lg:flex-nowrap items-end gap-2">
+          <div className="w-full sm:w-52 shrink-0 min-w-0">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
               Search
             </label>
@@ -1158,13 +1253,13 @@ export default function VillaBookings() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Stay #, guest name, phone, or unit..."
+                placeholder="Stay #, guest, phone..."
                 className={`${INPUT_STYLES.base} pl-9`}
               />
             </div>
           </div>
 
-          <div className="lg:col-span-2 min-w-0">
+          <div className="w-[125px] shrink-0">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
               Status
             </label>
@@ -1182,7 +1277,7 @@ export default function VillaBookings() {
             </select>
           </div>
 
-          <div className="lg:col-span-2 min-w-0">
+          <div className="w-[135px] shrink-0">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
               Villa
             </label>
@@ -1200,7 +1295,7 @@ export default function VillaBookings() {
             </select>
           </div>
 
-          <div className="lg:col-span-2 min-w-0">
+          <div className="w-[140px] shrink-0">
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
               Unit
             </label>
@@ -1218,37 +1313,33 @@ export default function VillaBookings() {
             </select>
           </div>
 
-          <div className="lg:col-span-2 min-w-0 grid grid-cols-2 gap-2">
-            <div className="min-w-0">
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
-                From
-              </label>
-              <input
-                type="date"
-                aria-label="Filter from date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className={`${INPUT_STYLES.base} px-2 text-xs`}
-              />
-            </div>
-            <div className="min-w-0">
-              <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
-                To
-              </label>
-              <input
-                type="date"
-                aria-label="Filter to date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className={`${INPUT_STYLES.base} px-2 text-xs`}
-              />
-            </div>
+          <div className="w-[122px] shrink-0">
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
+              From
+            </label>
+            <input
+              type="date"
+              aria-label="Filter from date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className={`${INPUT_STYLES.base} !px-2 text-xs`}
+            />
           </div>
-        </div>
 
-        {(searchQuery || statusFilter || villaFilter || unitFilter || dateFrom || dateTo) && (
-          <div className="flex items-center justify-between text-xs text-stone-500 pt-1">
-            <span>Showing {totalRecords} filtered stays</span>
+          <div className="w-[122px] shrink-0">
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2] mb-1">
+              To
+            </label>
+            <input
+              type="date"
+              aria-label="Filter to date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className={`${INPUT_STYLES.base} !px-2 text-xs`}
+            />
+          </div>
+
+          {(searchQuery || statusFilter || villaFilter || unitFilter || dateFrom || dateTo) && (
             <button
               type="button"
               onClick={() => {
@@ -1259,13 +1350,60 @@ export default function VillaBookings() {
                 setDateFrom("");
                 setDateTo("");
               }}
-              className="font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+              className={`${BUTTON_VARIANTS.secondary} shrink-0 py-2 text-xs`}
             >
-              Clear all filters
+              Clear
             </button>
+          )}
+        </div>
+
+        {(searchQuery || statusFilter || villaFilter || unitFilter || dateFrom || dateTo) && (
+          <div className="flex items-center justify-between gap-4 text-xs text-stone-500 pt-0.5">
+            <span>Showing {totalRecords} filtered stays</span>
           </div>
         )}
       </div>
+
+      {selectedBookingIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5">
+          <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            {selectedBookingIds.size} stay{selectedBookingIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={BUTTON_VARIANTS.secondary}
+              onClick={() => setSelectedBookingIds(new Set())}
+            >
+              Clear Selection
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 cursor-pointer"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 size={13} />
+              Delete Selected
+            </button>
+          </div>
+        </div>
+      )}
+
+      {bulkFailures.length > 0 && (
+        <div
+          role="status"
+          className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-4 py-3 text-xs text-rose-800 dark:text-rose-200"
+        >
+          <p className="font-semibold">Some stays could not be deleted:</p>
+          <ul className="mt-1 space-y-1">
+            {bulkFailures.map((item) => (
+              <li key={item.id}>
+                <span className="font-medium">{item.name}:</span> {item.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ALL STAYS ALIGNED TABLE */}
       <VillaDataTable
@@ -1276,7 +1414,10 @@ export default function VillaBookings() {
         emptyIcon={CalendarDays}
         emptyTitle="No stays match your filters"
         emptyDescription="Create a new reservation or adjust active search criteria."
-        tableMinWidth="min-w-[1060px]"
+        tableMinWidth="min-w-full"
+        selectedIds={selectedBookingIds}
+        onSelectRow={handleSelectBooking}
+        onSelectAll={handleSelectAllBookings}
         pagination={{
           currentPage: safePage,
           totalPages,
@@ -1339,11 +1480,15 @@ export default function VillaBookings() {
               <input
                 type="tel"
                 required
+                maxLength={15}
                 value={inlineGuestForm.phone}
                 onChange={(e) => setInlineGuestForm({ ...inlineGuestForm, phone: e.target.value })}
                 placeholder="e.g. 9820198201"
                 className={INPUT_STYLES.base}
               />
+              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                10-digit mobile starting with 6, 7, 8, or 9.
+              </p>
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Email</label>
@@ -1545,7 +1690,10 @@ export default function VillaBookings() {
                 disabled={
                   actionSubmitting ||
                   (["Cancelled", "No Show"].includes(actionModal.targetStatus) &&
-                    !actionReason.trim())
+                    !actionReason.trim()) ||
+                  (actionModal.targetStatus === "Checked In" &&
+                    Number(actionModal.booking.invoice_paid ?? 0) + 0.01 <
+                      Number(((Number(actionModal.booking.invoice_total ?? actionModal.booking.total_amount ?? 0)) / 2).toFixed(2)))
                 }
                 onClick={() =>
                   handleConfirmStatusChange(
@@ -1576,29 +1724,53 @@ export default function VillaBookings() {
               />
             )}
 
-            {actionModal.targetStatus === "Checked In" && (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-stone-200 dark:border-stone-800 p-3.5 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-stone-500">Check-in:</span>
-                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                      {villaDateWithTime(actionModal.booking.check_in, actionModal.booking.check_in_time)}
-                    </span>
+            {actionModal.targetStatus === "Checked In" && (() => {
+              const totalStay = Number(actionModal.booking.invoice_total ?? actionModal.booking.total_amount ?? 0);
+              const halfRequired = Number((totalStay / 2).toFixed(2));
+              const paidSoFar = Number(actionModal.booking.invoice_paid ?? 0);
+              const missingAdvance = paidSoFar + 0.01 < halfRequired;
+              return (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-stone-200 dark:border-stone-800 p-3.5 text-xs space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Check-in:</span>
+                      <span className="font-semibold text-stone-900 dark:text-stone-100">
+                        {villaDateWithTime(actionModal.booking.check_in, actionModal.booking.check_in_time)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Check-out:</span>
+                      <span className="font-semibold text-stone-900 dark:text-stone-100">
+                        {villaDateWithTime(actionModal.booking.check_out, actionModal.booking.check_out_time)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between pt-1 border-t border-stone-100 dark:border-stone-800">
+                      <span className="text-stone-500">Pre-Stay Advance Paid (min 50%):</span>
+                      <span
+                        className={`font-semibold tabular-nums ${
+                          missingAdvance ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
+                        }`}
+                      >
+                        {villaMoney(paidSoFar)} / {villaMoney(halfRequired)} required
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-500">Check-out:</span>
-                    <span className="font-semibold text-stone-900 dark:text-stone-100">
-                      {villaDateWithTime(actionModal.booking.check_out, actionModal.booking.check_out_time)}
-                    </span>
-                  </div>
+                  {missingAdvance ? (
+                    <AlertBanner
+                      variant="error"
+                      title="50% Pre-Stay Payment Required"
+                      message={`At least half (${villaMoney(halfRequired)}) must be paid in Invoices before the guest checks in to stay at the unit.`}
+                    />
+                  ) : (
+                    <AlertBanner
+                      variant="info"
+                      title="Check-In Readiness"
+                      message="Confirm guest arrival. Backend validates scheduled arrival timing and Ready/Inspected housekeeping status."
+                    />
+                  )}
                 </div>
-                <AlertBanner
-                  variant="info"
-                  title="Check-In Readiness"
-                  message="Confirm guest arrival. Backend validates scheduled arrival timing and Ready/Inspected housekeeping status."
-                />
-              </div>
-            )}
+              );
+            })()}
 
             {actionModal.targetStatus === "Checked Out" && (
               <div className="space-y-3">
@@ -1802,15 +1974,87 @@ export default function VillaBookings() {
         }
         size="md"
         footer={
-          <div className="flex justify-end w-full">
-            <button
-              type="button"
-              onClick={() => setDetailBooking(null)}
-              className={BUTTON_VARIANTS.secondary}
-            >
-              Close
-            </button>
-          </div>
+          detailBooking && (
+            <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {detailBooking.invoice_number && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const inv = detailBooking.invoice_number;
+                      setDetailBooking(null);
+                      navigate(`/villas/invoices?search=${inv}`);
+                    }}
+                    className={`${BUTTON_VARIANTS.secondary} !px-2.5 !py-1.5 text-xs`}
+                  >
+                    <FileText size={13} />
+                    <span>Invoice</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = detailBooking;
+                    setDetailBooking(null);
+                    openHistoryModal(target);
+                  }}
+                  className={`${BUTTON_VARIANTS.secondary} !px-2.5 !py-1.5 text-xs`}
+                >
+                  <History size={13} />
+                  <span>History</span>
+                </button>
+                {detailBooking.status === "Checked In" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = detailBooking.id;
+                      setDetailBooking(null);
+                      navigate(`/villas/services?bookingId=${id}`);
+                    }}
+                    className={`${BUTTON_VARIANTS.secondary} !px-2.5 !py-1.5 text-xs`}
+                  >
+                    <Wrench size={13} />
+                    <span>Services</span>
+                  </button>
+                )}
+                {["Reserved", "Confirmed"].includes(detailBooking.status) &&
+                  Boolean(detailBooking.can_mark_no_show) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = detailBooking;
+                        setDetailBooking(null);
+                        openActionModal(target, "No Show");
+                      }}
+                      className={`${BUTTON_VARIANTS.secondary} !px-2.5 !py-1.5 text-xs`}
+                    >
+                      <span>No Show</span>
+                    </button>
+                  )}
+                {["Reserved", "Confirmed"].includes(detailBooking.status) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = detailBooking;
+                      setDetailBooking(null);
+                      openActionModal(target, "Cancelled");
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-100 cursor-pointer"
+                  >
+                    <XCircle size={13} />
+                    <span>Cancel Stay</span>
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailBooking(null)}
+                className={BUTTON_VARIANTS.secondary}
+              >
+                Close
+              </button>
+            </div>
+          )
         }
       >
         {detailBooking && (
@@ -1883,6 +2127,59 @@ export default function VillaBookings() {
             )}
           </div>
         )}
+      </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => !deleteLoading && setDeleteTarget(null)}
+        onConfirm={handleDeleteBooking}
+        title="Delete Stay Booking"
+        recordName={deleteTarget ? `${deleteTarget.booking_number} (${deleteTarget.guest_name || deleteTarget.customer_name})` : ""}
+        message="This will permanently delete this stay booking along with its linked invoice, payments, service requests, and status history. This action cannot be undone."
+        confirmButtonText="Delete Stay"
+        loading={deleteLoading}
+        error={deleteError}
+      />
+
+      <Modal
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        title={`Delete ${selectedBookingIds.size} Selected Stay${selectedBookingIds.size !== 1 ? "s" : ""}`}
+        size="sm"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className={BUTTON_VARIANTS.secondary}
+              disabled={bulkDeleting}
+              onClick={() => setBulkDeleteOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 cursor-pointer"
+              disabled={bulkDeleting}
+              onClick={handleBulkDeleteBookings}
+            >
+              {bulkDeleting ? "Deleting..." : "Confirm Delete"}
+            </button>
+          </div>
+        }
+      >
+        <p className="mb-3 text-sm text-[#64748B] dark:text-[#8A9AB2]">
+          All selected stays and their linked invoices, payments, service requests, and status history will be permanently removed.
+        </p>
+        <ul className="max-h-48 overflow-y-auto divide-y divide-[#E5E9F0] dark:divide-[#1E293B] rounded-xl border border-[#E5E9F0] dark:border-[#1E293B]">
+          {Array.from(selectedBookingIds).map((id) => {
+            const bk = bookings.find((b) => b.id === id);
+            return (
+              <li key={id} className="px-3 py-2 text-sm">
+                {bk ? `${bk.booking_number} · ${bk.guest_name || bk.customer_name}` : `#${id}`}
+              </li>
+            );
+          })}
+        </ul>
       </Modal>
     </div>
   );

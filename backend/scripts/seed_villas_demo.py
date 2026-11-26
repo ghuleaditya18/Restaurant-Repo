@@ -61,7 +61,7 @@ def validate_target_database(db_url: str) -> None:
     parsed = make_url(db_url)
     db_str = (parsed.database or "").lower()
     driver = (parsed.drivername or "").lower()
-    if "restaurant_db" in db_str or "dineflow_db" in db_str:
+    if "resort_db" in db_str or "restaurant_db" in db_str or "dineflow_db" in db_str:
         raise RuntimeError(
             f"SAFETY BLOCK: Refusing to run demo seeder against operational database ({db_url})."
         )

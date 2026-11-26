@@ -32,7 +32,7 @@ TEST_PDF_DIR = Path(__file__).resolve().parent / "_tmp_villa_pdfs"
 TEST_DATABASE_URL = os.environ.get("VILLAS_TEST_DATABASE_URL", f"sqlite:///{TEST_DB_PATH.as_posix()}")
 parsed_test_url = make_url(TEST_DATABASE_URL)
 test_db_name = (parsed_test_url.database or "").lower()
-if test_db_name in {"restaurant_db", "dineflow_db"}:
+if test_db_name in {"resort_db", "restaurant_db", "dineflow_db"}:
     raise RuntimeError("Villas tests are blocked from using the operational database.")
 if "test" not in test_db_name and ":memory:" not in TEST_DATABASE_URL.lower():
     raise RuntimeError("Villas tests require a dedicated database name containing 'test' or in-memory SQLite.")
@@ -1011,10 +1011,6 @@ class TestVillasWorkflows(unittest.TestCase):
         self.assertGreater(float(pdata["outstanding_balance"]), 0.0)
         self.assertEqual(len(pdata["stays"]), 1)
 
-        # Delete protection when guest has bookings; allowed when guest has none
-        del_protected = self.client.delete(f"/api/villas/guests/{g1_data['id']}", headers=self.headers)
-        self.assertEqual(del_protected.status_code, 409)
-
         # Deactivate guest prevents new bookings
         deact = self.client.patch(f"/api/villas/guests/{g2.json()['id']}", headers=self.headers, json={"is_active": False})
         self.assertEqual(deact.status_code, 200)
@@ -1034,6 +1030,33 @@ class TestVillasWorkflows(unittest.TestCase):
 
         del_clean = self.client.delete(f"/api/villas/guests/{g2.json()['id']}", headers=self.headers)
         self.assertEqual(del_clean.status_code, 200)
+
+        # Full cascade delete removes guest along with linked stays, invoices, and payments
+        del_with_history = self.client.delete(f"/api/villas/guests/{g1_data['id']}", headers=self.headers)
+        self.assertEqual(del_with_history.status_code, 200, del_with_history.text)
+        self.assertEqual(self.client.get(f"/api/villas/guests/{g1_data['id']}", headers=self.headers).status_code, 404)
+
+        # Direct booking delete also removes linked invoice, payments, and status history
+        g3 = self.client.post(
+            "/api/villas/guests",
+            headers=self.headers,
+            json={"full_name": "Booking Delete Guest", "phone": "9820012349"},
+        ).json()
+        bk3 = self.client.post(
+            "/api/villas/bookings",
+            headers=self.headers,
+            json={
+                "unit_id": self.unit_id,
+                "guest_id": g3["id"],
+                "check_in": (self.departure + timedelta(days=12)).isoformat(),
+                "check_out": (self.departure + timedelta(days=13)).isoformat(),
+                "guests": 1,
+            },
+        ).json()
+        del_bk3 = self.client.delete(f"/api/villas/bookings/{bk3['id']}", headers=self.headers)
+        self.assertEqual(del_bk3.status_code, 200, del_bk3.text)
+        self.assertEqual(self.client.delete(f"/api/villas/bookings/{bk3['id']}", headers=self.headers).status_code, 404)
+        self.assertEqual(self.client.delete(f"/api/villas/guests/{g3['id']}", headers=self.headers).status_code, 200)
 
     def test_phase3_inventory_edits_rates_blocks_and_service_catalogue(self):
         # Edit category & guard delete when used
@@ -2035,3 +2058,152 @@ class TestVillasWorkflows(unittest.TestCase):
             self.assertEqual(Decimal(str(inv_unconf["subtotal"])), Decimal("10000.00"))
         finally:
             self._reset_default_policy()
+
+    def test_availability_schedule_reasons_and_next_available(self):
+        # 1. Existing booking self.arrival -> self.departure makes unit unavailable; next open is self.departure
+        resp = self.client.get(
+            "/api/villas/availability",
+            headers=self.headers,
+            params={"start_date": self.arrival.isoformat(), "end_date": self.departure.isoformat(), "guests": 2},
+        )
+        self.assertEqual(resp.status_code, 200, resp.text)
+        own = next(row for row in resp.json() if row["id"] == self.unit_id)
+        self.assertFalse(own["available"])
+        self.assertIn("Reserved", own["unavailable_reason"])
+        self.assertEqual(own["next_available_date"], self.departure.isoformat())
+        self.assertIn("2:00 PM", own["next_available_display"])
+
+        # 2. Back-to-back booking leaving only a 1-night gap means a 2-night search skips past the second booking
+        second_in = self.departure + timedelta(days=1)
+        second_out = second_in + timedelta(days=3)
+        b2 = self.client.post(
+            "/api/villas/bookings",
+            headers=self.headers,
+            json={
+                "unit_id": self.unit_id,
+                "customer": {"full_name": "BackToBack Guest", "phone": "9876509988"},
+                "check_in": second_in.isoformat(),
+                "check_out": second_out.isoformat(),
+                "guests": 2,
+            },
+        )
+        self.assertEqual(b2.status_code, 201, b2.text)
+        resp2 = self.client.get(
+            "/api/villas/availability",
+            headers=self.headers,
+            params={
+                "start_date": self.arrival.isoformat(),
+                "end_date": (self.arrival + timedelta(days=2)).isoformat(),
+                "guests": 2,
+            },
+        )
+        own2 = next(row for row in resp2.json() if row["id"] == self.unit_id)
+        self.assertFalse(own2["available"])
+        self.assertEqual(own2["next_available_date"], second_out.isoformat())
+
+        # 3. Block + Out of Order + Needs Cleaning on separate units
+        u_blk = self.client.post(
+            "/api/villas/units",
+            headers=self.headers,
+            json={"villa_id": self.villa_id, "category_id": self.cat_id, "name": "Unit-Blk-Avail", "capacity": 4, "bedrooms": 2, "base_rate": "4500"},
+        )
+        self.assertEqual(u_blk.status_code, 201, u_blk.text)
+        u_blk_id = u_blk.json()["id"]
+        blk_start = self.arrival
+        blk_end = self.arrival + timedelta(days=4)
+        self.assertEqual(
+            self.client.post(
+                "/api/villas/blocks",
+                headers=self.headers,
+                json={"unit_id": u_blk_id, "start_date": blk_start.isoformat(), "end_date": blk_end.isoformat(), "block_type": "Maintenance", "reason": "Plumbing"},
+            ).status_code,
+            201,
+        )
+
+        u_ooo = self.client.post(
+            "/api/villas/units",
+            headers=self.headers,
+            json={"villa_id": self.villa_id, "category_id": self.cat_id, "name": "Unit-OOO-Avail", "capacity": 4, "bedrooms": 2, "base_rate": "4500"},
+        )
+        self.assertEqual(u_ooo.status_code, 201, u_ooo.text)
+        u_ooo_id = u_ooo.json()["id"]
+        self.assertEqual(
+            self.client.patch(
+                f"/api/villas/units/{u_ooo_id}/housekeeping",
+                headers=self.headers,
+                json={"status": "Out of Order"},
+            ).status_code,
+            200,
+        )
+
+        u_dirty = self.client.post(
+            "/api/villas/units",
+            headers=self.headers,
+            json={"villa_id": self.villa_id, "category_id": self.cat_id, "name": "Unit-Dirty-Avail", "capacity": 4, "bedrooms": 2, "base_rate": "4500"},
+        )
+        self.assertEqual(u_dirty.status_code, 201, u_dirty.text)
+        u_dirty_id = u_dirty.json()["id"]
+        self.assertEqual(
+            self.client.patch(
+                f"/api/villas/units/{u_dirty_id}/housekeeping",
+                headers=self.headers,
+                json={"status": "Needs Cleaning"},
+            ).status_code,
+            200,
+        )
+
+        from app.core.date_utils import get_kolkata_today
+        today = get_kolkata_today()
+        resp_today = self.client.get(
+            "/api/villas/availability",
+            headers=self.headers,
+            params={"start_date": today.isoformat(), "end_date": (today + timedelta(days=2)).isoformat(), "guests": 2},
+        )
+        rows_today = {row["id"]: row for row in resp_today.json()}
+        self.assertFalse(rows_today[u_ooo_id]["available"])
+        self.assertIn("Out of Order", rows_today[u_ooo_id]["unavailable_reason"])
+        self.assertIsNone(rows_today[u_ooo_id]["next_available_date"])
+        self.assertIn("maintenance clearance", rows_today[u_ooo_id]["next_available_display"].lower())
+
+        self.assertFalse(rows_today[u_dirty_id]["available"])
+        self.assertIn("Needs Cleaning", rows_today[u_dirty_id]["unavailable_reason"])
+        self.assertEqual(rows_today[u_dirty_id]["next_available_date"], (today + timedelta(days=1)).isoformat())
+
+        resp_future = self.client.get(
+            "/api/villas/availability",
+            headers=self.headers,
+            params={"start_date": blk_start.isoformat(), "end_date": (blk_start + timedelta(days=2)).isoformat(), "guests": 2},
+        )
+        rows_future = {row["id"]: row for row in resp_future.json()}
+        self.assertFalse(rows_future[u_blk_id]["available"])
+        self.assertIn("Maintenance block", rows_future[u_blk_id]["unavailable_reason"])
+        self.assertEqual(rows_future[u_blk_id]["next_available_date"], blk_end.isoformat())
+        self.assertTrue(rows_future[u_dirty_id]["available"])
+
+    def test_villa_guest_phone_and_email_strict_validation(self):
+        # Reject 15-digit random phone, 7-digit phone, invalid prefix phone, and malformed email
+        for bad_phone in ["789955441265125", "1234567", "5123456789", "98765"]:
+            res = self.client.post(
+                "/api/villas/guests",
+                headers=self.headers,
+                json={"full_name": "Invalid Phone Guest", "phone": bad_phone},
+            )
+            self.assertEqual(res.status_code, 422, f"Expected 422 for phone={bad_phone}: {res.text}")
+
+        for bad_email in ["not-an-email", "a..b@resort.com", "guest@resort.c", "guest@domain"]:
+            res = self.client.post(
+                "/api/villas/guests",
+                headers=self.headers,
+                json={"full_name": "Invalid Email Guest", "phone": "9876501122", "email": bad_email},
+            )
+            self.assertEqual(res.status_code, 422, f"Expected 422 for email={bad_email}: {res.text}")
+
+        # Valid +91 formatted 10-digit mobile and valid email succeed and normalize cleanly
+        ok = self.client.post(
+            "/api/villas/guests",
+            headers=self.headers,
+            json={"full_name": "Valid Contact Guest", "phone": "+91 98765 01133", "email": "Valid.Guest@Resort.IN"},
+        )
+        self.assertEqual(ok.status_code, 201, ok.text)
+        self.assertEqual(ok.json()["phone"], "9876501133")
+        self.assertEqual(ok.json()["email"], "valid.guest@resort.in")

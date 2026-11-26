@@ -20,9 +20,11 @@ def create_manager():
 
         full_name = input("Manager Name: ").strip()
         email = input("Manager Email: ").strip().lower()
-        business_context = (input("Business context [RESTAURANT/SPA/VILLA] (default RESTAURANT): ").strip().upper() or "RESTAURANT")
-        if business_context not in {"RESTAURANT", "SPA", "VILLA"}:
-            raise ValueError("Business context must be RESTAURANT, SPA, or VILLA.")
+        business_context = (input("Business context [RESTAURANT/SPA/VILLA/PACKAGE] (default RESTAURANT): ").strip().upper() or "RESTAURANT")
+        if business_context == "PACKAGES":
+            business_context = "PACKAGE"
+        if business_context not in {"RESTAURANT", "SPA", "VILLA", "PACKAGE"}:
+            raise ValueError("Business context must be RESTAURANT, SPA, VILLA, or PACKAGE.")
 
         password = getpass("Manager Password: ")
         confirm_password = getpass("Confirm Password: ")

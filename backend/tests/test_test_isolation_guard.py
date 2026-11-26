@@ -25,9 +25,14 @@ class TestDatabaseSafetyGuard(unittest.TestCase):
 
     def test_guard_rejects_operational_database_names(self):
         with self.assertRaises(RuntimeError) as ctx1:
-            verify_test_database_safety("postgresql+psycopg://user:pass@localhost:5432/restaurant_db")
+            verify_test_database_safety("postgresql+psycopg://user:pass@localhost:5432/resort_db")
         self.assertIn("CRITICAL SAFETY GUARD VIOLATION", str(ctx1.exception))
-        self.assertIn("restaurant_db", str(ctx1.exception))
+        self.assertIn("resort_db", str(ctx1.exception))
+
+        with self.assertRaises(RuntimeError) as ctx_old:
+            verify_test_database_safety("postgresql+psycopg://user:pass@localhost:5432/restaurant_db")
+        self.assertIn("CRITICAL SAFETY GUARD VIOLATION", str(ctx_old.exception))
+        self.assertIn("restaurant_db", str(ctx_old.exception))
 
         with self.assertRaises(RuntimeError) as ctx2:
             verify_test_database_safety("postgresql+psycopg://user:pass@localhost:5432/dineflow_db")

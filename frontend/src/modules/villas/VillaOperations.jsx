@@ -9,12 +9,15 @@ import {
   Eye,
   FileText,
   IndianRupee,
+  MessageCircle,
   Percent,
   Plus,
   Power,
+  Printer,
   RotateCcw,
   Save,
   Search,
+  Share2,
   Sparkles,
   Trash2,
   Users,
@@ -35,8 +38,10 @@ import {
   CARD_STYLES,
   INPUT_STYLES,
 } from "../../utils/themeTokens";
+import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
 import {
   clearPaymentForm,
+  computeInstallmentPlan,
   getPaymentForm,
   setPaymentFormError,
   setPaymentFormField,
@@ -91,6 +96,29 @@ function savePdfBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function getWhatsAppNumber(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (/^[6-9]\d{9}$/.test(digits)) return `91${digits}`;
+  if (/^91[6-9]\d{9}$/.test(digits)) return digits;
+  return null;
+}
+
+function getVillaInvoiceShareText(invoice) {
+  const balance = Number(
+    Number(invoice?.balance_due ?? Math.max(0, Number(invoice?.total_amount || 0) - Number(invoice?.paid_amount || 0))).toFixed(2)
+  );
+  return (
+    `Invoice ${invoice.invoice_number}\n` +
+    `Stay: ${invoice.booking_number || "—"}${invoice.unit_name ? ` (${invoice.unit_name})` : ""}\n` +
+    `Guest: ${invoice.customer_name || invoice.guest_name || "Guest"}\n` +
+    `Total: ${villaMoney(invoice.total_amount)}\n` +
+    `Paid: ${villaMoney(invoice.paid_amount)}\n` +
+    `Balance Due: ${villaMoney(balance)}\n` +
+    `Status: ${invoice.payment_status}\n\n` +
+    "Thank you for staying with us!"
+  );
+}
+
 const REQUEST_STATUSES = [
   "Requested",
   "Scheduled",
@@ -101,7 +129,7 @@ const REQUEST_STATUSES = [
 
 export default function VillaOperations({ view = "services" }) {
   const [searchParams] = useSearchParams();
-  const { showSuccess, showError, confirm } = useNotification();
+  const { showSuccess, showError, showInfo, confirm } = useNotification();
 
   const initialSearch = searchParams.get("search") || "";
   const initialBookingId = searchParams.get("bookingId") || "";
@@ -156,6 +184,8 @@ export default function VillaOperations({ view = "services" }) {
   const [expandedPayInvoiceIds, setExpandedPayInvoiceIds] = useState({});
   const [payingInvoiceId, setPayingInvoiceId] = useState(null);
   const [downloadingPdfId, setDownloadingPdfId] = useState(null);
+  const [preparedPdf, setPreparedPdf] = useState(null);
+  const [pdfPreparing, setPdfPreparing] = useState(false);
   const [invoiceSearch, setInvoiceSearch] = useState(initialSearch);
   const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("");
   const [invoicePage, setInvoicePage] = useState(1);
@@ -176,6 +206,7 @@ export default function VillaOperations({ view = "services" }) {
     end_date: toIsoDate(30),
   });
   const [reportPage, setReportPage] = useState(1);
+  const [settingsError, setSettingsError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -395,13 +426,27 @@ export default function VillaOperations({ view = "services" }) {
   };
 
   // --- Invoices Handlers (Phase 1 & 2 intact) ---
+  const togglePayRow = (invoice, forceOpen = null) => {
+    const plan = computeInstallmentPlan(invoice);
+    setExpandedPayInvoiceIds((prev) => {
+      const nextOpen = forceOpen !== null ? forceOpen : !prev[invoice.id];
+      if (nextOpen && !paymentForms[invoice.id]?.amount && plan.balanceDue > 0) {
+        setPaymentForms((forms) =>
+          setPaymentFormField(forms, invoice.id, "amount", String(plan.balanceDue))
+        );
+      }
+      return { ...prev, [invoice.id]: nextOpen };
+    });
+  };
+
   const handlePaymentSubmit = async (e, invoice) => {
     e.preventDefault();
-    const rowForm = getPaymentForm(paymentForms, invoice.id);
+    const rawForm = getPaymentForm(paymentForms, invoice.id);
     const balance = Number(
       Number(invoice.balance_due ?? Number(invoice.total_amount) - Number(invoice.paid_amount)).toFixed(2)
     );
-    const validationError = validateInvoicePayment(rowForm, balance);
+    const rowForm = rawForm.amount === "" ? { ...rawForm, amount: String(balance) } : rawForm;
+    const validationError = validateInvoicePayment(rowForm, balance, invoice);
     if (validationError) {
       setPaymentForms((prev) => setPaymentFormError(prev, invoice.id, validationError));
       return;
@@ -427,13 +472,26 @@ export default function VillaOperations({ view = "services" }) {
     }
   };
 
+  const getPdfBlobForInvoice = async (invoice) => {
+    if (preparedPdf && Number(preparedPdf.invoiceId) === Number(invoice.id)) {
+      return preparedPdf.blob;
+    }
+    const blob = await villasApi.downloadInvoicePdf(invoice.id);
+    if (!blob || blob.size === 0) {
+      throw new Error("Generated PDF is empty.");
+    }
+    const pdfBlob =
+      blob instanceof Blob && blob.type === "application/pdf"
+        ? blob
+        : new Blob([blob], { type: "application/pdf" });
+    setPreparedPdf({ invoiceId: invoice.id, blob: pdfBlob });
+    return pdfBlob;
+  };
+
   const handleDownloadPdf = async (invoice) => {
     setDownloadingPdfId(invoice.id);
     try {
-      const blob = await villasApi.downloadInvoicePdf(invoice.id);
-      if (!blob || blob.size === 0) {
-        throw new Error("Generated PDF is empty.");
-      }
+      const blob = await getPdfBlobForInvoice(invoice);
       savePdfBlob(blob, `Villa-Invoice-${invoice.invoice_number}.pdf`);
       showSuccess(`Downloaded ${invoice.invoice_number}.pdf`);
     } catch (err) {
@@ -445,8 +503,100 @@ export default function VillaOperations({ view = "services" }) {
     }
   };
 
+  const handlePrintInvoicePdf = async (invoice) => {
+    const printWindow = window.open("", "_blank");
+    try {
+      const blob = await getPdfBlobForInvoice(invoice);
+      const url = URL.createObjectURL(blob);
+      if (printWindow && !printWindow.closed) {
+        printWindow.location.href = url;
+        showInfo("Invoice PDF opened. Use the PDF viewer's Print option.");
+        window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+      } else {
+        savePdfBlob(blob, `Villa-Invoice-${invoice.invoice_number}.pdf`);
+        showInfo("PDF downloaded because pop-ups were blocked. Open it to print.");
+      }
+    } catch (err) {
+      if (printWindow && !printWindow.closed) {
+        printWindow.close();
+      }
+      showError(villaError(err) || "Unable to prepare PDF for printing.");
+    }
+  };
+
+  const handleWhatsAppShare = (invoice) => {
+    const phone = getWhatsAppNumber(invoice.customer_phone);
+    if (!phone) {
+      showError("This guest does not have a valid WhatsApp mobile number.");
+      return;
+    }
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(getVillaInvoiceShareText(invoice))}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    showInfo(
+      `WhatsApp opened for ${invoice.customer_name || "guest"} with invoice details ready to send.`
+    );
+  };
+
+  const handleWhatsAppPdfShare = (invoice) => {
+    const phone = getWhatsAppNumber(invoice.customer_phone);
+    if (!phone) {
+      showError("This guest does not have a valid WhatsApp mobile number.");
+      return;
+    }
+    if (!preparedPdf || Number(preparedPdf.invoiceId) !== Number(invoice.id)) {
+      showError("The invoice PDF is still preparing. Please try again in a moment.");
+      return;
+    }
+
+    const filename = `Villa-Invoice-${invoice.invoice_number}.pdf`;
+    const file = new File([preparedPdf.blob], filename, { type: "application/pdf" });
+    const shareText = getVillaInvoiceShareText(invoice);
+    const shareData = {
+      title: `Invoice ${invoice.invoice_number}`,
+      text: shareText,
+      files: [file],
+    };
+
+    let canShareFile = false;
+    try {
+      if (
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] })
+      ) {
+        canShareFile = true;
+      }
+    } catch {
+      canShareFile = false;
+    }
+
+    if (canShareFile) {
+      navigator
+        .share(shareData)
+        .then(() => showSuccess("Invoice PDF sharing completed."))
+        .catch((shareError) => {
+          if (shareError?.name !== "AbortError") {
+            showError("Could not share the PDF. Try Download PDF instead.");
+          }
+        });
+      return;
+    }
+
+    savePdfBlob(preparedPdf.blob, filename);
+    window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(shareText)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+    showInfo(
+      "The PDF was downloaded and the guest's WhatsApp chat was opened. Attach the PDF and tap Send."
+    );
+  };
+
   const openInvoiceDetails = async (invoice, preselectPayment = null) => {
     setInvoiceModal({ invoice, history: null, loading: true, error: "" });
+    setPreparedPdf(null);
+    setPdfPreparing(true);
     setRefundForm({
       payment_id: preselectPayment ? String(preselectPayment.id) : "",
       refund_amount: preselectPayment ? String(preselectPayment.refundable_amount) : "",
@@ -460,13 +610,28 @@ export default function VillaOperations({ view = "services" }) {
         villasApi.invoiceDetail(invoice.id),
         villasApi.invoicePayments(invoice.id),
       ]);
+      const detailed = detailRes.data;
       setInvoiceModal({
-        invoice: detailRes.data,
+        invoice: detailed,
         history: historyRes.data,
         loading: false,
         error: "",
       });
+      villasApi
+        .downloadInvoicePdf(detailed.id)
+        .then((blob) => {
+          if (blob && blob.size > 0) {
+            const pdfBlob =
+              blob instanceof Blob && blob.type === "application/pdf"
+                ? blob
+                : new Blob([blob], { type: "application/pdf" });
+            setPreparedPdf({ invoiceId: detailed.id, blob: pdfBlob });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setPdfPreparing(false));
     } catch (err) {
+      setPdfPreparing(false);
       setInvoiceModal({ invoice, history: null, loading: false, error: villaError(err) });
     }
   };
@@ -613,12 +778,12 @@ export default function VillaOperations({ view = "services" }) {
         "Manage concierge, transfer, and villa service catalogue items and schedule requests for checked-in stays.",
     },
     invoices: {
-      title: "Villas Invoices & Settlements",
+      title: "Invoices",
       description:
         "Track stay folios, record payments per invoice, process refunds/reversals, and download PDF folios.",
     },
     reports: {
-      title: "Villas Operational Reports",
+      title: "Reports",
       description:
         "Analyze occupancy rate, average daily rate (ADR), accommodation vs. service revenue, unit utilization, and repeat guest activity.",
     },
@@ -938,9 +1103,7 @@ export default function VillaOperations({ view = "services" }) {
             {canPay && (
               <button
                 type="button"
-                onClick={() =>
-                  setExpandedPayInvoiceIds((prev) => ({ ...prev, [i.id]: !prev[i.id] }))
-                }
+                onClick={() => togglePayRow(i)}
                 title={`Receive payment for ${i.invoice_number}`}
                 className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
                   isPayExpanded
@@ -1014,8 +1177,9 @@ export default function VillaOperations({ view = "services" }) {
               <ul className="mt-1 space-y-1">{bulkDeleteFailures.map((item) => <li key={item.id}><span className="font-medium">{item.name}:</span> {item.reason}</li>)}</ul>
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
             <StatCard
+              compact
               title="Catalogue Services"
               value={services.length}
               description={`${activeCatalogueServices.length} active offerings`}
@@ -1023,6 +1187,7 @@ export default function VillaOperations({ view = "services" }) {
               color="amber"
             />
             <StatCard
+              compact
               title="Active In-House Stays"
               value={checkedInStays.length}
               description="Eligible for service charges"
@@ -1030,6 +1195,7 @@ export default function VillaOperations({ view = "services" }) {
               color="emerald"
             />
             <StatCard
+              compact
               title="Open Requests"
               value={requests.filter((r) => ["Requested", "Scheduled", "In Progress"].includes(r.status)).length}
               description="Awaiting fulfilment"
@@ -1037,6 +1203,7 @@ export default function VillaOperations({ view = "services" }) {
               color="sky"
             />
             <StatCard
+              compact
               title="Completed Revenue"
               value={villaMoney(
                 requests
@@ -1290,8 +1457,9 @@ export default function VillaOperations({ view = "services" }) {
       {/* ===================== VIEW: INVOICES ===================== */}
       {view === "invoices" && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
             <StatCard
+              compact
               title="Total Invoices"
               value={invoices.length}
               description="Active and archived folios"
@@ -1299,6 +1467,7 @@ export default function VillaOperations({ view = "services" }) {
               color="amber"
             />
             <StatCard
+              compact
               title="Net Revenue Collected"
               value={villaMoney(invoiceTotals.netCollected)}
               description="Gross receipts less refunds"
@@ -1306,6 +1475,7 @@ export default function VillaOperations({ view = "services" }) {
               color="emerald"
             />
             <StatCard
+              compact
               title="Refunds & Reversals"
               value={villaMoney(invoiceTotals.totalRefunded)}
               description="Returned advances and adjustments"
@@ -1313,6 +1483,7 @@ export default function VillaOperations({ view = "services" }) {
               color="stone"
             />
             <StatCard
+              compact
               title="Balance Outstanding"
               value={villaMoney(invoiceTotals.outstanding)}
               description="Due across open folios"
@@ -1321,8 +1492,8 @@ export default function VillaOperations({ view = "services" }) {
             />
           </div>
 
-          <div className={`${CARD_STYLES.base} flex flex-col sm:flex-row sm:items-center justify-between gap-3`}>
-            <div className="relative flex-1 max-w-md min-w-0">
+          <div className={`${CARD_STYLES.base} !p-2.5 w-fit max-w-full flex flex-wrap items-center gap-2.5`}>
+            <div className="relative w-full sm:w-72 min-w-0">
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
@@ -1343,7 +1514,7 @@ export default function VillaOperations({ view = "services" }) {
                   setInvoiceStatusFilter(e.target.value);
                   setInvoicePage(1);
                 }}
-                className={`${INPUT_STYLES.select} w-full sm:w-auto min-w-[165px]`}
+                className={`${INPUT_STYLES.select} !w-auto min-w-[165px]`}
               >
                 <option value="">All Payment Statuses</option>
                 {["Pending", "Partially Paid", "Paid", "Refunded", "Void"].map((s) => (
@@ -1378,42 +1549,87 @@ export default function VillaOperations({ view = "services" }) {
             tableMinWidth="min-w-[1060px]"
             renderExpandedRow={(i) => {
               if (!expandedPayInvoiceIds[i.id]) return null;
-              const balance = Number(
-                Number(i.balance_due ?? Number(i.total_amount) - Number(i.paid_amount)).toFixed(2)
-              );
+              const plan = computeInstallmentPlan(i);
+              const balance = plan.balanceDue;
               const rowForm = getPaymentForm(paymentForms, i.id);
+              const activeAmount = rowForm.amount === "" ? String(balance) : rowForm.amount;
+              const isFullSelected = Math.abs(Number(activeAmount) - balance) <= 0.01;
+              const isFirstInstallmentSelected =
+                !plan.hasPriorPayment &&
+                Math.abs(Number(activeAmount) - plan.firstInstallmentAmount) <= 0.01 &&
+                !isFullSelected;
               return (
-                <div className="space-y-2 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-[#101722] p-3.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-bold text-[#172033] dark:text-[#F8FAFC]">
-                      Record Payment for {i.invoice_number} (Balance Due: {villaMoney(balance)})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPaymentForms((prev) =>
-                          setPaymentFormField(prev, i.id, "amount", String(balance))
-                        )
-                      }
-                      className="font-semibold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
-                    >
-                      Fill Full Balance
-                    </button>
+                <div className="w-fit max-w-full space-y-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-[#101722] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-[#172033] dark:text-[#F8FAFC]">
+                        Record Payment · {i.invoice_number}
+                      </span>
+                      <span className="text-stone-500 dark:text-[#8A9AB2]">
+                        Balance Due: <strong className="text-[#172033] dark:text-stone-100">{villaMoney(balance)}</strong>
+                      </span>
+                      {plan.hasPriorPayment && (
+                        <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                          Installment 1 paid: {villaMoney(plan.paidAmount)} · Final installment (2/2)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPaymentForms((prev) =>
+                            setPaymentFormField(prev, i.id, "amount", String(balance))
+                          )
+                        }
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                          isFullSelected
+                            ? "border-amber-500 bg-amber-50 dark:bg-[#30251C] text-amber-800 dark:text-[#FFB02E]"
+                            : "border-[#E5E9F0] dark:border-[#1E293B] text-stone-600 dark:text-stone-300 hover:border-amber-400"
+                        }`}
+                      >
+                        {plan.hasPriorPayment
+                          ? `2nd Installment · Final (${villaMoney(balance)})`
+                          : `Full Payment (${villaMoney(balance)})`}
+                      </button>
+                      {!plan.hasPriorPayment && plan.firstInstallmentAmount < balance && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPaymentForms((prev) =>
+                              setPaymentFormField(
+                                prev,
+                                i.id,
+                                "amount",
+                                String(plan.firstInstallmentAmount)
+                              )
+                            )
+                          }
+                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                            isFirstInstallmentSelected
+                              ? "border-amber-500 bg-amber-50 dark:bg-[#30251C] text-amber-800 dark:text-[#FFB02E]"
+                              : "border-[#E5E9F0] dark:border-[#1E293B] text-stone-600 dark:text-stone-300 hover:border-amber-400"
+                          }`}
+                        >
+                          1st Installment · 50% Pre-Stay ({villaMoney(plan.firstInstallmentAmount)})
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <form
-                    className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-center"
+                    className="flex flex-wrap items-center gap-2"
                     onSubmit={(e) => handlePaymentSubmit(e, i)}
                   >
                     <input
                       aria-label={`Payment amount for ${i.invoice_number}`}
-                      className={INPUT_STYLES.base}
+                      className={`${INPUT_STYLES.base} !w-36 tabular-nums`}
                       type="number"
-                      min="0.01"
+                      min={plan.hasPriorPayment ? balance : plan.firstInstallmentAmount}
                       max={balance}
                       step="0.01"
                       placeholder="Amount (₹)"
                       required
-                      value={rowForm.amount}
+                      value={activeAmount}
                       onChange={(e) =>
                         setPaymentForms((prev) =>
                           setPaymentFormField(prev, i.id, "amount", e.target.value)
@@ -1422,7 +1638,7 @@ export default function VillaOperations({ view = "services" }) {
                     />
                     <select
                       aria-label={`Payment method for ${i.invoice_number}`}
-                      className={INPUT_STYLES.select}
+                      className={`${INPUT_STYLES.select} !w-auto min-w-[125px]`}
                       value={rowForm.method}
                       onChange={(e) =>
                         setPaymentForms((prev) =>
@@ -1437,7 +1653,7 @@ export default function VillaOperations({ view = "services" }) {
                     </select>
                     <input
                       aria-label={`Payment reference for ${i.invoice_number}`}
-                      className={INPUT_STYLES.base}
+                      className={`${INPUT_STYLES.base} !w-44 sm:!w-52`}
                       type="text"
                       maxLength={100}
                       placeholder="Reference (optional)"
@@ -1452,12 +1668,17 @@ export default function VillaOperations({ view = "services" }) {
                       type="submit"
                       title={`Receive payment for ${i.invoice_number}`}
                       disabled={payingInvoiceId === i.id}
-                      className={BUTTON_VARIANTS.primary}
+                      className={`${BUTTON_VARIANTS.primary} w-auto shrink-0`}
                     >
                       <CreditCard size={14} />
                       <span>{payingInvoiceId === i.id ? "Saving..." : "Record Payment"}</span>
                     </button>
                   </form>
+                  <p className="text-[11px] text-stone-500 dark:text-[#8A9AB2]">
+                    {plan.hasPriorPayment
+                      ? "Partial stay payments are settled in 2 installments. Complete the remaining balance below."
+                      : `Pay in full (${villaMoney(balance)}) or in 2 installments: minimum 50% (${villaMoney(plan.firstInstallmentAmount)}) before guest check-in and remaining balance as 2nd installment.`}
+                  </p>
                   {rowForm.error && (
                     <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
                       {rowForm.error}
@@ -1480,8 +1701,8 @@ export default function VillaOperations({ view = "services" }) {
       {/* ===================== VIEW: REPORTS ===================== */}
       {view === "reports" && (
         <>
-          <div className={`${CARD_STYLES.base} flex flex-col sm:flex-row sm:items-end justify-between gap-4`}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 max-w-lg">
+          <div className={`${CARD_STYLES.base} !p-3 w-fit max-w-full flex flex-wrap items-end gap-3`}>
+            <div className="flex flex-wrap items-end gap-2.5">
               <div>
                 <label className="block text-xs font-semibold mb-1">Period Start</label>
                 <input
@@ -1491,7 +1712,7 @@ export default function VillaOperations({ view = "services" }) {
                     setReportPage(1);
                     setReportRange({ ...reportRange, start_date: e.target.value });
                   }}
-                  className={INPUT_STYLES.base}
+                  className={`${INPUT_STYLES.base} !w-auto`}
                 />
               </div>
               <div>
@@ -1503,7 +1724,7 @@ export default function VillaOperations({ view = "services" }) {
                     setReportPage(1);
                     setReportRange({ ...reportRange, end_date: e.target.value });
                   }}
-                  className={INPUT_STYLES.base}
+                  className={`${INPUT_STYLES.base} !w-auto`}
                 />
               </div>
             </div>
@@ -1529,8 +1750,9 @@ export default function VillaOperations({ view = "services" }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
             <StatCard
+              compact
               title="Occupancy Rate"
               value={loading ? "—" : `${reportData?.summary?.occupancy_rate ?? 0}%`}
               description={`${reportData?.summary?.nights_sold ?? 0} of ${reportData?.summary?.available_unit_nights ?? 0} unit-nights`}
@@ -1538,6 +1760,7 @@ export default function VillaOperations({ view = "services" }) {
               color="sky"
             />
             <StatCard
+              compact
               title="Avg Daily Rate (ADR)"
               value={loading ? "—" : villaMoney(reportData?.summary?.adr)}
               description={`Accommodation: ${villaMoney(reportData?.summary?.accommodation_revenue)}`}
@@ -1545,6 +1768,7 @@ export default function VillaOperations({ view = "services" }) {
               color="amber"
             />
             <StatCard
+              compact
               title="Net Revenue Collected"
               value={loading ? "—" : villaMoney(reportData?.summary?.net_revenue_received)}
               description={`Service rev: ${villaMoney(reportData?.summary?.service_revenue)}`}
@@ -1552,6 +1776,7 @@ export default function VillaOperations({ view = "services" }) {
               color="emerald"
             />
             <StatCard
+              compact
               title="Outstanding Balance"
               value={loading ? "—" : villaMoney(reportData?.summary?.outstanding_balance)}
               description={`Cancel / No-Show: ${reportData?.summary?.cancellation_no_show_rate ?? 0}%`}
@@ -1704,23 +1929,74 @@ export default function VillaOperations({ view = "services" }) {
 
       {/* ===================== VIEW: SETTINGS ===================== */}
       {view === "settings" && profile && (
-        <section className={`${CARD_STYLES.base} max-w-3xl`}>
-          <h2 className="mb-4 text-base font-bold text-stone-900 dark:text-stone-100">
+        <section className={`${CARD_STYLES.base} max-w-3xl space-y-4`}>
+          <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">
             Villas &amp; Units Property Details
           </h2>
+          {settingsError && (
+            <AlertBanner
+              variant="error"
+              message={settingsError}
+              onDismiss={() => setSettingsError("")}
+            />
+          )}
           <form
             className="grid gap-4 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
+              setSettingsError("");
+              const trimmedName = String(profile.business_name || "").trim();
+              if (trimmedName.length < 2) {
+                setSettingsError("Property Name must contain at least 2 characters.");
+                return;
+              }
+              const emailCheck = validateEmailAddress(profile.business_email, {
+                required: true,
+                label: "Official Email",
+              });
+              if (!emailCheck.valid) {
+                setSettingsError(emailCheck.error);
+                return;
+              }
+              const phoneCheck = validateMobileNumber(profile.business_phone, {
+                required: true,
+                label: "Contact Phone",
+              });
+              if (!phoneCheck.valid) {
+                setSettingsError(phoneCheck.error);
+                return;
+              }
+              const cleaned = {
+                ...profile,
+                business_name: trimmedName,
+                business_email: emailCheck.normalized,
+                business_phone: phoneCheck.normalized,
+              };
               runAction(async () => {
-                const updated = await updateBusinessProfile(profile);
+                const updated = await updateBusinessProfile(cleaned);
                 setProfile(updated);
               }, "Property details saved.");
             }}
           >
-            <Field label="Property Name" field="business_name" profile={profile} setProfile={setProfile} />
-            <Field label="Official Email" field="business_email" profile={profile} setProfile={setProfile} />
-            <Field label="Contact Phone" field="business_phone" profile={profile} setProfile={setProfile} />
+            <Field label="Property Name *" field="business_name" profile={profile} setProfile={setProfile} />
+            <Field
+              label="Official Email *"
+              field="business_email"
+              type="email"
+              placeholder="e.g. contact@resort.com"
+              profile={profile}
+              setProfile={setProfile}
+            />
+            <Field
+              label="Contact Phone *"
+              field="business_phone"
+              type="tel"
+              maxLength={15}
+              placeholder="e.g. 9876543210"
+              hint="10-digit mobile starting with 6, 7, 8, or 9."
+              profile={profile}
+              setProfile={setProfile}
+            />
             <Field label="City" field="city" profile={profile} setProfile={setProfile} />
             <label className="text-xs font-semibold sm:col-span-2">
               Address
@@ -1882,7 +2158,7 @@ export default function VillaOperations({ view = "services" }) {
         </ul>
       </Modal>
 
-      {/* Invoice Details, Line Items, Payment & Refund History Modal */}
+      {/* Invoice Details, Line Items, Payment & Share Modal */}
       <Modal
         isOpen={Boolean(invoiceModal)}
         onClose={() => !refunding && setInvoiceModal(null)}
@@ -1894,26 +2170,85 @@ export default function VillaOperations({ view = "services" }) {
         }
         size="lg"
         footer={
-          invoiceModal && (
-            <div className="flex justify-between items-center w-full">
-              <button
-                type="button"
-                onClick={() => handleDownloadPdf(invoiceModal.invoice)}
-                disabled={downloadingPdfId === invoiceModal.invoice.id}
-                className={BUTTON_VARIANTS.outline}
-              >
-                <Download size={15} />
-                <span>Download PDF</span>
-              </button>
-              <button
-                type="button"
-                className={BUTTON_VARIANTS.secondary}
-                onClick={() => setInvoiceModal(null)}
-              >
-                Close
-              </button>
-            </div>
-          )
+          invoiceModal && (() => {
+            const inv = invoiceModal.invoice;
+            const modalBalance = Number(
+              Number(
+                invoiceModal.history?.balance_due ??
+                  inv.balance_due ??
+                  Math.max(0, Number(inv.total_amount) - Number(inv.paid_amount))
+              ).toFixed(2)
+            );
+            const canModalPay =
+              inv.payment_status !== "Void" &&
+              !["Cancelled", "No Show"].includes(inv.booking_status) &&
+              modalBalance > 0;
+            return (
+              <div className="flex flex-wrap items-center justify-between gap-2.5 w-full">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPdf(inv)}
+                    disabled={downloadingPdfId === inv.id}
+                    className={BUTTON_VARIANTS.outline}
+                  >
+                    <Download size={15} />
+                    <span>{downloadingPdfId === inv.id ? "Downloading..." : "Download PDF"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintInvoicePdf(inv)}
+                    className={BUTTON_VARIANTS.outline}
+                    title="Print invoice PDF"
+                  >
+                    <Printer size={15} />
+                    <span>Print PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleWhatsAppShare(inv)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#1EBE5D] transition shadow-xs cursor-pointer"
+                    title="Share invoice details via WhatsApp"
+                  >
+                    <MessageCircle size={15} />
+                    <span>WhatsApp</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleWhatsAppPdfShare(inv)}
+                    disabled={pdfPreparing || !preparedPdf || Number(preparedPdf.invoiceId) !== Number(inv.id)}
+                    className={`${BUTTON_VARIANTS.outline} disabled:opacity-50`}
+                    title="Share invoice PDF file"
+                  >
+                    <Share2 size={15} />
+                    <span>{pdfPreparing ? "Preparing..." : "Share PDF"}</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {canModalPay && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInvoiceModal(null);
+                        togglePayRow(inv, true);
+                      }}
+                      className={BUTTON_VARIANTS.primary}
+                    >
+                      <CreditCard size={14} />
+                      <span>Record Payment</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={BUTTON_VARIANTS.secondary}
+                    onClick={() => setInvoiceModal(null)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            );
+          })()
         }
       >
         {invoiceModal && (
@@ -1992,11 +2327,11 @@ export default function VillaOperations({ view = "services" }) {
               <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-500">
                 Payment History
               </h4>
-              <VillaDataTable
-                tableMinWidth="min-w-[640px]"
-                rows={invoiceModal.history?.payments || invoiceModal.invoice.payments || []}
-                emptyTitle="No payments recorded yet"
-                columns={[
+              {(() => {
+                const isCancelledOrNoShowAdvance =
+                  ["Cancelled", "No Show"].includes(invoiceModal.invoice.booking_status) &&
+                  Number(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount ?? 0) > 0;
+                const paymentHistoryCols = [
                   {
                     key: "created_at",
                     label: "Date",
@@ -2029,7 +2364,9 @@ export default function VillaOperations({ view = "services" }) {
                     align: "center",
                     render: (p) => <StatusBadge status={p.status} label={p.status} size="sm" />,
                   },
-                  {
+                ];
+                if (isCancelledOrNoShowAdvance) {
+                  paymentHistoryCols.push({
                     key: "action",
                     label: "Action",
                     align: "right",
@@ -2054,59 +2391,71 @@ export default function VillaOperations({ view = "services" }) {
                       ) : (
                         "—"
                       ),
-                  },
-                ]}
-              />
+                  });
+                }
+                return (
+                  <VillaDataTable
+                    tableMinWidth="min-w-[600px]"
+                    rows={invoiceModal.history?.payments || invoiceModal.invoice.payments || []}
+                    emptyTitle="No payments recorded yet"
+                    columns={paymentHistoryCols}
+                  />
+                );
+              })()}
             </div>
 
-            <div>
-              <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-500">
-                Refund &amp; Reversal History
-              </h4>
-              <VillaDataTable
-                tableMinWidth="min-w-[640px]"
-                rows={invoiceModal.history?.reversals || invoiceModal.invoice.reversals || []}
-                emptyTitle="No refunds recorded"
-                columns={[
-                  {
-                    key: "created_at",
-                    label: "Date",
-                    cellClassName: "whitespace-nowrap text-xs",
-                    render: (r) => (r.created_at ? villaDateTime(r.created_at) : "—"),
-                  },
-                  {
-                    key: "payment_id",
-                    label: "Payment #",
-                    cellClassName: "whitespace-nowrap font-mono",
-                    render: (r) => `#${r.payment_id}`,
-                  },
-                  { key: "refund_method", label: "Method", cellClassName: "whitespace-nowrap" },
-                  {
-                    key: "refund_reference",
-                    label: "Reference",
-                    render: (r) => r.refund_reference || "—",
-                  },
-                  { key: "reason", label: "Reason" },
-                  {
-                    key: "refund_amount",
-                    label: "Amount",
-                    align: "right",
-                    cellClassName: "font-semibold text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap",
-                    render: (r) => villaMoney(r.refund_amount),
-                  },
-                  {
-                    key: "reversal_status",
-                    label: "Status",
-                    align: "center",
-                    render: (r) => (
-                      <StatusBadge status={r.reversal_status} label={r.reversal_status} size="sm" />
-                    ),
-                  },
-                ]}
-              />
-            </div>
+            {((invoiceModal.history?.reversals || invoiceModal.invoice.reversals || []).length > 0 ||
+              ["Cancelled", "No Show"].includes(invoiceModal.invoice.booking_status)) && (
+              <div>
+                <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-500">
+                  Refund &amp; Reversal History
+                </h4>
+                <VillaDataTable
+                  tableMinWidth="min-w-[640px]"
+                  rows={invoiceModal.history?.reversals || invoiceModal.invoice.reversals || []}
+                  emptyTitle="No refunds recorded"
+                  columns={[
+                    {
+                      key: "created_at",
+                      label: "Date",
+                      cellClassName: "whitespace-nowrap text-xs",
+                      render: (r) => (r.created_at ? villaDateTime(r.created_at) : "—"),
+                    },
+                    {
+                      key: "payment_id",
+                      label: "Payment #",
+                      cellClassName: "whitespace-nowrap font-mono",
+                      render: (r) => `#${r.payment_id}`,
+                    },
+                    { key: "refund_method", label: "Method", cellClassName: "whitespace-nowrap" },
+                    {
+                      key: "refund_reference",
+                      label: "Reference",
+                      render: (r) => r.refund_reference || "—",
+                    },
+                    { key: "reason", label: "Reason" },
+                    {
+                      key: "refund_amount",
+                      label: "Amount",
+                      align: "right",
+                      cellClassName: "font-semibold text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap",
+                      render: (r) => villaMoney(r.refund_amount),
+                    },
+                    {
+                      key: "reversal_status",
+                      label: "Status",
+                      align: "center",
+                      render: (r) => (
+                        <StatusBadge status={r.reversal_status} label={r.reversal_status} size="sm" />
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            )}
 
-            {Number(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount ?? 0) > 0 && (
+            {["Cancelled", "No Show"].includes(invoiceModal.invoice.booking_status) &&
+              Number(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount ?? 0) > 0 && (
               <form
                 onSubmit={handleRefundSubmit}
                 className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-stone-900 p-3.5 space-y-3"
@@ -2136,9 +2485,9 @@ export default function VillaOperations({ view = "services" }) {
                 {refundForm.error && (
                   <AlertBanner variant="error" message={refundForm.error} />
                 )}
-                <div className="grid gap-2 sm:grid-cols-4">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
-                    className={INPUT_STYLES.base}
+                    className={`${INPUT_STYLES.base} !w-36`}
                     type="number"
                     min="0.01"
                     step="0.01"
@@ -2150,7 +2499,7 @@ export default function VillaOperations({ view = "services" }) {
                     }
                   />
                   <select
-                    className={INPUT_STYLES.select}
+                    className={`${INPUT_STYLES.select} !w-auto min-w-[125px]`}
                     value={refundForm.refund_method}
                     onChange={(e) =>
                       setRefundForm((prev) => ({ ...prev, refund_method: e.target.value }))
@@ -2162,7 +2511,7 @@ export default function VillaOperations({ view = "services" }) {
                     <option>Cash</option>
                   </select>
                   <input
-                    className={INPUT_STYLES.base}
+                    className={`${INPUT_STYLES.base} !w-44`}
                     placeholder="Refund ref (optional)"
                     value={refundForm.refund_reference}
                     onChange={(e) =>
@@ -2170,7 +2519,7 @@ export default function VillaOperations({ view = "services" }) {
                     }
                   />
                   <input
-                    className={INPUT_STYLES.base}
+                    className={`${INPUT_STYLES.base} !w-52`}
                     placeholder="Refund reason *"
                     required
                     value={refundForm.reason}
@@ -2196,15 +2545,19 @@ export default function VillaOperations({ view = "services" }) {
   );
 }
 
-function Field({ label, field, profile, setProfile }) {
+function Field({ label, field, profile, setProfile, type = "text", placeholder = "", maxLength, hint = "" }) {
   return (
-    <label className="text-xs font-semibold">
+    <label className="text-xs font-semibold block">
       {label}
       <input
+        type={type}
+        maxLength={maxLength}
+        placeholder={placeholder}
         className={`${INPUT_STYLES.base} mt-1`}
         value={profile[field] || ""}
         onChange={(e) => setProfile({ ...profile, [field]: e.target.value })}
       />
+      {hint && <span className="mt-1 block text-[11px] font-normal text-stone-500 dark:text-stone-400">{hint}</span>}
     </label>
   );
 }

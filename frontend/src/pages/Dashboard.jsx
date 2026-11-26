@@ -224,8 +224,9 @@ function Dashboard() {
               </span>
             </div>
 
-            <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
               <StatCard
+                compact
                 title={`Orders (${periodLabel})`}
                 value={String(stats.total_orders).padStart(2, "0")}
                 description={
@@ -238,6 +239,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 title={`Revenue (${periodLabel})`}
                 value={formattedRevenue}
                 description="Net invoiced period revenue"
@@ -246,6 +248,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 title="Active Orders"
                 value={String(stats.active_orders).padStart(2, "0")}
                 description={
@@ -258,6 +261,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 title="Pending Bills"
                 value={String(stats.pending_payments).padStart(2, "0")}
                 description="Unsettled customer invoices"
@@ -273,8 +277,9 @@ function Dashboard() {
               Restaurant Capacity & Resources
             </h2>
 
-            <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
               <StatCard
+                compact
                 layout="horizontal"
                 title="Customers"
                 value={stats.total_customers}
@@ -283,6 +288,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 layout="horizontal"
                 title="Staff Members"
                 value={stats.total_staff}
@@ -291,6 +297,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 layout="horizontal"
                 title="Menu Items"
                 value={stats.total_menu_items}
@@ -299,6 +306,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 layout="horizontal"
                 title="Dining Tables"
                 value={stats.total_tables}
@@ -323,8 +331,9 @@ function Dashboard() {
               </Link>
             </div>
 
-            <section className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
+            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
               <StatCard
+                compact
                 layout="horizontal"
                 title="Stock Items"
                 value={stats.total_inventory_items || 0}
@@ -333,6 +342,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 layout="horizontal"
                 title="Low Stock"
                 value={stats.low_stock_items_count || 0}
@@ -341,6 +351,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 layout="horizontal"
                 title="Out of Stock"
                 value={stats.out_of_stock_items_count || 0}
@@ -349,6 +360,7 @@ function Dashboard() {
               />
 
               <StatCard
+                compact
                 layout="horizontal"
                 title="Valuation"
                 value={formatCurrency(stats.total_inventory_valuation || 0)}
@@ -449,7 +461,7 @@ function Dashboard() {
 
               <Link
                 to="/tables"
-                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-850 py-2 text-center text-xs font-semibold text-stone-700 dark:text-stone-300 transition hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100"
+                className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-[#151D29] py-2 text-center text-xs font-semibold text-stone-700 dark:text-stone-300 transition hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100"
               >
                 <span>Manage All Dining Tables</span>
                 <ArrowRight size={14} />

@@ -30,6 +30,8 @@ import {
   Building2,
   CheckCircle2,
   BookOpen,
+  Package,
+  Compass,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -38,10 +40,13 @@ import { useTheme } from "../context/ThemeContext";
 import { updateProfile, uploadProfileImage, deleteProfileImage } from "../services/authService";
 import { getBusinessProfile, updateBusinessProfile } from "../services/businessProfileService";
 import { resolveImageUrl } from "../utils/mediaUtils";
+import { validateMobileNumber } from "../utils/validation";
 import BusinessProfileEditor from "../components/BusinessProfileEditor";
 import PageHeader from "../components/PageHeader";
 import { SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
 import { VILLAS_HELP_SECTIONS, VILLAS_ABOUT_CONFIG } from "../config/villasSettingsConfig";
+import { PACKAGES_HELP_SECTIONS, PACKAGES_ABOUT_CONFIG } from "../config/packagesSettingsConfig";
+import { ACTIVITIES_HELP_SECTIONS, ACTIVITIES_ABOUT_CONFIG } from "../config/activitiesSettingsConfig";
 import { villasApi, villaMoney, villaError, formatTime12h } from "../modules/villas/villasApi";
 import {
   BUTTON_VARIANTS,
@@ -231,11 +236,17 @@ export default function Settings() {
 
   const isSpaContext = user?.business_context === "SPA";
   const isVillaContext = user?.business_context === "VILLA";
+  const isPackageContext = user?.business_context === "PACKAGE";
+  const isActivityContext = user?.business_context === "ACTIVITY";
   const currentHelpSections = isSpaContext
     ? SPA_HELP_SECTIONS
     : isVillaContext
       ? VILLAS_HELP_SECTIONS
-      : HELP_SECTIONS;
+      : isPackageContext
+        ? PACKAGES_HELP_SECTIONS
+        : isActivityContext
+          ? ACTIVITIES_HELP_SECTIONS
+          : HELP_SECTIONS;
   const isManager = (user?.role || "").toLowerCase() === "manager" || (user?.role || "").toLowerCase() === "admin";
 
   const { themeMode, setThemeMode } = useTheme();
@@ -562,8 +573,13 @@ export default function Settings() {
     <div className="space-y-4">
       {/* STANDARDIZED PAGE HEADER WITH TAB CONTROLS */}
       <PageHeader
-        title={isSpaContext ? "Spa Facility Settings" : isVillaContext ? "Villas & Units Settings" : "System Settings"}
-        description={`Manage your account profile, theme appearance, operational help, and ${isSpaContext ? "spa facility" : isVillaContext ? "villas property" : "restaurant"} information.`}
+        title={
+          isSpaContext
+            ? "Spa Facility Settings"
+            : isVillaContext || isPackageContext || isActivityContext
+              ? "Settings"
+              : "System Settings"
+        }
         actions={
           <div className="flex flex-wrap sm:inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1 shadow-2xs gap-1 max-w-full">
             <button
@@ -690,7 +706,14 @@ export default function Settings() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg sm:text-xl font-bold text-stone-900 dark:text-stone-100 truncate">
-                      {user?.full_name || (isSpaContext ? "Spa Receptionist" : isVillaContext ? "Villas Manager" : "Receptionist User")}
+                      {user?.full_name ||
+                        (isSpaContext
+                          ? "Spa Receptionist"
+                          : isVillaContext
+                            ? "Villas Manager"
+                            : isPackageContext
+                              ? "Packages Manager"
+                              : "Receptionist User")}
                     </h2>
                   </div>
                   <p className="mt-0.5 text-xs sm:text-sm text-stone-500 dark:text-stone-400 truncate">
@@ -701,7 +724,13 @@ export default function Settings() {
                       {isSpaContext ? "Role: Spa Receptionist" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
                     </span>
                     <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
-                      {isSpaContext ? "Context: Spa & Wellness" : isVillaContext ? "Context: Villas & Units" : "Context: Restaurant"}
+                      {isSpaContext
+                        ? "Context: Spa & Wellness"
+                        : isVillaContext
+                          ? "Context: Villas & Units"
+                          : isPackageContext
+                            ? "Context: Packages"
+                            : "Context: Restaurant"}
                     </span>
                     {user?.phone ? (
                       <span className="inline-flex items-center gap-1 text-stone-500 dark:text-stone-400">
@@ -751,7 +780,7 @@ export default function Settings() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
+                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-4">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                     Full Name
                   </p>
@@ -765,7 +794,7 @@ export default function Settings() {
                   </p> */}
                 </div>
 
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-4">
+                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-4">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                     Email Address
                   </p>
@@ -778,17 +807,17 @@ export default function Settings() {
                   </p> */}
                 </div>
 
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3.5">
+                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                     Contact Number
                   </p>
                   <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     <Phone size={14} className="text-stone-400 shrink-0" />
-                    <span>{user?.phone || (isSpaContext || isVillaContext ? "Not configured" : "Not provided")}</span>
+                    <span>{user?.phone || (isSpaContext || isVillaContext || isPackageContext ? "Not configured" : "Not provided")}</span>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3.5">
+                <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3.5">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                     Operational Role
                   </p>
@@ -799,7 +828,9 @@ export default function Settings() {
                         ? "Spa Receptionist"
                         : isVillaContext
                           ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
-                          : (user?.role || "Receptionist")}
+                          : isPackageContext
+                            ? (user?.role ? `Packages ${user.role}` : "Packages Manager")
+                            : (user?.role || "Receptionist")}
                     </span>
                   </div>
                 </div>
@@ -910,10 +941,14 @@ export default function Settings() {
                           ? "Spa Receptionist"
                           : isVillaContext
                             ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
-                            : (user?.role || "Receptionist")
+                            : isPackageContext
+                              ? (user?.role ? `Packages ${user.role}` : "Packages Manager")
+                              : isActivityContext
+                                ? (user?.role ? `Activities ${user.role}` : "Activities Manager")
+                                : (user?.role || "Receptionist")
                       }
                       disabled
-                      className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-850 px-3 py-2 text-sm text-stone-500 dark:text-stone-400 cursor-not-allowed"
+                      className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-[#151D29] px-3 py-2 text-sm text-stone-500 dark:text-stone-400 cursor-not-allowed"
                     />
                     <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">
                       Role assignments are governed by system administrators.
@@ -959,7 +994,17 @@ export default function Settings() {
                 <div>
                   <h3 className="text-base font-bold text-stone-900 dark:text-stone-100 flex items-center gap-2">
                     <Building2 size={17} className="text-[#F59E0B]" />
-                    <span>{isSpaContext ? "Spa Facility Profile" : isVillaContext ? "Property & Resorts Profile" : "Establishment Profile"}</span>
+                    <span>
+                      {isSpaContext
+                        ? "Spa Facility Profile"
+                        : isVillaContext
+                          ? "Property & Resorts Profile"
+                          : isPackageContext
+                            ? "Packages Business Profile"
+                            : isActivityContext
+                              ? "Activities Business Profile"
+                              : "Establishment Profile"}
+                    </span>
                   </h3>
                   <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
                     Public property contact information used on guest folios and module settings.
@@ -984,7 +1029,7 @@ export default function Settings() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Property Name
                     </p>
@@ -992,7 +1037,7 @@ export default function Settings() {
                       {bizProfile?.business_name || "Not configured"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Official Email
                     </p>
@@ -1000,15 +1045,21 @@ export default function Settings() {
                       {bizProfile?.business_email || "Not configured"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Contact Phone
                     </p>
                     <p className="mt-1 text-sm font-semibold text-stone-900 dark:text-stone-100 truncate">
                       {bizProfile?.business_phone || "Not configured"}
                     </p>
+                    {bizProfile?.business_phone &&
+                      !validateMobileNumber(bizProfile.business_phone, { required: false }).valid && (
+                        <p className="mt-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                          Invalid format — update to a 10-digit mobile (starts with 6–9).
+                        </p>
+                      )}
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3 sm:col-span-2">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3 sm:col-span-2">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Address &amp; City
                     </p>
@@ -1016,7 +1067,7 @@ export default function Settings() {
                       {[bizProfile?.address_line, bizProfile?.city, bizProfile?.state].filter(Boolean).join(", ") || "Not configured"}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Property Photo / Lead Avatar
                     </p>
@@ -1189,7 +1240,7 @@ export default function Settings() {
                 </form>
               ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Default Check-in Time
                     </p>
@@ -1198,7 +1249,7 @@ export default function Settings() {
                         formatTime12h(villaPolicy?.default_check_in_time || "14:00")}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Default Check-out Time
                     </p>
@@ -1207,7 +1258,7 @@ export default function Settings() {
                         formatTime12h(villaPolicy?.default_check_out_time || "11:00")}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Late Checkout Grace Period
                     </p>
@@ -1215,7 +1266,7 @@ export default function Settings() {
                       {villaPolicy?.late_checkout_grace_minutes ?? 30} minutes
                     </p>
                   </div>
-                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-stone-850/60 p-3">
+                  <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/60 dark:bg-[#151D29]/80 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                       Default Late Checkout Fee
                     </p>
@@ -1248,7 +1299,7 @@ export default function Settings() {
               </p>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="mt-4 flex flex-wrap items-center gap-3">
               {/* Light Mode Card */}
               <button
                 type="button"
@@ -1256,34 +1307,25 @@ export default function Settings() {
                   setThemeMode("light", user?.id);
                   showSuccess("Appearance set to Light Mode");
                 }}
-                className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                className={`group flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 min-w-[165px] text-left transition-all cursor-pointer ${
                   themeMode === "light"
                     ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
                     : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700 border border-amber-200">
-                      <Sun size={20} />
-                    </div>
-                    {themeMode === "light" && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
-                        <Check size={14} className="stroke-[3]" />
-                      </span>
-                    )}
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 border border-amber-200">
+                    <Sun size={16} />
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-stone-900 dark:text-stone-100">
+                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap">
                     Light Theme
                   </h3>
-                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-                    Crisp, bright aesthetic designed for daytime reception counters and well-lit office terminals.
-                  </p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
-                  <span>Surface: Crisp White</span>
-                  <span className="font-semibold text-amber-600">Active Bright</span>
-                </div>
+                {themeMode === "light" && (
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
+                    <Check size={12} className="stroke-[3]" />
+                  </span>
+                )}
               </button>
 
               {/* Dark Mode Card */}
@@ -1293,34 +1335,25 @@ export default function Settings() {
                   setThemeMode("dark", user?.id);
                   showSuccess("Appearance set to Dark Mode");
                 }}
-                className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                className={`group flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 min-w-[165px] text-left transition-all cursor-pointer ${
                   themeMode === "dark"
                     ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
                     : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-stone-900 text-amber-400 border border-stone-800">
-                      <Moon size={20} />
-                    </div>
-                    {themeMode === "dark" && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
-                        <Check size={14} className="stroke-[3]" />
-                      </span>
-                    )}
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-900 text-amber-400 border border-stone-800">
+                    <Moon size={16} />
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-stone-900 dark:text-stone-100">
+                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap">
                     Dark Theme
                   </h3>
-                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-                    Rich charcoal and espresso palette designed to reduce screen glare during evening service and low-light counters.
-                  </p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
-                  <span>Surface: Deep Espresso</span>
-                  <span className="font-semibold text-amber-400">Low Glare</span>
-                </div>
+                {themeMode === "dark" && (
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
+                    <Check size={12} className="stroke-[3]" />
+                  </span>
+                )}
               </button>
 
               {/* System Sync Card */}
@@ -1330,34 +1363,25 @@ export default function Settings() {
                   setThemeMode("system", user?.id);
                   showSuccess("Appearance set to System Default");
                 }}
-                className={`group relative flex flex-col justify-between rounded-xl border p-5 text-left transition-all cursor-pointer ${
+                className={`group flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 min-w-[165px] text-left transition-all cursor-pointer ${
                   themeMode === "system"
                     ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
                     : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                      <Monitor size={20} />
-                    </div>
-                    {themeMode === "system" && (
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
-                        <Check size={14} className="stroke-[3]" />
-                      </span>
-                    )}
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    <Monitor size={16} />
                   </div>
-                  <h3 className="mt-4 text-base font-semibold text-stone-900 dark:text-stone-100">
+                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap">
                     System Sync
                   </h3>
-                  <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-                    Automatically switches between Light and Dark appearance according to your device's operating system preferences.
-                  </p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-xs text-stone-500">
-                  <span>Adaptive Dynamic</span>
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">OS Matched</span>
-                </div>
+                {themeMode === "system" && (
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
+                    <Check size={12} className="stroke-[3]" />
+                  </span>
+                )}
               </button>
             </div>
           </div>
@@ -1394,7 +1418,7 @@ export default function Settings() {
                       ? "Search topics, e.g. villa image, seasonal rate, check-in, housekeeping, refund..."
                       : "Search topics, e.g. table occupied, cancel stale order, GST invoice, dark mode..."
                 }
-                className="h-10 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-stone-850 pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F59E0B] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="h-10 w-full rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50/70 dark:bg-[#151D29] pl-10 pr-16 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none transition focus:border-[#F59E0B] focus:bg-white dark:focus:bg-stone-900 focus:ring-2 focus:ring-[#F59E0B]/30"
               />
               <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
               {helpSearch && (
@@ -1442,7 +1466,7 @@ export default function Settings() {
                     <button
                       type="button"
                       onClick={() => toggleSection(sec.id)}
-                      className="flex w-full items-center justify-between border-b border-stone-100 dark:border-stone-800/60 bg-stone-50/50 dark:bg-stone-850/50 px-5 py-4 text-left transition hover:bg-stone-100/50 dark:hover:bg-stone-800/40 cursor-pointer"
+                      className="flex w-full items-center justify-between border-b border-stone-100 dark:border-stone-800/60 bg-stone-50/50 dark:bg-[#151D29]/50 px-5 py-4 text-left transition hover:bg-stone-100/50 dark:hover:bg-stone-800/40 cursor-pointer"
                     >
                       <div>
                         <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm sm:text-base">
@@ -1531,7 +1555,15 @@ export default function Settings() {
               <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Active Context</p>
                 <p className="mt-0.5 font-semibold text-stone-900 dark:text-stone-100">
-                  {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : "Restaurant"}
+                  {isSpaContext
+                    ? "Spa & Wellness"
+                    : isVillaContext
+                      ? "Villas & Units"
+                      : isPackageContext
+                        ? "Packages"
+                        : isActivityContext
+                          ? "Activities Management"
+                          : "Restaurant"}
                 </p>
               </div>
               <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
@@ -1580,7 +1612,7 @@ export default function Settings() {
                   Complete Your Business Profile
                 </h3>
                 <p className="mt-1.5 text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
-                  Some business information still needs to be added before your {isSpaContext ? "spa facility" : isVillaContext ? "villas property" : "restaurant"} profile is fully configured.
+                  Some business information still needs to be added before your {isSpaContext ? "spa facility" : isVillaContext ? "villas property" : isPackageContext ? "packages" : isActivityContext ? "activities" : "restaurant"} profile is fully configured.
                 </p>
               </div>
 
@@ -1631,7 +1663,7 @@ export default function Settings() {
                   <div className="flex flex-wrap items-center gap-2">
                     {bizProfile.business_type && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF7E8] dark:bg-[#30251C] border border-[#FFEDD5] dark:border-[#9A3412]/40 px-3 py-0.5 text-xs font-semibold text-[#9A3412] dark:text-[#FFB02E]">
-                        {isSpaContext ? <Sparkles size={13} /> : isVillaContext ? <Building2 size={13} /> : <Utensils size={13} />}
+                        {isSpaContext ? <Sparkles size={13} /> : isVillaContext ? <Building2 size={13} /> : isPackageContext ? <Package size={13} /> : isActivityContext ? <Compass size={13} /> : <Utensils size={13} />}
                         {bizProfile.business_type}
                       </span>
                     )}
@@ -1682,10 +1714,10 @@ export default function Settings() {
 
                   <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#101722] p-5 text-center w-48 shadow-2xs">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
-                      {isSpaContext ? <Sparkles size={24} /> : isVillaContext ? <Building2 size={24} /> : <ChefHat size={24} />}
+                      {isSpaContext ? <Sparkles size={24} /> : isVillaContext ? <Building2 size={24} /> : isPackageContext ? <Package size={24} /> : isActivityContext ? <Compass size={24} /> : <ChefHat size={24} />}
                     </div>
                     <h4 className="mt-2.5 text-xs font-bold text-stone-900 dark:text-stone-100">
-                      {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : "Restaurant & Dining"}
+                      {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : isPackageContext ? PACKAGES_ABOUT_CONFIG.applicationName : isActivityContext ? ACTIVITIES_ABOUT_CONFIG.applicationName : "Restaurant & Dining"}
                     </h4>
                     <p className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400 leading-tight">
                       Verified Business Identity

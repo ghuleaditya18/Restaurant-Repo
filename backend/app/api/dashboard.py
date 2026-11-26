@@ -99,7 +99,7 @@ def get_dashboard_summary(
     )
 
     # Date-filtered invoice and payment statistics
-    invoice_q = db.query(Invoice)
+    invoice_q = db.query(Invoice).filter(Invoice.source_module == "RESTAURANT")
     if start_dt is not None and end_dt is not None:
         invoice_q = invoice_q.filter(
             Invoice.created_at >= start_dt,
@@ -112,7 +112,10 @@ def get_dashboard_summary(
         or 0
     )
 
-    payment_q = db.query(Payment).filter(Payment.status == PaymentStatus.PAID)
+    payment_q = db.query(Payment).filter(
+        Payment.source_module == "RESTAURANT",
+        Payment.status == PaymentStatus.PAID,
+    )
     if start_dt is not None and end_dt is not None:
         payment_q = payment_q.filter(
             Payment.created_at >= start_dt,

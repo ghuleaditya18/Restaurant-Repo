@@ -1575,7 +1575,7 @@ export default function Orders() {
                       className={`transition ${
                         isSelected
                           ? "bg-amber-50/60 dark:bg-amber-950/20"
-                          : "hover:bg-stone-50/70 dark:hover:bg-stone-850/60"
+                          : "hover:bg-stone-50/70 dark:hover:bg-[#151D29]/80"
                       }`}
                     >
                       {/* Checkbox */}

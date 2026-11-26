@@ -3,6 +3,8 @@
   "modules": {
     "RESTAURANT": "Restaurant Management",
     "SPA": "Spa & Wellness",
-    "VILLA": "Villas & Units"
+    "VILLA": "Villas & Units",
+    "PACKAGE": "Packages",
+    "ACTIVITY": "Activities Management"
   }
 }

@@ -21,6 +21,8 @@ from app.api.inventory import router as inventory_router
 from app.api.search import router as search_router
 from app.api.business_profile import router as business_profile_router
 from app.api.villas import router as villas_router
+from app.api.packages import router as packages_router
+from app.api.activities import router as activities_router
 
 from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import engine, get_db
@@ -89,6 +91,10 @@ app.include_router(search_router)
 app.include_router(business_profile_router, prefix="/api/business-profile", tags=["Business Profile"])
 
 app.include_router(villas_router, prefix="/api/villas", tags=["Villas & Units"])
+
+app.include_router(packages_router, prefix="/api/packages", tags=["Packages"])
+
+app.include_router(activities_router, prefix="/api/activities", tags=["Activities"])
 
 # Serves uploaded menu photos and supplier bills
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")

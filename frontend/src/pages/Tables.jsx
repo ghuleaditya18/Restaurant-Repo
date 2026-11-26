@@ -349,8 +349,9 @@ export default function Tables() {
       />
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
         <StatCard
+          compact
           title="Total Tables"
           value={tables.length}
           icon={<Armchair size={19} />}
@@ -362,10 +363,11 @@ export default function Tables() {
         />
 
         <StatCard
+          compact
           title="Available"
           value={availableCount}
           icon={<CheckCircle2 size={19} />}
-          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+          color="emerald"
           active={statusFilter === "AVAILABLE"}
           onClick={() => {
             setStatusFilter("AVAILABLE");
@@ -374,10 +376,11 @@ export default function Tables() {
         />
 
         <StatCard
+          compact
           title="Occupied"
           value={occupiedCount}
           icon={<Clock size={19} />}
-          badgeColor="bg-amber-50 text-amber-800 border-amber-200"
+          color="amber"
           active={statusFilter === "OCCUPIED"}
           onClick={() => {
             setStatusFilter("OCCUPIED");
@@ -386,10 +389,11 @@ export default function Tables() {
         />
 
         <StatCard
+          compact
           title="Inactive"
           value={inactiveCount}
           icon={<Ban size={19} />}
-          badgeColor="bg-stone-100 text-stone-600 border-stone-200"
+          color="stone"
           active={statusFilter === "INACTIVE"}
           onClick={() => {
             setStatusFilter("INACTIVE");
@@ -400,12 +404,12 @@ export default function Tables() {
 
       {/* TABLE LIST CONTAINER */}
       <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelected} onClear={clear} />
-      <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-xs">
+      <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND FILTER */}
-        <div className="flex flex-col gap-4 border-b border-stone-200/80 p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="font-bold text-stone-900 dark:text-stone-100">Restaurant Tables</h2>
-            <p className="mt-0.5 text-xs text-stone-500">
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredTables.length} {filteredTables.length === 1 ? "table" : "tables"} found
             </p>
           </div>
@@ -414,7 +418,7 @@ export default function Tables() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
               <input
                 type="text"
@@ -424,7 +428,7 @@ export default function Tables() {
                   setSearch(event.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full rounded-lg border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
+                className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-[#8A9AB2] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
               />
             </div>
 
@@ -434,7 +438,7 @@ export default function Tables() {
                 setStatusFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-800 dark:text-stone-100 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Tables</option>
               <option value="AVAILABLE">Available</option>
@@ -447,7 +451,7 @@ export default function Tables() {
               onClick={loadTables}
               disabled={loading}
               title="Refresh tables"
-              className="flex items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-stone-600 hover:bg-stone-50 transition cursor-pointer"
+              className="flex items-center justify-center rounded-lg border border-stone-200 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-stone-600 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#1E293B] transition cursor-pointer"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -457,7 +461,7 @@ export default function Tables() {
         {/* TABLE RECORDS */}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[700px] text-left">
-            <thead className="bg-stone-50/80 text-xs font-semibold uppercase tracking-wider text-stone-500">
+            <thead className="bg-stone-50/80 dark:bg-[#151D29] text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
               <tr>
                 <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all tables on this page" checked={paginatedTables.length > 0 && paginatedTables.every((table) => selectedIds.has(table.id))} onChange={() => toggleMany(paginatedTables.map((table) => table.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3">Table Number</th>
@@ -468,12 +472,12 @@ export default function Tables() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-stone-100 text-sm">
+            <tbody className="divide-y divide-stone-100 dark:divide-[#1E293B] text-sm">
               {loading ? (
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-[#8A9AB2]"
                   >
                     Loading restaurant tables...
                   </td>
@@ -482,7 +486,7 @@ export default function Tables() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500"
+                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-[#8A9AB2]"
                   >
                     No restaurant tables found.
                   </td>
@@ -491,32 +495,32 @@ export default function Tables() {
                 paginatedTables.map((table) => {
                   const isOccupied = table.status?.toLowerCase() === "occupied";
                   return (
-                    <tr key={table.id} className="transition hover:bg-stone-50/70">
+                    <tr key={table.id} className="transition hover:bg-stone-50/70 dark:hover:bg-[#151D29]/60">
                       <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select table ${table.table_number}`} checked={selectedIds.has(table.id)} onChange={() => toggle(table.id)} className="h-4 w-4 accent-amber-500" /></td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className={`flex h-9 w-9 items-center justify-center rounded-lg border ${
                             isOccupied
-                              ? "bg-amber-50 text-amber-800 border-amber-200"
+                              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
                               : "bg-[#FFF7E8] text-[#9A3412] border-[#FFEDD5] dark:bg-[#30251C] dark:text-[#FFB02E] dark:border-[#9A3412]/40"
                           }`}>
                             <Armchair size={18} />
                           </div>
 
                           <div>
-                            <p className="font-semibold text-stone-900">
+                            <p className="font-semibold text-stone-900 dark:text-stone-100">
                               Table {table.table_number}
                             </p>
-                            <p className="text-xs text-stone-400">
+                            <p className="text-xs text-stone-400 dark:text-[#8A9AB2]">
                               ID: {table.id}
                             </p>
                           </div>
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-sm text-stone-600">
+                      <td className="px-4 py-3 text-sm text-stone-600 dark:text-stone-300">
                         <span className="inline-flex items-center gap-1.5 font-medium">
-                          <Users size={15} className="text-stone-400" />
+                          <Users size={15} className="text-stone-400 dark:text-[#8A9AB2]" />
                           {table.capacity} seats
                         </span>
                       </td>
@@ -525,8 +529,8 @@ export default function Tables() {
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             isOccupied
-                              ? "bg-amber-50 text-amber-800 border border-amber-200"
-                              : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+                              : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60"
                           }`}
                         >
                           <span className={`h-1.5 w-1.5 rounded-full ${isOccupied ? "bg-amber-500" : "bg-emerald-500"}`} />
@@ -538,8 +542,8 @@ export default function Tables() {
                         <span
                           className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             table.is_active
-                              ? "bg-stone-100 text-stone-800 border border-stone-200"
-                              : "bg-stone-100 text-stone-400 border border-stone-200"
+                              ? "bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700"
+                              : "bg-stone-100 dark:bg-stone-800/60 text-stone-400 dark:text-stone-500 border border-stone-200 dark:border-stone-700"
                           }`}
                         >
                           {table.is_active ? "Active" : "Inactive"}
@@ -552,7 +556,7 @@ export default function Tables() {
                             type="button"
                             onClick={() => openViewModal(table)}
                             title="View table details"
-                            className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                            className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1E293B] hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                           >
                             <Eye size={16} />
                           </button>
@@ -561,7 +565,7 @@ export default function Tables() {
                             type="button"
                             onClick={() => openEditModal(table)}
                             title="Edit table"
-                            className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition cursor-pointer"
+                            className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1E293B] hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                           >
                             <Pencil size={16} />
                           </button>
@@ -576,8 +580,8 @@ export default function Tables() {
                             }
                             className={`rounded-lg p-2 transition cursor-pointer ${
                               table.is_active
-                                ? "text-amber-700 hover:bg-amber-50"
-                                : "text-emerald-700 hover:bg-emerald-50"
+                                ? "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                                : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                             }`}
                           >
                             <Power size={16} />
@@ -587,7 +591,7 @@ export default function Tables() {
                             type="button"
                             onClick={() => handleDelete(table)}
                             title="Delete table"
-                            className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
+                            className="rounded-lg p-2 text-stone-400 dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 hover:text-red-700 transition cursor-pointer"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -653,22 +657,22 @@ export default function Tables() {
                   name="status"
                   value={form.status || "Available"}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B]"
+                  className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none transition focus:border-[#F59E0B]"
                 >
                   <option value="Available">Available</option>
                   <option value="Occupied">Occupied</option>
                 </select>
-                <p className="mt-1 text-xs text-stone-500">
+                <p className="mt-1 text-xs text-stone-500 dark:text-[#8A9AB2]">
                   Tables with active dining orders cannot be manually marked Available.
                 </p>
               </div>
             )}
 
-            <div className="flex justify-end gap-3 border-t border-stone-100 pt-4">
+            <div className="flex justify-end gap-3 border-t border-stone-100 dark:border-[#1E293B] pt-4">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
+                className="rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#1E293B] transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -774,7 +778,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
 
@@ -788,7 +792,7 @@ function FormField({
         maxLength={maxLength}
         min={min}
         step={type === "number" ? "1" : undefined}
-        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+        className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
       />
     </div>
   );
@@ -796,8 +800,8 @@ function FormField({
 
 function DetailItem({ label, value }) {
   return (
-    <div className="rounded-lg border border-stone-100 bg-stone-50/70 p-3">
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-stone-500">
+    <div className="rounded-lg border border-stone-100 dark:border-[#1E293B] bg-stone-50/70 dark:bg-[#151D29] p-3">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
         {label}
       </p>
 

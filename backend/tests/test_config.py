@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 # Operational database names that tests are strictly forbidden to access
-OPERATIONAL_DB_NAMES = {"restaurant_db", "dineflow_db"}
+OPERATIONAL_DB_NAMES = {"resort_db", "restaurant_db", "dineflow_db"}
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 if not TEST_DATABASE_URL:

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   clearPaymentForm,
+  computeInstallmentPlan,
   DEFAULT_PAYMENT_FORM,
   getPaymentForm,
   setPaymentFormError,
@@ -57,4 +58,28 @@ test("validateInvoicePayment checks positive numeric bounds and payment methods"
   assert.match(validateInvoicePayment({ amount: "1000.01", method: "UPI" }, 1000), /exceed remaining balance/);
   assert.match(validateInvoicePayment({ amount: "500", method: "Crypto" }, 1000), /valid payment method/);
   assert.equal(validateInvoicePayment({ amount: "1000", method: "UPI" }, 1000), "");
+});
+
+test("2-installment partial payment rules enforce 50% first installment and final 2nd installment", () => {
+  const unpaid = { total_amount: 19824, paid_amount: 0, balance_due: 19824 };
+  const plan = computeInstallmentPlan(unpaid);
+  assert.equal(plan.firstInstallmentAmount, 9912);
+  assert.equal(plan.hasPriorPayment, false);
+
+  // Less than 50% rejected
+  assert.match(
+    validateInvoicePayment({ amount: "5000", method: "UPI" }, 19824, unpaid),
+    /at least 50%/
+  );
+  // Exact 50% accepted as 1st installment, Full balance accepted
+  assert.equal(validateInvoicePayment({ amount: "9912", method: "UPI" }, 19824, unpaid), "");
+  assert.equal(validateInvoicePayment({ amount: "19824", method: "UPI" }, 19824, unpaid), "");
+
+  // Second installment must clear remaining balance
+  const second = { total_amount: 19824, paid_amount: 9912, balance_due: 9912 };
+  assert.match(
+    validateInvoicePayment({ amount: "5000", method: "UPI" }, 9912, second),
+    /limited to 2 installments/
+  );
+  assert.equal(validateInvoicePayment({ amount: "9912", method: "UPI" }, 9912, second), "");
 });

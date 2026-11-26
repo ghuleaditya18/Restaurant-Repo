@@ -82,6 +82,11 @@ function paginateList(list, page) {
   };
 }
 
+const isUnitAvailable = (unit) =>
+  Boolean(unit?.is_active) &&
+  Boolean(unit?.availability) &&
+  ["Ready", "Inspected"].includes(unit?.housekeeping_status);
+
 export default function VillasInventory() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -104,7 +109,7 @@ export default function VillasInventory() {
   const [hkFilter, setHkFilter] = useState("");
   const [blockTypeFilter, setBlockTypeFilter] = useState("");
   const [page, setPage] = useState(1);
-  const [viewMode, setViewMode] = useState("cards");
+  const [viewMode, setViewMode] = useState("table");
 
   const [modalState, setModalState] = useState(null);
   const [form, setForm] = useState({});
@@ -500,7 +505,7 @@ export default function VillasInventory() {
             : null,
         is_active: !unit.is_active,
       });
-      showSuccess(`${unit.name} is now ${!unit.is_active ? "Active" : "Inactive"}.`);
+      showSuccess(`${unit.name} is now ${!unit.is_active ? "Available" : "Unavailable"}.`);
       await loadAll();
     } catch (err) {
       showError(villaError(err));
@@ -923,7 +928,6 @@ export default function VillasInventory() {
     {
       key: "name",
       label: "Unit & Villa",
-      width: "min-w-[210px]",
       render: (u) => (
         <div>
           <div className="font-semibold text-[#172033] dark:text-[#F8FAFC] whitespace-nowrap">
@@ -975,18 +979,16 @@ export default function VillasInventory() {
       label: "Status",
       align: "center",
       cellClassName: "whitespace-nowrap",
-      render: (u) => (
-        <div className="inline-flex flex-col items-center gap-0.5">
+      render: (u) => {
+        const available = isUnitAvailable(u);
+        return (
           <StatusBadge
-            status={u.is_active ? "ACTIVE" : "INACTIVE"}
-            label={u.is_active ? "Active" : "Inactive"}
+            status={available ? "ACTIVE" : "INACTIVE"}
+            label={available ? "Available" : "Unavailable"}
             size="sm"
           />
-          <span className="text-[11px] text-[#64748B] dark:text-[#8A9AB2]">
-            {u.availability ? "Available today" : "Unavailable today"}
-          </span>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "actions",
@@ -1027,7 +1029,7 @@ export default function VillasInventory() {
           <button
             type="button"
             onClick={() => handleToggleUnit(u)}
-            title={u.is_active ? "Deactivate Unit" : "Activate Unit"}
+            title={u.is_active ? "Mark Unavailable" : "Mark Available"}
             className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
           >
             <Power size={15} />
@@ -1346,7 +1348,7 @@ export default function VillasInventory() {
     },
     units: {
       columns: unitColumns,
-      minWidth: "min-w-[1040px]",
+      minWidth: "min-w-full",
       emptyTitle: "No accommodation units found",
       emptyDescription: "Add a unit or clear active filters.",
     },
@@ -1455,7 +1457,7 @@ export default function VillasInventory() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Villas & Units Management"
+        title="Villas & Units"
         description="Manage resort properties, guest accommodation units, categories, seasonal pricing, availability holds, and housekeeping readiness."
         actions={
           primaryActionLabel && (
@@ -1533,8 +1535,9 @@ export default function VillasInventory() {
 
       {/* HOUSEKEEPING KPI SUMMARY ON HOUSEKEEPING TAB */}
       {activeTab === "housekeeping" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
           <StatCard
+            compact
             title="Ready / Inspected"
             value={hkStats.ready}
             description="Cleared for guest check-in"
@@ -1544,6 +1547,7 @@ export default function VillasInventory() {
             onClick={() => setHkFilter((prev) => (prev === "Ready" ? "" : "Ready"))}
           />
           <StatCard
+            compact
             title="Needs Cleaning"
             value={hkStats.needsCleaning}
             description="Awaiting housekeeping turnover"
@@ -1553,6 +1557,7 @@ export default function VillasInventory() {
             onClick={() => setHkFilter((prev) => (prev === "Needs Cleaning" ? "" : "Needs Cleaning"))}
           />
           <StatCard
+            compact
             title="Cleaning In Progress"
             value={hkStats.cleaning}
             description="Currently being serviced"
@@ -1562,6 +1567,7 @@ export default function VillasInventory() {
             onClick={() => setHkFilter((prev) => (prev === "Cleaning" ? "" : "Cleaning"))}
           />
           <StatCard
+            compact
             title="Out of Order"
             value={hkStats.outOfOrder}
             description="Blocked from reservations"
@@ -1574,30 +1580,30 @@ export default function VillasInventory() {
       )}
 
       {/* RESPONSIVE SEARCH & FILTER BAR */}
-      <div className={CARD_STYLES.base}>
+      <div className={`${CARD_STYLES.base} !p-2.5 w-fit max-w-full`}>
         <div
           className={
             activeTab === "units"
-              ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1.1fr)_minmax(130px,0.9fr)_minmax(130px,0.9fr)_minmax(150px,1fr)_auto]"
+              ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[220px_140px_155px_170px_auto]"
               : activeTab === "villas"
-                ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(220px,1fr)_auto]"
-                : "flex flex-wrap items-center gap-3"
+                ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-[260px_auto]"
+                : "flex flex-wrap items-center gap-2"
           }
         >
           {/* Search field */}
           <div className={`flex min-w-0 items-center gap-2 ${activeTab === "units" ? "w-full" : ""}`}>
-            <div className={`relative min-w-0 ${activeTab === "units" ? "w-full" : activeTab === "villas" ? "w-full max-w-[420px]" : "w-64 max-w-full"}`}>
-            <Search
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`Search ${activeTab}...`}
-              className={`${INPUT_STYLES.base} w-full pl-9`}
-            />
+            <div className={`relative min-w-0 ${activeTab === "units" ? "w-full" : activeTab === "villas" ? "w-full max-w-[260px]" : "w-56 max-w-full"}`}>
+              <Search
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={`Search ${activeTab}...`}
+                className={`${INPUT_STYLES.base} w-full pl-9`}
+              />
             </div>
             {(searchQuery || villaFilter || categoryFilter || hkFilter || blockTypeFilter) && (
               <button
@@ -1622,7 +1628,7 @@ export default function VillasInventory() {
               <select
                 value={villaFilter}
                 onChange={(e) => setVillaFilter(e.target.value)}
-                className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "min-w-[130px] flex-1"}`}
+                className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "!w-auto min-w-[130px]"}`}
               >
                 <option value="">All Villas</option>
                 {villas.map((v) => (
@@ -1650,7 +1656,7 @@ export default function VillasInventory() {
               <select
                 value={hkFilter}
                 onChange={(e) => setHkFilter(e.target.value)}
-                className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "min-w-[150px] flex-1"}`}
+                className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "!w-auto min-w-[150px]"}`}
               >
                 <option value="">All Housekeeping</option>
                 {HOUSEKEEPING_STATUSES.map((s) => (
@@ -1667,7 +1673,7 @@ export default function VillasInventory() {
             <select
               value={blockTypeFilter}
               onChange={(e) => setBlockTypeFilter(e.target.value)}
-              className={`${INPUT_STYLES.select} min-w-0 w-full`}
+              className={`${INPUT_STYLES.select} !w-auto min-w-[140px]`}
             >
               <option value="">All Block Types</option>
               {BLOCK_TYPES.map((t) => (
@@ -1678,26 +1684,10 @@ export default function VillasInventory() {
             </select>
           )}
 
-          {/* Spacer pushes Cards/Table toggle to the far right */}
+          {/* Spacer pushes Table/Cards toggle to the far right */}
           {(activeTab === "villas" || activeTab === "units") && (
             <div className="justify-self-end shrink-0">
               <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50 dark:bg-[#0D1420] p-1 gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedIds(new Set());
-                    setBulkFailures([]);
-                    setViewMode("cards");
-                  }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                    viewMode === "cards"
-                      ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
-                      : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
-                  }`}
-                >
-                  <LayoutGrid size={13} />
-                  <span>Cards</span>
-                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1713,6 +1703,22 @@ export default function VillasInventory() {
                 >
                   <List size={13} />
                   <span>Table</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIds(new Set());
+                    setBulkFailures([]);
+                    setViewMode("cards");
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                    viewMode === "cards"
+                      ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                      : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+                  }`}
+                >
+                  <LayoutGrid size={13} />
+                  <span>Cards</span>
                 </button>
               </div>
             </div>
@@ -1882,8 +1888,8 @@ export default function VillasInventory() {
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                     <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
                       <StatusBadge
-                        status={u.is_active ? "ACTIVE" : "INACTIVE"}
-                        label={u.is_active ? "Active" : "Inactive"}
+                        status={isUnitAvailable(u) ? "ACTIVE" : "INACTIVE"}
+                        label={isUnitAvailable(u) ? "Available" : "Unavailable"}
                         size="sm"
                       />
                     </div>
@@ -1989,7 +1995,7 @@ export default function VillasInventory() {
                         <button
                           type="button"
                           onClick={() => handleToggleUnit(u)}
-                          title={u.is_active ? "Deactivate Unit" : "Activate Unit"}
+                          title={u.is_active ? "Mark Unavailable" : "Mark Available"}
                           className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
                         >
                           <Power size={14} />

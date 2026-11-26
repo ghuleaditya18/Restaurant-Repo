@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
 
-OPERATIONAL_DB_NAMES = {"restaurant_db", "dineflow_db"}
+OPERATIONAL_DB_NAMES = {"resort_db", "restaurant_db", "dineflow_db"}
 
 
 def _is_test_environment() -> bool:

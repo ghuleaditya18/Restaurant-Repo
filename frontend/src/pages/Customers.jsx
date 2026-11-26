@@ -327,25 +327,28 @@ export default function Customers() {
       />
 
       {/* METRIC OVERVIEW */}
-      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-3.5">
+      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 w-full">
         <StatCard
+          compact
           title="Registered Guests"
           value={customers.length}
           icon={<Users size={18} />}
         />
 
         <StatCard
+          compact
           title="With Email"
           value={customers.filter((c) => Boolean(c.email)).length}
           icon={<Mail size={18} />}
-          badgeColor="bg-blue-50 text-blue-700 border-blue-200"
+          color="sky"
         />
 
         <StatCard
+          compact
           title="With Address"
           value={customers.filter((c) => Boolean(c.address)).length}
           icon={<MapPin size={18} />}
-          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+          color="emerald"
         />
       </div>
 
@@ -590,15 +593,15 @@ export default function Customers() {
                 onChange={handleChange}
                 rows={3}
                 placeholder="Enter postal address or landmark..."
-                className="w-full resize-none rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="w-full resize-none rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-[#F8FAFC] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               />
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-stone-100 pt-4">
+            <div className="flex justify-end gap-3 border-t border-stone-100 dark:border-[#1E293B] pt-4">
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
+                className="rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-4 py-2 text-sm font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#1E293B] transition cursor-pointer"
               >
                 Cancel
               </button>
@@ -723,7 +726,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700">
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
         {label} {required && <span className="text-red-500">*</span>}
       </label>
 
@@ -736,7 +739,7 @@ function FormField({
         required={required}
         minLength={minLength}
         maxLength={maxLength}
-        className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+        className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-[#F8FAFC] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
       />
     </div>
   );
@@ -744,13 +747,13 @@ function FormField({
 
 function DetailItem({ label, value, icon }) {
   return (
-    <div className="rounded-lg border border-stone-100 bg-stone-50/70 p-3">
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500">
+    <div className="rounded-lg border border-stone-100 dark:border-[#1E293B] bg-stone-50/70 dark:bg-[#151D29] p-3">
+      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
         {icon}
         <span>{label}</span>
       </div>
 
-      <p className="break-words text-sm font-semibold text-stone-900">
+      <p className="break-words text-sm font-semibold text-stone-900 dark:text-[#F8FAFC]">
         {value || "—"}
       </p>
     </div>

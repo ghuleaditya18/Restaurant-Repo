@@ -28,6 +28,20 @@ import VillasInventory from "./modules/villas/VillasInventory";
 import VillaBookings from "./modules/villas/VillaBookings";
 import VillaGuests from "./modules/villas/VillaGuests";
 import VillaOperations from "./modules/villas/VillaOperations";
+import PackagesDashboard from "./modules/packages/PackagesDashboard";
+import PackagesCatalog from "./modules/packages/PackagesCatalog";
+import PackageBookings from "./modules/packages/PackageBookings";
+import PackageCustomers from "./modules/packages/PackageCustomers";
+import PackageInvoices from "./modules/packages/PackageInvoices";
+import PackageReports from "./modules/packages/PackageReports";
+import ActivitiesDashboard from "./modules/activities/ActivitiesDashboard";
+import ActivitiesCatalog from "./modules/activities/ActivitiesCatalog";
+import ActivitiesSchedule from "./modules/activities/ActivitiesSchedule";
+import ActivityBookings from "./modules/activities/ActivityBookings";
+import ActivityRoster from "./modules/activities/ActivityRoster";
+import ActivityCustomers from "./modules/activities/ActivityCustomers";
+import ActivityInvoices from "./modules/activities/ActivityInvoices";
+import ActivityReports from "./modules/activities/ActivityReports";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getModuleHomeRoute } from "./config/moduleRouting";
@@ -55,6 +69,8 @@ function AppRoutes() {
         ["restaurant", "RESTAURANT"],
         ["spa", "SPA"],
         ["villas", "VILLA"],
+        ["packages", "PACKAGE"],
+        ["activities", "ACTIVITY"],
       ].map(([path, context]) => (
         <Route
           key={path}
@@ -112,6 +128,45 @@ function AppRoutes() {
         <Route path="services" element={<VillaOperations />} />
         <Route path="invoices" element={<VillaOperations view="invoices" />} />
         <Route path="reports" element={<VillaOperations view="reports" />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+
+      {/* Packages Protected Routes */}
+      <Route
+        path="/packages"
+        element={
+          <ProtectedRoute allowedRoles={["MANAGER", "RECEPTIONIST"]} allowedContext="PACKAGE">
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="dashboard" element={<PackagesDashboard />} />
+        <Route path="catalog" element={<PackagesCatalog />} />
+        <Route path="bookings" element={<PackageBookings />} />
+        <Route path="offers" element={<PackagesCatalog seasonalOnly={true} />} />
+        <Route path="customers" element={<PackageCustomers />} />
+        <Route path="invoices" element={<PackageInvoices />} />
+        <Route path="reports" element={<PackageReports />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+
+      {/* Activities Protected Routes */}
+      <Route
+        path="/activities"
+        element={
+          <ProtectedRoute allowedRoles={["MANAGER", "RECEPTIONIST"]} allowedContext="ACTIVITY">
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="dashboard" element={<ActivitiesDashboard />} />
+        <Route path="catalog" element={<ActivitiesCatalog />} />
+        <Route path="schedule" element={<ActivitiesSchedule />} />
+        <Route path="bookings" element={<ActivityBookings />} />
+        <Route path="roster" element={<ActivityRoster />} />
+        <Route path="customers" element={<ActivityCustomers />} />
+        <Route path="invoices" element={<ActivityInvoices />} />
+        <Route path="reports" element={<ActivityReports />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 

@@ -155,6 +155,21 @@ class ProfileAndAboutTestCase(IsolatedTestCase):
         self.assertEqual(data2["business_name"], "Saffron Table Dining")
         self.assertEqual(data2["city"], "Pune")
 
+        # Reject invalid random-digit phone & malformed email
+        bad_phone = self.client.put(
+            "/api/business-profile",
+            headers=headers,
+            json={**complete_payload, "business_phone": "789955441265125"},
+        )
+        self.assertEqual(bad_phone.status_code, 422)
+
+        bad_email = self.client.put(
+            "/api/business-profile",
+            headers=headers,
+            json={**complete_payload, "business_email": "invalid..mail@villa.c"},
+        )
+        self.assertEqual(bad_email.status_code, 422)
+
     # 6. FOUNDER IMAGE UPLOAD & REMOVE
     def test_upload_and_delete_founder_image(self):
         headers = {"Authorization": f"Bearer {self.rest_token}"}

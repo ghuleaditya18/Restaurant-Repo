@@ -136,6 +136,30 @@ def require_villa_context(
     return current_user
 
 
+def require_package_context(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if str(biz_context).upper() not in {"PACKAGE", "PACKAGES"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Packages account required"
+        )
+    return current_user
+
+
+def require_activity_context(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if str(biz_context).upper() not in {"ACTIVITY", "ACTIVITIES"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Activities account required"
+        )
+    return current_user
+
+
 def require_restaurant_context_image(
     current_user: User = Depends(require_restaurant_context)
 ) -> User:

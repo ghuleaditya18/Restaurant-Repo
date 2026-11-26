@@ -15,6 +15,7 @@ import {
 import { resolveImageUrl } from "../utils/mediaUtils";
 import { uploadFounderImage, deleteFounderImage } from "../services/businessProfileService";
 import { BUTTON_VARIANTS, INPUT_STYLES, CARD_STYLES } from "../utils/themeTokens";
+import { validateEmailAddress, validateMobileNumber } from "../utils/validation";
 
 export default function BusinessProfileEditor({
   profile,
@@ -60,6 +61,7 @@ export default function BusinessProfileEditor({
   const fileInputRef = useRef(null);
 
   const isSpa = profile?.business_context === "SPA";
+  const isVilla = profile?.business_context === "VILLA";
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -123,17 +125,43 @@ export default function BusinessProfileEditor({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.business_name.trim()) {
-      setError("Business Name is required.");
+    if (!formData.business_name.trim() || formData.business_name.trim().length < 2) {
+      setError("Business Name must contain at least 2 characters.");
+      return;
+    }
+
+    const emailCheck = validateEmailAddress(formData.business_email, {
+      required: true,
+      label: "Official Business Email",
+    });
+    if (!emailCheck.valid) {
+      setError(emailCheck.error);
+      return;
+    }
+
+    const phoneCheck = validateMobileNumber(formData.business_phone, {
+      required: true,
+      label: "Business Contact Phone",
+    });
+    if (!phoneCheck.valid) {
+      setError(phoneCheck.error);
       return;
     }
 
     try {
       setSaving(true);
       setError("");
-      await onSave(formData);
+      await onSave({
+        ...formData,
+        business_name: formData.business_name.trim(),
+        business_email: emailCheck.normalized,
+        business_phone: phoneCheck.normalized,
+      });
     } catch (err) {
-      const msg = err.response?.data?.detail || "Failed to save business profile.";
+      const detail = err.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map((d) => d.msg).join(", ")
+        : detail || "Failed to save business profile.";
       setError(msg);
     } finally {
       setSaving(false);
@@ -152,7 +180,7 @@ export default function BusinessProfileEditor({
               <Building2 size={16} />
             </span>
             <h3 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-              Edit {isSpa ? "Spa & Wellness" : "Restaurant"} Business Profile
+              Edit {isVilla ? "Villas & Units Property" : isSpa ? "Spa & Wellness" : "Restaurant"} Profile
             </h3>
           </div>
           <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
@@ -191,7 +219,7 @@ export default function BusinessProfileEditor({
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* Section A: Basic Business Information */}
-        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-stone-850/50 p-4 sm:p-5 space-y-4">
+        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-[#151D29]/70 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-stone-200/60 dark:border-stone-800 pb-2">
             <Building2 size={16} className="text-[#F59E0B]" />
             <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">
@@ -233,7 +261,7 @@ export default function BusinessProfileEditor({
 
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-                Category / Cuisine
+                Category
               </label>
               <input
                 type="text"
@@ -293,7 +321,7 @@ export default function BusinessProfileEditor({
         </div>
 
         {/* Section B: Our Story */}
-        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-stone-850/50 p-4 sm:p-5 space-y-4">
+        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-[#151D29]/70 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-stone-200/60 dark:border-stone-800 pb-2">
             <BookOpen size={16} className="text-[#F59E0B]" />
             <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">
@@ -304,7 +332,7 @@ export default function BusinessProfileEditor({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-                Story Title / Heading
+                Story Title
               </label>
               <input
                 type="text"
@@ -349,7 +377,7 @@ export default function BusinessProfileEditor({
         </div>
 
         {/* Section C: Founder / Owner Information */}
-        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-stone-850/50 p-4 sm:p-5 space-y-4">
+        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-[#151D29]/70 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-stone-200/60 dark:border-stone-800 pb-2">
             <User size={16} className="text-[#F59E0B]" />
             <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">
@@ -420,7 +448,7 @@ export default function BusinessProfileEditor({
             <div className="flex-1 grid grid-cols-1 gap-4 sm:grid-cols-2 w-full">
               <div>
                 <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-                  Founder / Owner Name
+                  Founder
                 </label>
                 <input
                   type="text"
@@ -481,7 +509,7 @@ export default function BusinessProfileEditor({
         </div>
 
         {/* Section D: Contact Information & Location */}
-        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-stone-850/50 p-4 sm:p-5 space-y-4">
+        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-[#151D29]/70 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-stone-200/60 dark:border-stone-800 pb-2">
             <MapPin size={16} className="text-[#F59E0B]" />
             <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">
@@ -514,10 +542,13 @@ export default function BusinessProfileEditor({
                 name="business_phone"
                 value={formData.business_phone}
                 onChange={handleChange}
-                maxLength={50}
-                placeholder="e.g. +91 98765 43210"
+                maxLength={15}
+                placeholder="e.g. 9876543210"
                 className={INPUT_STYLES.base}
               />
+              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                
+              </p>
             </div>
 
             <div>
@@ -613,7 +644,7 @@ export default function BusinessProfileEditor({
         </div>
 
         {/* Section E: Business Highlights / Specialties */}
-        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-stone-850/50 p-4 sm:p-5 space-y-4">
+        <div className="rounded-xl border border-stone-100 dark:border-stone-800/80 bg-stone-50/50 dark:bg-[#151D29]/70 p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 border-b border-stone-200/60 dark:border-stone-800 pb-2">
             <Sparkles size={16} className="text-[#F59E0B]" />
             <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100 uppercase tracking-wide">
@@ -623,7 +654,7 @@ export default function BusinessProfileEditor({
 
           <div>
             <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-              Service Highlights (Comma-separated)
+              Service Highlights
             </label>
             <input
               type="text"
@@ -633,11 +664,19 @@ export default function BusinessProfileEditor({
               placeholder={isSpa ? "e.g. Ayurvedic Therapies, Aromatherapy, Couples Suite, Herbal Steam" : "e.g. Family Dining, Multi-Course Tasting, Live Tandoor, Fresh Regional Spices"}
               className={INPUT_STYLES.base}
             />
-            <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
-              Key amenities, specialties, or dining features highlighted on your About profile.
-            </p>
+            
           </div>
         </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 rounded-xl border border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-950/30 px-3.5 py-2.5 text-xs font-medium text-rose-700 dark:text-rose-300"
+          >
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200/80 dark:border-stone-800">

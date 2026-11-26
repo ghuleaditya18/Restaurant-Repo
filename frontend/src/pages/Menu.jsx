@@ -832,8 +832,9 @@ export default function Menu() {
 
       {/* SUMMARY CARDS */}
 
-      <div className="mb-4 grid grid-cols-1 min-[380px]:grid-cols-3 gap-2 sm:gap-3.5">
+      <div className="mb-4 grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 w-full">
         <StatCard
+          compact
           title="Total Menu Items"
           value={items.length}
           icon={<Utensils size={16} />}
@@ -845,10 +846,11 @@ export default function Menu() {
         />
 
         <StatCard
+          compact
           title="Available Items"
           value={availableCount}
           icon={<ChefHat size={16} />}
-          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+          color="emerald"
           active={availabilityFilter === "AVAILABLE"}
           onClick={() => {
             setAvailabilityFilter("AVAILABLE");
@@ -857,10 +859,11 @@ export default function Menu() {
         />
 
         <StatCard
+          compact
           title="Unavailable Items"
           value={unavailableCount}
           icon={<Power size={16} />}
-          badgeColor="bg-stone-100 text-stone-600 border-stone-200"
+          color="stone"
           active={availabilityFilter === "UNAVAILABLE"}
           onClick={() => {
             setAvailabilityFilter("UNAVAILABLE");
@@ -872,16 +875,16 @@ export default function Menu() {
       {/* MENU TABLE CONTAINER */}
       <BulkSelectionBar count={selectedIds.size} onDelete={requestDeleteSelectedItems} onClear={clear} />
 
-      <div className="overflow-hidden rounded-xl border border-[#E7E5E4] bg-white">
+      <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND FILTER */}
 
-        <div className="flex flex-col gap-3 border-b border-[#E7E5E4] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
               Restaurant Menu
             </h2>
 
-            <p className="mt-0.5 text-xs text-[#78716C]">
+            <p className="mt-0.5 text-xs text-[#78716C] dark:text-[#8A9AB2]">
               {filteredItems.length} menu{" "}
               {filteredItems.length === 1 ? "item" : "items"} found
             </p>
@@ -891,7 +894,7 @@ export default function Menu() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78716C]"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78716C] dark:text-[#8A9AB2]"
               />
 
               <input
@@ -903,7 +906,7 @@ export default function Menu() {
                   setSearch(event.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full rounded-lg border border-[#E7E5E4] bg-white py-2 pl-9 pr-8 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-8 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-[#8A9AB2] outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
               />
 
               {search && (
@@ -914,7 +917,7 @@ export default function Menu() {
                     setCurrentPage(1);
                   }}
                   aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] hover:text-stone-900 dark:text-stone-100"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
                 >
                   <X size={15} />
                 </button>
@@ -928,7 +931,7 @@ export default function Menu() {
                 setSelectedCategory(event.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Categories</option>
 
@@ -946,7 +949,7 @@ export default function Menu() {
                 setAvailabilityFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-[#E7E5E4] bg-white px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Items</option>
               <option value="AVAILABLE">Available</option>
@@ -959,7 +962,7 @@ export default function Menu() {
               disabled={loading}
               title="Refresh menu"
               aria-label="Refresh menu"
-              className="flex items-center justify-center rounded-lg border border-[#E7E5E4] px-3 py-2 text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] disabled:opacity-60"
+              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] dark:hover:bg-[#1E293B] disabled:opacity-60"
             >
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
             </button>
@@ -970,7 +973,7 @@ export default function Menu() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase tracking-wide text-[#78716C]">
+            <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-xs uppercase tracking-wide text-[#78716C] dark:text-[#8A9AB2]">
               <tr>
                 <th className="px-4 py-3 text-center font-medium"><input type="checkbox" aria-label="Select all menu items on this page" checked={paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className="px-4 py-3 font-medium">Menu Item</th>
@@ -985,12 +988,12 @@ export default function Menu() {
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#F0ECE6]">
+            <tbody className="divide-y divide-[#F0ECE6] dark:divide-[#1E293B]">
               {loading ? (
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-10 text-center text-sm text-[#78716C]"
+                    className="px-4 py-10 text-center text-sm text-[#78716C] dark:text-[#8A9AB2]"
                   >
                     Loading menu items...
                   </td>
@@ -999,7 +1002,7 @@ export default function Menu() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-10 text-center text-sm text-[#78716C]"
+                    className="px-4 py-10 text-center text-sm text-[#78716C] dark:text-[#8A9AB2]"
                   >
                     <p>No menu items found.</p>
 
@@ -1007,7 +1010,7 @@ export default function Menu() {
                       <button
                         type="button"
                         onClick={clearFilters}
-                        className="mt-2 font-medium text-amber-800 hover:underline"
+                        className="mt-2 font-medium text-amber-800 dark:text-amber-400 hover:underline"
                       >
                         Clear search and filters
                       </button>
@@ -1016,7 +1019,7 @@ export default function Menu() {
                 </tr>
               ) : (
                 paginatedItems.map((item) => (
-                  <tr key={item.id} className="transition hover:bg-[#FAF9F6]">
+                  <tr key={item.id} className="transition hover:bg-[#FAF9F6] dark:hover:bg-[#151D29]/60">
                     <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select menu item ${item.name}`} checked={selectedIds.has(item.id)} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* ITEM (image + name + description) */}
                     <td className="px-4 py-3">
@@ -1024,7 +1027,7 @@ export default function Menu() {
                         <MenuImage
                           src={getItemImage(item)}
                           alt={item.name}
-                          className="h-11 w-11 shrink-0 rounded-lg border border-[#E7E5E4]"
+                          className="h-11 w-11 shrink-0 rounded-lg border border-[#E7E5E4] dark:border-[#1E293B]"
                           iconSize={16}
                         />
 
@@ -1033,12 +1036,12 @@ export default function Menu() {
                             {item.name}
                           </p>
 
-                          <p className="max-w-[16rem] truncate text-xs text-[#78716C] lg:max-w-sm">
+                          <p className="max-w-[16rem] truncate text-xs text-[#78716C] dark:text-[#8A9AB2] lg:max-w-sm">
                             {item.description || "No description"}
                           </p>
 
                           {/* Shown only when the Category column is hidden */}
-                          <p className="truncate text-xs text-[#78716C] md:hidden">
+                          <p className="truncate text-xs text-[#78716C] dark:text-[#8A9AB2] md:hidden">
                             {item.category_name}
                           </p>
                         </div>
@@ -1070,7 +1073,7 @@ export default function Menu() {
                           onClick={() => setViewingItemId(item.id)}
                           title="View details"
                           aria-label={`View ${item.name}`}
-                          className="rounded-lg p-2 text-stone-900 dark:text-stone-100 hover:bg-stone-100 hover:text-stone-900"
+                          className="rounded-lg p-2 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B]"
                         >
                           <Eye size={16} />
                         </button>
@@ -1080,7 +1083,7 @@ export default function Menu() {
                           onClick={() => openEditItemModal(item)}
                           title="Edit menu item"
                           aria-label={`Edit ${item.name}`}
-                          className="rounded-lg p-2 text-stone-900 dark:text-stone-100 hover:bg-stone-100 hover:text-stone-900"
+                          className="rounded-lg p-2 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B]"
                         >
                           <Pencil size={16} />
                         </button>
@@ -1099,10 +1102,10 @@ export default function Menu() {
                               ? "Mark unavailable"
                               : "Mark available"
                           }: ${item.name}`}
-                          className={`rounded-lg p-2 hover:bg-stone-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`rounded-lg p-2 hover:bg-stone-100 dark:hover:bg-[#1E293B] disabled:cursor-not-allowed disabled:opacity-50 ${
                             item.is_available
                               ? "text-stone-900 dark:text-stone-100"
-                              : "text-[#78716C]"
+                              : "text-[#78716C] dark:text-[#8A9AB2]"
                           }`}
                         >
                           <Power
@@ -1120,7 +1123,7 @@ export default function Menu() {
                           onClick={() => requestDeleteItem(item)}
                           title="Delete menu item"
                           aria-label={`Delete ${item.name}`}
-                          className="rounded-lg p-2 text-[#6B625B] hover:bg-red-50 hover:text-red-700"
+                          className="rounded-lg p-2 text-[#6B625B] dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 hover:text-red-700"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -1344,10 +1347,10 @@ export default function Menu() {
                 value={itemForm.category_id}
                 onChange={handleItemChange}
                 aria-invalid={Boolean(itemErrors.category_id)}
-                className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none ${
+                className={`w-full rounded-lg border bg-white dark:bg-[#151D29] px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none ${
                   itemErrors.category_id
                     ? "border-red-400"
-                    : "border-[#E7E5E4] focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                    : "border-[#E7E5E4] dark:border-[#1E293B] focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
                 }`}
               >
                 <option value="">Select category</option>
@@ -1604,7 +1607,7 @@ export default function Menu() {
                     onChange={handleCategoryChange}
                     placeholder="Category description"
                     rows={2}
-                    className="w-full resize-none rounded-lg border border-[#E7E5E4] bg-white px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                    className="w-full resize-none rounded-lg border border-[#E7E5E4] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
                   />
                 </div>
 
@@ -1616,7 +1619,7 @@ export default function Menu() {
                       setEditingCategory(null);
                     }}
                     disabled={categorySaving}
-                    className="rounded-lg border border-[#E7E5E4] bg-white px-4 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] disabled:opacity-60"
+                    className="rounded-lg border border-[#E7E5E4] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-4 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] dark:hover:bg-[#1E293B] disabled:opacity-60"
                   >
                     Cancel
                   </button>
@@ -1849,8 +1852,8 @@ function FormField({
         step={step}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none ${
-          error ? "border-red-400" : "border-[#E7E5E4] focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+        className={`w-full rounded-lg border bg-white dark:bg-[#151D29] px-3 py-2.5 text-sm text-stone-900 dark:text-stone-100 outline-none ${
+          error ? "border-red-400" : "border-[#E7E5E4] dark:border-[#1E293B] focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
         }`}
       />
 

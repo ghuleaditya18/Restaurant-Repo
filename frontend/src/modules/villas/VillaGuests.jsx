@@ -30,6 +30,7 @@ import {
   CARD_STYLES,
   INPUT_STYLES,
 } from "../../utils/themeTokens";
+import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
 import VillaDataTable from "./VillaDataTable";
 import { villaDate, villaDateWithTime, villaError, villaMoney, villasApi } from "./villasApi";
 
@@ -50,12 +51,13 @@ function validateGuestForm(form) {
   if (!form.full_name.trim() || form.full_name.trim().length < 2) {
     return "Guest full name must contain at least 2 characters.";
   }
-  const digits = form.phone.replace(/\D/g, "");
-  if (digits.length < 7 || digits.length > 15) {
-    return "Enter a valid phone number (7 to 15 digits).";
+  const phoneCheck = validateMobileNumber(form.phone, { required: true });
+  if (!phoneCheck.valid) {
+    return phoneCheck.error;
   }
-  if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
-    return "Enter a valid email address.";
+  const emailCheck = validateEmailAddress(form.email, { required: false });
+  if (!emailCheck.valid) {
+    return emailCheck.error;
   }
   return "";
 }
@@ -173,12 +175,15 @@ export default function VillaGuests() {
       return;
     }
 
+    const phoneCheck = validateMobileNumber(form.phone, { required: true });
+    const emailCheck = validateEmailAddress(form.email, { required: false });
+
     setSaving(true);
     setFormError("");
     const payload = {
       full_name: form.full_name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim() || null,
+      phone: phoneCheck.normalized,
+      email: emailCheck.normalized || null,
       address: form.address.trim() || null,
       city: form.city.trim() || null,
       state: form.state.trim() || null,
@@ -298,7 +303,8 @@ export default function VillaGuests() {
     {
       key: "guest",
       label: "Guest & Reference",
-      width: "min-w-[200px]",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3",
       render: (guest) => (
         <button
           type="button"
@@ -325,7 +331,8 @@ export default function VillaGuests() {
     {
       key: "contact",
       label: "Contact",
-      width: "min-w-[190px]",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3",
       render: (guest) => (
         <div className="space-y-0.5 text-xs">
           <div className="flex items-center gap-1.5 font-medium text-[#172033] dark:text-[#F8FAFC] whitespace-nowrap">
@@ -335,7 +342,7 @@ export default function VillaGuests() {
           {guest.email ? (
             <div className="flex items-center gap-1.5 text-[#64748B] dark:text-[#8A9AB2]">
               <Mail size={12} className="text-stone-400 shrink-0" />
-              <span className="truncate max-w-[190px]" title={guest.email}>
+              <span className="truncate max-w-[160px]" title={guest.email}>
                 {guest.email}
               </span>
             </div>
@@ -349,7 +356,8 @@ export default function VillaGuests() {
       key: "total_stays",
       label: "Total Stays",
       align: "right",
-      cellClassName: "whitespace-nowrap tabular-nums",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3 whitespace-nowrap tabular-nums",
       render: (guest) => (
         <div>
           <div className="font-semibold">{guest.total_stays ?? 0}</div>
@@ -364,7 +372,8 @@ export default function VillaGuests() {
     {
       key: "last_stay",
       label: "Last Stay",
-      cellClassName: "whitespace-nowrap",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3 whitespace-nowrap",
       render: (guest) =>
         guest.last_stay_date ? (
           <div>
@@ -372,7 +381,7 @@ export default function VillaGuests() {
               {villaDate(guest.last_stay_date)}
             </div>
             <div
-              className="text-[11px] text-[#64748B] dark:text-[#8A9AB2] truncate max-w-[160px]"
+              className="text-[11px] text-[#64748B] dark:text-[#8A9AB2] truncate max-w-[140px]"
               title={guest.last_stay_unit || guest.last_stay_number}
             >
               {guest.last_stay_unit || guest.last_stay_number}
@@ -386,14 +395,16 @@ export default function VillaGuests() {
       key: "total_spending",
       label: "Total Spending",
       align: "right",
-      cellClassName: "whitespace-nowrap font-semibold tabular-nums",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3 whitespace-nowrap font-semibold tabular-nums",
       render: (guest) => villaMoney(guest.total_spending),
     },
     {
       key: "outstanding_balance",
-      label: "Outstanding Balance",
+      label: "Balance",
       align: "right",
-      cellClassName: "whitespace-nowrap font-semibold tabular-nums",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3 whitespace-nowrap font-semibold tabular-nums",
       render: (guest) => {
         const balance = Number(guest.outstanding_balance || 0);
         return (
@@ -413,6 +424,8 @@ export default function VillaGuests() {
       key: "status",
       label: "Status",
       align: "center",
+      headerClassName: "!px-2.5",
+      cellClassName: "!px-2.5",
       render: (guest) => (
         <StatusBadge
           status={guest.is_active ? "ACTIVE" : "INACTIVE"}
@@ -425,9 +438,9 @@ export default function VillaGuests() {
       key: "actions",
       label: "Actions",
       align: "right",
-      cellClassName: "whitespace-nowrap",
+      headerClassName: "!px-3",
+      cellClassName: "!px-3 whitespace-nowrap",
       render: (guest) => {
-        const hasHistory = (guest.total_bookings ?? guest.total_stays ?? 0) > 0;
         return (
           <div className="inline-flex items-center justify-end gap-1">
             <button
@@ -460,11 +473,7 @@ export default function VillaGuests() {
                 setDeleteError("");
                 setDeleteTarget(guest);
               }}
-              title={
-                hasHistory
-                  ? "Protected guest with stay history (click for details)"
-                  : "Delete Guest"
-              }
+              title="Delete Guest"
               className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer"
             >
               <Trash2 size={15} />
@@ -481,7 +490,7 @@ export default function VillaGuests() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Guest Directory"
+        title="Guest"
         description="Manage resort guest profiles, stay history, billing balances, and preferences for Villas & Units."
         actions={
           <button
@@ -505,8 +514,9 @@ export default function VillaGuests() {
       )}
 
       {/* KPI SUMMARY CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
         <StatCard
+          compact
           title="Total Guests"
           value={summary.total_guests ?? 0}
           description="Registered Villas guest profiles"
@@ -519,6 +529,7 @@ export default function VillaGuests() {
           }}
         />
         <StatCard
+          compact
           title="Active Profiles"
           value={summary.active_guests ?? 0}
           description="Eligible for new bookings"
@@ -531,6 +542,7 @@ export default function VillaGuests() {
           }}
         />
         <StatCard
+          compact
           title="Repeat Guests"
           value={summary.repeat_guests ?? 0}
           description="Guests with 2+ resort stays"
@@ -538,6 +550,7 @@ export default function VillaGuests() {
           color="sky"
         />
         <StatCard
+          compact
           title="Outstanding Balances"
           value={villaMoney(summary.outstanding_balance_total)}
           description="Pending settlement across stays"
@@ -547,8 +560,8 @@ export default function VillaGuests() {
       </div>
 
       {/* SEARCH & FILTER BAR */}
-      <div className={`${CARD_STYLES.base} flex flex-col sm:flex-row sm:items-center gap-3 justify-between`}>
-        <div className="relative flex-1 max-w-md min-w-0">
+      <div className={`${CARD_STYLES.base} !p-3 w-fit max-w-full flex flex-wrap items-center gap-2.5`}>
+        <div className="relative w-full sm:w-80 min-w-0">
           <Search
             size={16}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
@@ -569,7 +582,7 @@ export default function VillaGuests() {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className={`${INPUT_STYLES.select} w-full sm:w-auto min-w-[155px]`}
+            className={`${INPUT_STYLES.select} !w-auto min-w-[140px]`}
           >
             <option value="all">All Statuses</option>
             <option value="active">Active Only</option>
@@ -596,16 +609,16 @@ export default function VillaGuests() {
       {/* GUEST DIRECTORY TABLE */}
       {selectedGuestIds.size > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5">
-          <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">{selectedGuestIds.size} eligible guest{selectedGuestIds.size !== 1 ? "s" : ""} selected</span>
+          <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">{selectedGuestIds.size} guest{selectedGuestIds.size !== 1 ? "s" : ""} selected</span>
           <div className="flex items-center gap-2">
             <button type="button" className={BUTTON_VARIANTS.secondary} onClick={() => setSelectedGuestIds(new Set())}>Clear Selection</button>
-            <button type="button" className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700" onClick={() => setBulkGuestConfirmOpen(true)}><Trash2 size={13} />Delete Selected</button>
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 cursor-pointer" onClick={() => setBulkGuestConfirmOpen(true)}><Trash2 size={13} />Delete Selected</button>
           </div>
         </div>
       )}
       {bulkGuestFailures.length > 0 && (
         <div role="status" className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-4 py-3 text-xs text-rose-800 dark:text-rose-200">
-          <p className="font-semibold">Some guest profiles were protected:</p>
+          <p className="font-semibold">Some guest profiles could not be deleted:</p>
           <ul className="mt-1 space-y-1">{bulkGuestFailures.map((item) => <li key={item.id}><span className="font-medium">{item.name}:</span> {item.reason}</li>)}</ul>
         </div>
       )}
@@ -617,7 +630,7 @@ export default function VillaGuests() {
         emptyIcon={Users}
         emptyTitle="No guests match your filters"
         emptyDescription="Add a new guest profile or clear active search filters."
-        tableMinWidth="min-w-[1040px]"
+        tableMinWidth="min-w-full"
         pagination={{
           currentPage: page,
           totalPages,
@@ -628,7 +641,6 @@ export default function VillaGuests() {
         selectedIds={selectedGuestIds}
         onSelectRow={handleSelectGuest}
         onSelectAll={handleSelectAllGuests}
-        isRowSelectable={(guest) => (guest.total_bookings ?? guest.total_stays ?? 0) === 0}
       />
 
       {/* ADD / EDIT GUEST MODAL */}
@@ -697,11 +709,15 @@ export default function VillaGuests() {
                 <input
                   type="tel"
                   required
+                  maxLength={15}
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="e.g. 9820123456"
                   className={INPUT_STYLES.base}
                 />
+                <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                  10-digit mobile starting with 6, 7, 8, or 9.
+                </p>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
@@ -1054,12 +1070,12 @@ export default function VillaGuests() {
         recordName={deleteTarget ? `${deleteTarget.full_name} (${deleteTarget.guest_reference})` : ""}
         message={
           hasDeleteHistory
-            ? "This guest has linked stay or billing history. Deleting is blocked to preserve financial audit records; archive/deactivate the profile instead."
-            : "Are you sure you want to permanently remove this unused guest profile? This action cannot be undone."
+            ? "This will permanently delete this guest along with all linked stays, invoices, payments, service requests, and status history. This action cannot be undone."
+            : "Are you sure you want to permanently remove this guest profile? This action cannot be undone."
         }
         impactSummary={
           hasDeleteHistory
-            ? `${deleteTarget.total_bookings ?? deleteTarget.total_stays} linked stay record(s)`
+            ? `${deleteTarget.total_bookings ?? deleteTarget.total_stays} linked stay record(s) and their billing data will also be deleted`
             : "0 linked stays or invoices"
         }
         confirmButtonText="Delete Guest"
@@ -1071,9 +1087,9 @@ export default function VillaGuests() {
         onClose={() => !bulkGuestLoading && setBulkGuestConfirmOpen(false)}
         title={`Delete ${selectedGuestIds.size} Selected Guest${selectedGuestIds.size !== 1 ? "s" : ""}`}
         size="sm"
-        footer={<div className="flex justify-end gap-2"><button type="button" className={BUTTON_VARIANTS.secondary} disabled={bulkGuestLoading} onClick={() => setBulkGuestConfirmOpen(false)}>Cancel</button><button type="button" className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={bulkGuestLoading} onClick={handleBulkDeleteGuests}>{bulkGuestLoading ? "Deleting..." : "Confirm Delete"}</button></div>}
+        footer={<div className="flex justify-end gap-2"><button type="button" className={BUTTON_VARIANTS.secondary} disabled={bulkGuestLoading} onClick={() => setBulkGuestConfirmOpen(false)}>Cancel</button><button type="button" className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 cursor-pointer" disabled={bulkGuestLoading} onClick={handleBulkDeleteGuests}>{bulkGuestLoading ? "Deleting..." : "Confirm Delete"}</button></div>}
       >
-        <p className="mb-3 text-sm text-[#64748B] dark:text-[#8A9AB2]">Only profiles without stay history can be deleted. The server rechecks each guest before removal.</p>
+        <p className="mb-3 text-sm text-[#64748B] dark:text-[#8A9AB2]">Selected guest profiles and all their linked stay, invoice, and payment records will be permanently removed.</p>
         <ul className="max-h-48 overflow-y-auto divide-y divide-[#E5E9F0] rounded-xl border border-[#E5E9F0]">{Array.from(selectedGuestIds).map((id) => <li key={id} className="px-3 py-2 text-sm">{guests.find((guest) => guest.id === id)?.full_name || `#${id}`}</li>)}</ul>
       </Modal>
     </div>

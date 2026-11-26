@@ -791,24 +791,27 @@ export default function SpaInvoices() {
       </div>
 
       {/* 4 SUMMARY CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
         <StatCard
+          compact
           title="Total Invoices"
           value={invoices.length}
           icon={<Receipt size={20} />}
         />
 
         <StatCard
+          compact
           title="Total Amount"
           value={formatCurrency(totalAmount)}
           icon={<IndianRupee size={20} />}
         />
 
         <StatCard
+          compact
           title="Paid Invoices"
           value={paidInvoicesCount}
           icon={<CheckCircle2 size={20} />}
-          badgeColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+          color="emerald"
           active={paymentStatusFilter === "PAID"}
           onClick={() => {
             setActiveTab("invoices");
@@ -817,10 +820,11 @@ export default function SpaInvoices() {
         />
 
         <StatCard
+          compact
           title="Pending Invoices"
           value={pendingInvoicesCount}
           icon={<Clock size={20} />}
-          badgeColor="bg-amber-50 text-amber-800 border-amber-200"
+          color="amber"
           active={paymentStatusFilter === "PENDING"}
           onClick={() => {
             setActiveTab("invoices");
@@ -1383,7 +1387,7 @@ export default function SpaInvoices() {
               </div>
 
               {selectedBookingData && (
-                <div className="rounded-xl bg-stone-100 dark:bg-stone-850 p-3.5 space-y-1.5 text-xs">
+                <div className="rounded-xl bg-stone-100 dark:bg-[#151D29] p-3.5 space-y-1.5 text-xs">
                   <div className="flex justify-between text-stone-600 dark:text-stone-400">
                     <span>Subtotal:</span>
                     <span className="font-bold text-stone-900 dark:text-white">

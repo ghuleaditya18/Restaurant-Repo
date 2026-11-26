@@ -17,8 +17,8 @@ export default function StatusBadge({
 
   const normalizedKey = String(status).trim().toUpperCase().replace(/\s+/g, "_");
   const config = STATUS_MAP[normalizedKey] || {
-    bg: "bg-stone-100 dark:bg-stone-850",
-    text: "text-stone-700 dark:text-stone-300",
+    bg: "bg-stone-100 dark:bg-stone-800",
+    text: "text-stone-700 dark:text-stone-200",
     border: "border-stone-200 dark:border-stone-700",
     dot: "bg-stone-400",
     label: String(status).replace(/_/g, " "),

@@ -36,7 +36,7 @@ def get_payment_record(db: Session, payment_id: int):
     payment = (
         db.query(Payment)
         .options(joinedload(Payment.invoice))
-        .filter(Payment.id == payment_id)
+        .filter(Payment.id == payment_id, Payment.source_module == "RESTAURANT")
         .first()
     )
 
@@ -59,7 +59,10 @@ def create_payment(
 ):
 
     invoice = (
-        db.query(Invoice).filter(Invoice.id == invoice_id).with_for_update().first()
+        db.query(Invoice)
+        .filter(Invoice.id == invoice_id, Invoice.source_module == "RESTAURANT")
+        .with_for_update()
+        .first()
     )
 
     if invoice is None:
@@ -116,7 +119,7 @@ def get_all_payments(
     end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
-    query = db.query(Payment)
+    query = db.query(Payment).filter(Payment.source_module == "RESTAURANT")
 
     start_dt, end_dt = get_date_range(preset, start_date, end_date)
     if start_dt is not None and end_dt is not None:

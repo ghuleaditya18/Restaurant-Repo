@@ -54,6 +54,37 @@ from app.models.villas import (
     VillaBookingStatusHistory, VillaService, ServiceRequest,
     VillaInvoice, VillaInvoiceItem, VillaPayment, VillaPaymentReversal, StayStatus,
 )
+from app.models.packages import (
+    PackageCategory,
+    PackageStatus,
+    PackagePricingType,
+    PackageInclusionType,
+    PackageBookingStatus,
+    Package,
+    PackageItem,
+    PackageMedia,
+    PackageBlackout,
+    PackageBooking,
+    PackageBookingItem,
+    PackageBookingHistory,
+)
+from app.models.activities import (
+    ActivityBookingType,
+    ActivityStatus,
+    ActivityCategory,
+    SessionStatus,
+    ActivityBookingStatus,
+    AttendanceStatus,
+    Activity,
+    ActivityResource,
+    ActivitySchedule,
+    ActivitySession,
+    ActivityBooking,
+    ActivityParticipant,
+    ActivityMedia,
+    ActivityBookingHistory,
+    ActivityUsageLog,
+)
 
 __all__ = [
     "User",
@@ -104,4 +135,9 @@ __all__ = [
     "VillaPropertySettings", "Villa", "UnitCategory", "Unit", "SeasonalRate", "UnitBlock", "VillaGuest", "StayBooking",
     "VillaBookingStatusHistory", "VillaService", "ServiceRequest",
     "VillaInvoice", "VillaInvoiceItem", "VillaPayment", "VillaPaymentReversal", "StayStatus",
+    "PackageCategory", "PackageStatus", "PackagePricingType", "PackageInclusionType", "PackageBookingStatus",
+    "Package", "PackageItem", "PackageMedia", "PackageBlackout", "PackageBooking", "PackageBookingItem", "PackageBookingHistory",
+    "ActivityBookingType", "ActivityStatus", "ActivityCategory", "SessionStatus", "ActivityBookingStatus", "AttendanceStatus",
+    "Activity", "ActivityResource", "ActivitySchedule", "ActivitySession", "ActivityBooking",
+    "ActivityParticipant", "ActivityMedia", "ActivityBookingHistory", "ActivityUsageLog",
 ]

@@ -5,6 +5,8 @@ import {
   ChefHat,
   Sparkles,
   BedDouble,
+  Package,
+  Compass,
   Mail,
   Lock,
   ArrowRight,
@@ -116,6 +118,20 @@ const MODULE_CHOICES = [
     title: MODULE_NAMES.VILLA || "Villas & Units",
     description: "Villas, guest units, stays, services & billing",
     icon: BedDouble,
+  },
+  {
+    context: "PACKAGE",
+    to: "/login/packages",
+    title: MODULE_NAMES.PACKAGE || "Packages",
+    description: "Curated resort packages, seasonal offers & bookings",
+    icon: Package,
+  },
+  {
+    context: "ACTIVITY",
+    to: "/login/activities",
+    title: MODULE_NAMES.ACTIVITY || "Activities Management",
+    description: "Activities catalogue, schedules, sessions & roster",
+    icon: Compass,
   },
 ];
 
@@ -258,29 +274,38 @@ function Login({ moduleContext = null }) {
   // ---------- Styling helpers ----------
 
   const getInputClass = (hasError) =>
-    `w-full outline-none text-sm text-stone-900 bg-transparent ${
-      hasError ? "placeholder:text-red-300" : "placeholder:text-stone-400"
+    `w-full outline-none text-sm text-[#172033] dark:text-[#F8FAFC] bg-transparent ${
+      hasError
+        ? "placeholder:text-red-300 dark:placeholder:text-rose-400"
+        : "placeholder:text-stone-400 dark:placeholder:text-stone-500"
     }`;
 
   const getWrapperClass = (hasError) =>
-    `flex items-center gap-3 mt-2 border rounded-xl px-4 py-3 transition ${
+    `flex items-center gap-3 mt-2 border rounded-xl px-4 py-3 bg-white dark:bg-[#151D29] transition ${
       hasError
-        ? "border-red-400 focus-within:ring-2 focus-within:ring-red-100"
-        : "border-[#E5E9F0] focus-within:border-[#F59E0B] focus-within:ring-2 focus-within:ring-[#F59E0B]/30"
+        ? "border-red-400 dark:border-rose-500 focus-within:ring-2 focus-within:ring-red-100 dark:focus-within:ring-rose-900/40"
+        : "border-[#E5E9F0] dark:border-[#1E293B] focus-within:border-[#F59E0B] focus-within:ring-2 focus-within:ring-[#F59E0B]/30"
     }`;
 
 
   const ActiveIcon =
-    activeContext === "SPA" ? Sparkles : activeContext === "VILLA" ? BedDouble : ChefHat;
+    activeContext === "SPA"
+      ? Sparkles
+      : activeContext === "VILLA"
+        ? BedDouble
+        : activeContext === "PACKAGE"
+          ? Package
+          : activeContext === "ACTIVITY"
+            ? Compass
+            : ChefHat;
 
   return (
-    <div className="min-h-screen bg-[#F0F2F7] flex items-center justify-center p-5">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-[#E5E9F0] p-8 sm:p-10">
-
+    <div className="min-h-screen bg-[#F0F2F7] dark:bg-[#0B111A] flex items-center justify-center p-5 transition-colors">
+      <div className="relative w-full max-w-md bg-white dark:bg-[#101722] rounded-3xl shadow-xl border border-[#E5E9F0] dark:border-[#1E293B] p-8 sm:p-10">
         {activeContext && (
           <Link
             to="/login"
-            className="mb-5 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-50 hover:text-stone-900"
+            className="mb-5 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300 transition hover:bg-stone-100 dark:hover:bg-[#151D29] hover:text-stone-900 dark:hover:text-white"
           >
             <ArrowLeft size={15} />
             Back to Module Selection
@@ -288,7 +313,7 @@ function Login({ moduleContext = null }) {
         )}
 
         {/* Branding */}
-        <div className="flex justify-center mb-7">
+        <div className="flex justify-center mb-6">
           <div className="bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold p-4 rounded-2xl shadow-xs">
             <ActiveIcon size={30} />
           </div>
@@ -296,8 +321,8 @@ function Login({ moduleContext = null }) {
 
         {/* Application Name */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">{APP_NAME}</h1>
-          <p className="text-xs text-stone-500 mt-1 font-medium">
+          <h1 className="text-2xl font-bold tracking-tight text-[#172033] dark:text-[#F8FAFC]">{APP_NAME}</h1>
+          <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-1 font-medium">
             {activeContext ? MODULE_NAMES[activeContext] : "Unified Resort Management"}
           </p>
         </div>
@@ -305,8 +330,8 @@ function Login({ moduleContext = null }) {
         {!activeContext ? (
           <div>
             <div className="mb-5 text-center">
-              <h2 className="text-xl font-bold text-stone-900">Select Business Module</h2>
-              <p className="text-xs text-stone-500 mt-1 font-medium">
+              <h2 className="text-xl font-bold text-[#172033] dark:text-[#F8FAFC]">Select Business Module</h2>
+              <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-1 font-medium">
                 Choose the operational module you want to sign in to.
               </p>
             </div>
@@ -318,24 +343,24 @@ function Login({ moduleContext = null }) {
                   <Link
                     key={mod.context}
                     to={mod.to}
-                    className="group flex items-center justify-between gap-3 rounded-2xl border border-[#E5E9F0] bg-[#F8FAFC] p-4 transition hover:border-[#F59E0B] hover:bg-[#FFF7E8]"
+                    className="group flex items-center justify-between gap-3 rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] p-4 transition hover:border-[#F59E0B] hover:bg-[#FFF7E8] dark:hover:bg-[#30251C]/50"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="rounded-xl bg-white border border-[#E5E9F0] p-2.5 text-[#D97706] shrink-0 group-hover:border-[#F59E0B]/50">
+                      <div className="rounded-xl bg-white dark:bg-[#101722] border border-[#E5E9F0] dark:border-[#1E293B] p-2.5 text-[#D97706] dark:text-[#FFB02E] shrink-0 group-hover:border-[#F59E0B]/50">
                         <ModIcon size={20} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-stone-900 truncate">{mod.title}</p>
-                        <p className="text-xs text-stone-500 truncate">{mod.description}</p>
+                        <p className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC] truncate">{mod.title}</p>
+                        <p className="text-xs text-stone-500 dark:text-[#8A9AB2] truncate">{mod.description}</p>
                       </div>
                     </div>
-                    <ArrowRight size={16} className="text-stone-400 group-hover:text-[#D97706] shrink-0" />
+                    <ArrowRight size={16} className="text-stone-400 dark:text-stone-500 group-hover:text-[#D97706] dark:group-hover:text-[#FFB02E] shrink-0" />
                   </Link>
                 );
               })}
             </nav>
 
-            <p className="text-center text-xs text-stone-400 mt-8">
+            <p className="text-center text-xs text-stone-400 dark:text-stone-500 mt-8">
               Authorized personnel only.
             </p>
           </div>
@@ -343,8 +368,8 @@ function Login({ moduleContext = null }) {
           <>
             {/* Welcome Message */}
             <div className="mb-7">
-              <h2 className="text-xl font-bold text-stone-900">Welcome Back</h2>
-              <p className="text-xs text-stone-500 mt-1 font-medium">
+              <h2 className="text-xl font-bold text-[#172033] dark:text-[#F8FAFC]">Welcome Back</h2>
+              <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-1 font-medium">
                 {`Sign in to access ${MODULE_NAMES[activeContext]}.`}
               </p>
             </div>
@@ -356,13 +381,13 @@ function Login({ moduleContext = null }) {
           <div>
             <label
               htmlFor="email"
-              className="text-xs font-bold uppercase tracking-wider text-stone-700"
+              className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300"
             >
               Email Address
             </label>
 
             <div className={getWrapperClass(errors.email)}>
-              <Mail size={18} className="text-stone-400 shrink-0" />
+              <Mail size={18} className="text-stone-400 dark:text-stone-500 shrink-0" />
 
               <input
                 id="email"
@@ -383,7 +408,7 @@ function Login({ moduleContext = null }) {
               <p
                 id="email-error"
                 role="alert"
-                className="text-red-600 text-xs mt-1.5"
+                className="text-red-600 dark:text-rose-400 text-xs mt-1.5"
               >
                 {errors.email}
               </p>
@@ -394,13 +419,13 @@ function Login({ moduleContext = null }) {
           <div>
             <label
               htmlFor="password"
-              className="text-xs font-bold uppercase tracking-wider text-stone-700"
+              className="text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300"
             >
               Password
             </label>
 
             <div className={getWrapperClass(errors.password)}>
-              <Lock size={18} className="text-stone-400 shrink-0" />
+              <Lock size={18} className="text-stone-400 dark:text-stone-500 shrink-0" />
 
               <input
                 id="password"
@@ -421,7 +446,7 @@ function Login({ moduleContext = null }) {
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="text-stone-400 hover:text-stone-700 transition shrink-0 cursor-pointer"
+                className="text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition shrink-0 cursor-pointer"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 title={showPassword ? "Hide password" : "Show password"}
               >
@@ -433,7 +458,7 @@ function Login({ moduleContext = null }) {
               <p
                 id="password-error"
                 role="alert"
-                className="text-red-600 text-xs mt-1.5"
+                className="text-red-600 dark:text-rose-400 text-xs mt-1.5"
               >
                 {errors.password}
               </p>
@@ -444,7 +469,7 @@ function Login({ moduleContext = null }) {
           {serverError && (
             <div
               role="alert"
-              className="bg-red-50 border border-red-200 text-red-700 text-xs font-medium p-3 rounded-xl"
+              className="bg-red-50 dark:bg-rose-950/40 border border-red-200 dark:border-rose-800/60 text-red-700 dark:text-rose-300 text-xs font-medium p-3 rounded-xl"
             >
               {serverError}
             </div>
@@ -462,7 +487,7 @@ function Login({ moduleContext = null }) {
         </form>
 
             {/* Footer */}
-            <p className="text-center text-xs text-stone-400 mt-8">
+            <p className="text-center text-xs text-stone-400 dark:text-stone-500 mt-8">
               Authorized personnel only.
             </p>
           </>

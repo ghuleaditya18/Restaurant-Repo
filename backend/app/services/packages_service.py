@@ -12,7 +12,7 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.branding import APP_NAME
@@ -33,6 +33,7 @@ from app.models.packages import (
     PackageStatus,
 )
 from app.models.spa import SpaService
+from app.models.transport import TransportServiceType
 from app.models.villas import Unit
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -98,14 +99,48 @@ def calculate_package_price(
     raise HTTPException(status_code=422, detail=f"Unsupported pricing type '{pricing_type}'.")
 
 
+def generate_unique_package_code(
+    db: Session,
+    *,
+    is_seasonal_offer: bool = False,
+    category: str = "",
+) -> str:
+    """Auto-generates a guaranteed unique package code (PKG-XXXX or SEAS-XXXX)."""
+    prefix = "SEAS-" if (is_seasonal_offer or category.strip().lower() == "seasonal") else "PKG-"
+    existing_codes = {
+        code
+        for (code,) in db.query(Package.package_code)
+        .filter(Package.business_context == "PACKAGE")
+        .all()
+        if code
+    }
+    max_seq = 0
+    for code in existing_codes:
+        if code.startswith(prefix):
+            suffix = code[len(prefix):]
+            if suffix.isdigit():
+                max_seq = max(max_seq, int(suffix))
+    seq = max_seq + 1
+    while f"{prefix}{seq:04d}" in existing_codes:
+        seq += 1
+    return f"{prefix}{seq:04d}"
+
+
 def sync_expired_packages(db: Session) -> int:
-    """Automatically marks Active or Inactive packages past valid_to as Expired."""
+    """Automatically marks live/paused packages past valid_to as Expired."""
     today = get_kolkata_today()
     expired_rows = (
         db.query(Package)
         .filter(
             Package.is_deleted.is_(False),
-            Package.status.in_([PackageStatus.ACTIVE.value, PackageStatus.INACTIVE.value]),
+            Package.status.in_(
+                [
+                    PackageStatus.PUBLISHED.value,
+                    PackageStatus.UPCOMING.value,
+                    PackageStatus.AVAILABLE.value,
+                    PackageStatus.PAUSED.value,
+                ]
+            ),
             Package.valid_to < today,
         )
         .all()
@@ -170,6 +205,7 @@ def evaluate_package_availability(
     pkg: Package,
     start_date: date,
     guest_count: int,
+    customer_id: int | None = None,
 ) -> dict:
     today = get_kolkata_today()
     reasons: list[str] = []
@@ -177,12 +213,21 @@ def evaluate_package_availability(
     if pkg.is_deleted:
         reasons.append("Package has been deleted.")
     elif pkg.status == PackageStatus.EXPIRED.value or pkg.valid_to < today:
-        if pkg.status in {PackageStatus.ACTIVE.value, PackageStatus.INACTIVE.value} and pkg.valid_to < today:
+        if (
+            pkg.status
+            in {
+                PackageStatus.PUBLISHED.value,
+                PackageStatus.UPCOMING.value,
+                PackageStatus.AVAILABLE.value,
+                PackageStatus.PAUSED.value,
+            }
+            and pkg.valid_to < today
+        ):
             pkg.status = PackageStatus.EXPIRED.value
             db.commit()
         reasons.append("Package validity has expired and cannot be booked.")
-    elif pkg.status != PackageStatus.ACTIVE.value:
-        reasons.append(f"Package is currently '{pkg.status}' and must be Active to book.")
+    elif pkg.status != PackageStatus.AVAILABLE.value:
+        reasons.append(f"Package is currently '{pkg.status}' and must be Available to book.")
 
     if start_date < today:
         reasons.append("Booking start date cannot be in the past.")
@@ -206,6 +251,30 @@ def evaluate_package_availability(
         reasons.append("Package has no configured inclusions.")
 
     end_date = start_date + timedelta(days=max(1, pkg.duration_nights))
+
+    if customer_id is not None:
+        duplicate_booking = (
+            db.query(PackageBooking)
+            .filter(
+                PackageBooking.is_deleted.is_(False),
+                PackageBooking.package_id == pkg.id,
+                PackageBooking.customer_id == customer_id,
+                PackageBooking.status != PackageBookingStatus.CANCELLED.value,
+                or_(
+                    PackageBooking.start_date == start_date,
+                    and_(
+                        PackageBooking.start_date < end_date,
+                        PackageBooking.end_date > start_date,
+                    ),
+                ),
+            )
+            .first()
+        )
+        if duplicate_booking:
+            reasons.append(
+                f"This customer already has an active booking ({duplicate_booking.booking_number}) for this package on these dates. Please choose another available date."
+            )
+
     calculated_total = calculate_package_price(
         pricing_type=pkg.pricing_type,
         unit_price=pkg.price,
@@ -334,6 +403,30 @@ def get_supported_inclusion_references(db: Session) -> dict[str, list[dict]]:
     except Exception:
         refs["Meal Plan"] = []
 
+    try:
+        trn_services = (
+            db.query(TransportServiceType)
+            .filter(
+                TransportServiceType.is_deleted.is_(False),
+                TransportServiceType.is_active.is_(True),
+                TransportServiceType.is_available.is_(True),
+            )
+            .order_by(TransportServiceType.service_name.asc())
+            .limit(100)
+            .all()
+        )
+        refs["Transport Service"] = [
+            {
+                "reference_module": "TRANSPORT",
+                "reference_id": ts.id,
+                "label": ts.service_name,
+                "meta": f"{ts.pricing_model} · INR {money(ts.base_price)}",
+            }
+            for ts in trn_services
+        ]
+    except Exception:
+        refs["Transport Service"] = []
+
     return refs
 
 
@@ -365,7 +458,13 @@ def validate_inclusion_reference(
             raise HTTPException(status_code=404, detail=f"Referenced Meal/Menu Item #{reference_id} not found.")
         return "RESTAURANT", item.id, reference_label or item.name
 
-    # Pending modules (Activity, Transport Service, Amenity, Other): preserve reference cleanly without fake coupling
+    if inclusion_type == PackageInclusionType.TRANSPORT_SERVICE.value:
+        trn = db.get(TransportServiceType, reference_id)
+        if not trn or trn.is_deleted:
+            raise HTTPException(status_code=404, detail=f"Referenced Transport Service #{reference_id} not found.")
+        return "TRANSPORT", trn.id, reference_label or trn.service_name
+
+    # Pending modules (Activity, Amenity, Other): preserve reference cleanly without fake coupling
     default_module = {
         PackageInclusionType.ACTIVITY.value: "ACTIVITY",
         PackageInclusionType.TRANSPORT_SERVICE.value: "TRANSPORT",

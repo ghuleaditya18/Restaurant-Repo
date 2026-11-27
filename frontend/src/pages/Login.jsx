@@ -7,6 +7,7 @@ import {
   BedDouble,
   Package,
   Compass,
+  Car,
   Mail,
   Lock,
   ArrowRight,
@@ -102,36 +103,37 @@ const MODULE_CHOICES = [
     context: "RESTAURANT",
     to: "/login/restaurant",
     title: MODULE_NAMES.RESTAURANT || "Restaurant Management",
-    description: "Dining orders, tables, menu, inventory & invoices",
     icon: ChefHat,
   },
   {
     context: "SPA",
     to: "/login/spa",
     title: MODULE_NAMES.SPA || "Spa & Wellness",
-    description: "Therapist schedules, appointments & wellness billing",
     icon: Sparkles,
   },
   {
     context: "VILLA",
     to: "/login/villas",
     title: MODULE_NAMES.VILLA || "Villas & Units",
-    description: "Villas, guest units, stays, services & billing",
     icon: BedDouble,
   },
   {
     context: "PACKAGE",
     to: "/login/packages",
     title: MODULE_NAMES.PACKAGE || "Packages",
-    description: "Curated resort packages, seasonal offers & bookings",
     icon: Package,
   },
   {
     context: "ACTIVITY",
     to: "/login/activities",
     title: MODULE_NAMES.ACTIVITY || "Activities Management",
-    description: "Activities catalogue, schedules, sessions & roster",
     icon: Compass,
+  },
+  {
+    context: "TRANSPORT",
+    to: "/login/transport",
+    title: MODULE_NAMES.TRANSPORT || "Transport Management",
+    icon: Car,
   },
 ];
 
@@ -297,85 +299,90 @@ function Login({ moduleContext = null }) {
           ? Package
           : activeContext === "ACTIVITY"
             ? Compass
-            : ChefHat;
+            : activeContext === "TRANSPORT"
+              ? Car
+              : ChefHat;
 
   return (
-    <div className="min-h-screen bg-[#F0F2F7] dark:bg-[#0B111A] flex items-center justify-center p-5 transition-colors">
-      <div className="relative w-full max-w-md bg-white dark:bg-[#101722] rounded-3xl shadow-xl border border-[#E5E9F0] dark:border-[#1E293B] p-8 sm:p-10">
+    <div className="min-h-screen bg-[#F0F2F7] dark:bg-[#0B111A] flex items-center justify-center p-3 sm:p-4 transition-colors">
+      <div
+        className={`relative bg-white dark:bg-[#101722] rounded-2xl shadow-xl border border-[#E5E9F0] dark:border-[#1E293B] p-5 sm:p-6 ${
+          activeContext ? "w-full max-w-[380px]" : "w-fit min-w-[270px] max-w-full"
+        }`}
+      >
         {activeContext && (
           <Link
             to="/login"
-            className="mb-5 inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300 transition hover:bg-stone-100 dark:hover:bg-[#151D29] hover:text-stone-900 dark:hover:text-white"
+            className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-stone-600 dark:text-stone-300 transition hover:bg-stone-100 dark:hover:bg-[#151D29] hover:text-stone-900 dark:hover:text-white"
           >
-            <ArrowLeft size={15} />
-            Back to Module Selection
+            <ArrowLeft size={14} />
+            Back
           </Link>
         )}
 
         {/* Branding */}
-        <div className="flex justify-center mb-6">
-          <div className="bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold p-4 rounded-2xl shadow-xs">
-            <ActiveIcon size={30} />
+        <div className="flex justify-center mb-2.5">
+          <div className="bg-gradient-to-br from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold p-3 rounded-xl shadow-xs">
+            <ActiveIcon size={24} />
           </div>
         </div>
 
         {/* Application Name */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-[#172033] dark:text-[#F8FAFC]">{APP_NAME}</h1>
-          <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-1 font-medium">
+        <div className="text-center mb-4">
+          <h1 className="text-xl font-bold tracking-tight text-[#172033] dark:text-[#F8FAFC] leading-tight">{APP_NAME}</h1>
+          <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-0.5 font-medium leading-tight">
             {activeContext ? MODULE_NAMES[activeContext] : "Unified Resort Management"}
           </p>
         </div>
 
         {!activeContext ? (
           <div>
-            <div className="mb-5 text-center">
-              <h2 className="text-xl font-bold text-[#172033] dark:text-[#F8FAFC]">Select Business Module</h2>
-              <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-1 font-medium">
-                Choose the operational module you want to sign in to.
-              </p>
-            </div>
+            <h2 className="text-[15px] font-bold text-center text-[#172033] dark:text-[#F8FAFC] mb-2.5 whitespace-nowrap">
+              Select Business Module
+            </h2>
 
-            <nav aria-label="Choose a business module" className="space-y-3">
+            <nav aria-label="Choose a business module" className="space-y-1.5">
               {MODULE_CHOICES.map((mod) => {
                 const ModIcon = mod.icon;
                 return (
                   <Link
                     key={mod.context}
                     to={mod.to}
-                    className="group flex items-center justify-between gap-3 rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] p-4 transition hover:border-[#F59E0B] hover:bg-[#FFF7E8] dark:hover:bg-[#30251C]/50"
+                    className="group flex items-center justify-between gap-4 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] px-3 py-2 transition hover:border-[#F59E0B] hover:bg-[#FFF7E8] dark:hover:bg-[#30251C]/50"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="rounded-xl bg-white dark:bg-[#101722] border border-[#E5E9F0] dark:border-[#1E293B] p-2.5 text-[#D97706] dark:text-[#FFB02E] shrink-0 group-hover:border-[#F59E0B]/50">
-                        <ModIcon size={20} />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="rounded-lg bg-white dark:bg-[#101722] border border-[#E5E9F0] dark:border-[#1E293B] p-1.5 text-[#D97706] dark:text-[#FFB02E] shrink-0 group-hover:border-[#F59E0B]/50">
+                        <ModIcon size={16} />
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC] truncate">{mod.title}</p>
-                        <p className="text-xs text-stone-500 dark:text-[#8A9AB2] truncate">{mod.description}</p>
-                      </div>
+                      <span className="text-[13px] font-bold text-[#172033] dark:text-[#F8FAFC] whitespace-nowrap leading-tight">
+                        {mod.title}
+                      </span>
                     </div>
-                    <ArrowRight size={16} className="text-stone-400 dark:text-stone-500 group-hover:text-[#D97706] dark:group-hover:text-[#FFB02E] shrink-0" />
+                    <ArrowRight size={14} className="text-stone-400 dark:text-stone-500 group-hover:text-[#D97706] dark:group-hover:text-[#FFB02E] shrink-0" />
                   </Link>
                 );
               })}
             </nav>
 
-            <p className="text-center text-xs text-stone-400 dark:text-stone-500 mt-8">
+            <p className="text-center text-[11px] text-stone-400 dark:text-stone-500 mt-3.5">
               Authorized personnel only.
             </p>
           </div>
         ) : (
           <>
             {/* Welcome Message */}
-            <div className="mb-7">
-              <h2 className="text-xl font-bold text-[#172033] dark:text-[#F8FAFC]">Welcome Back</h2>
-              <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-1 font-medium">
+            <div className="mb-4">
+              <center>
+              <h2 className="text-lg font-bold text-[#172033] dark:text-[#F8FAFC]">Welcome Back</h2>
+              
+              <p className="text-xs text-stone-500 dark:text-[#8A9AB2] mt-0.5 font-medium">
                 {`Sign in to access ${MODULE_NAMES[activeContext]}.`}
               </p>
+              </center>
             </div>
 
             {/* Login Form */}
-            <form onSubmit={handleSubmit} noValidate className="space-y-5">
+            <form onSubmit={handleSubmit} noValidate className="space-y-4">
 
           {/* Email */}
           <div>
@@ -479,15 +486,15 @@ function Login({ moduleContext = null }) {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] hover:brightness-105 disabled:opacity-60 text-[#0D1420] font-bold py-3.5 rounded-xl transition shadow-xs cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] hover:brightness-105 disabled:opacity-60 text-[#0D1420] font-bold py-3 rounded-xl transition shadow-xs cursor-pointer"
           >
             {submitting ? "Signing in..." : "Sign In"}
-            {!submitting && <ArrowRight size={18} />}
+            {!submitting && <ArrowRight size={17} />}
           </button>
         </form>
 
             {/* Footer */}
-            <p className="text-center text-xs text-stone-400 dark:text-stone-500 mt-8">
+            <p className="text-center text-[11px] text-stone-400 dark:text-stone-500 mt-5">
               Authorized personnel only.
             </p>
           </>

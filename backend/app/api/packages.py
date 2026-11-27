@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.api.deps import get_current_user, require_package_context
 from app.core.date_utils import get_kolkata_now, get_kolkata_today
 from app.db.session import get_db
-from app.models.entities import Customer, Invoice, Payment, PaymentStatus, User
+from app.models.entities import Customer, Invoice, Order, Payment, PaymentStatus, User
 from app.models.packages import (
     Package,
     PackageBlackout,
@@ -51,6 +51,7 @@ from app.services.packages_service import (
     find_overlapping_blackouts,
     generate_package_booking_number,
     generate_package_invoice_pdf,
+    generate_unique_package_code,
     get_supported_inclusion_references,
     money,
     record_package_booking_history,
@@ -394,7 +395,8 @@ def packages_dashboard(db: Session = Depends(get_db)):
     expiring_soon = [
         p
         for p in packages
-        if p.status == PackageStatus.ACTIVE.value and today <= p.valid_to <= today + timedelta(days=14)
+        if p.status in {PackageStatus.AVAILABLE.value, PackageStatus.PUBLISHED.value}
+        and today <= p.valid_to <= today + timedelta(days=14)
     ]
     expired_pkgs = [p for p in packages if p.status == PackageStatus.EXPIRED.value]
     upcoming_7d = [
@@ -410,9 +412,9 @@ def packages_dashboard(db: Session = Depends(get_db)):
                 "id": "expiring_soon",
                 "severity": "warning",
                 "title": "Packages Approaching Expiry",
-                "message": f"{len(expiring_soon)} active package(s) expire within the next 14 days ({', '.join(p.package_code for p in expiring_soon[:3])}).",
+                "message": f"{len(expiring_soon)} package(s) expire within the next 14 days ({', '.join(p.package_code for p in expiring_soon[:3])}).",
                 "count": len(expiring_soon),
-                "route": "/packages/catalog?status=Active",
+                "route": "/packages/catalog?status=Available",
             }
         )
     if expired_pkgs:
@@ -463,8 +465,12 @@ def packages_dashboard(db: Session = Depends(get_db)):
     return {
         "statistics": {
             "total_packages": len(packages),
-            "active_packages": status_counts.get(PackageStatus.ACTIVE.value, 0),
-            "inactive_packages": status_counts.get(PackageStatus.INACTIVE.value, 0),
+            "available_packages": status_counts.get(PackageStatus.AVAILABLE.value, 0),
+            "published_packages": status_counts.get(PackageStatus.PUBLISHED.value, 0),
+            "upcoming_packages": status_counts.get(PackageStatus.UPCOMING.value, 0),
+            "paused_packages": status_counts.get(PackageStatus.PAUSED.value, 0),
+            "active_packages": status_counts.get(PackageStatus.AVAILABLE.value, 0),
+            "inactive_packages": status_counts.get(PackageStatus.PAUSED.value, 0),
             "draft_packages": status_counts.get(PackageStatus.DRAFT.value, 0),
             "expired_packages": status_counts.get(PackageStatus.EXPIRED.value, 0),
             "archived_packages": status_counts.get(PackageStatus.ARCHIVED.value, 0),
@@ -477,6 +483,12 @@ def packages_dashboard(db: Session = Depends(get_db)):
         "recent_bookings": [_serialize_booking(b) for b in bookings[:10]],
         "alerts": alerts,
     }
+
+
+@router.get("/notifications")
+def get_packages_notifications(db: Session = Depends(get_db)):
+    dash = packages_dashboard(db=db)
+    return {"items": dash["alerts"], "total": len(dash["alerts"])}
 
 
 # ==========================================
@@ -494,7 +506,7 @@ def list_package_categories(db: Session = Depends(get_db)):
     )
     active_counts = dict(
         db.query(Package.category, func.count(Package.id))
-        .filter(Package.is_deleted.is_(False), Package.status == PackageStatus.ACTIVE.value)
+        .filter(Package.is_deleted.is_(False), Package.status == PackageStatus.AVAILABLE.value)
         .group_by(Package.category)
         .all()
     )
@@ -519,7 +531,7 @@ def get_packages_settings():
         "booking_number_prefix": "PKG",
         "categories": [c["name"] for c in PACKAGE_CATEGORY_CONFIG],
         "pricing_types": ["Per Package", "Per Person", "Per Night"],
-        "statuses": ["Draft", "Active", "Inactive", "Expired", "Archived"],
+        "statuses": [s.value for s in PackageStatus],
         "inclusion_types": [
             "Unit Stay",
             "Meal Plan",
@@ -588,24 +600,16 @@ def create_package(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    dup = (
-        db.query(Package)
-        .filter(
-            Package.business_context == "PACKAGE",
-            Package.package_code == data.package_code,
-            Package.is_deleted.is_(False),
-        )
-        .first()
+    is_seasonal = bool(data.is_seasonal_offer or data.category == "Seasonal")
+    auto_code = generate_unique_package_code(
+        db,
+        is_seasonal_offer=is_seasonal,
+        category=data.category,
     )
-    if dup:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Package code '{data.package_code}' already exists.",
-        )
 
     pkg = Package(
         business_context="PACKAGE",
-        package_code=data.package_code,
+        package_code=auto_code,
         name=data.name,
         category=data.category,
         description=data.description,
@@ -618,7 +622,7 @@ def create_package(
         valid_to=data.valid_to,
         applicable_accommodation_types=data.applicable_accommodation_types,
         is_customizable=data.is_customizable,
-        is_seasonal_offer=data.is_seasonal_offer or data.category == "Seasonal",
+        is_seasonal_offer=is_seasonal,
         offer_badge=data.offer_badge,
         terms_and_conditions=data.terms_and_conditions,
         exclusions=data.exclusions,
@@ -684,23 +688,7 @@ def update_package(
 ):
     pkg = _get_package_or_404(db, package_id)
     updates = data.model_dump(exclude_unset=True)
-
-    if "package_code" in updates and updates["package_code"] != pkg.package_code:
-        dup = (
-            db.query(Package)
-            .filter(
-                Package.business_context == "PACKAGE",
-                Package.package_code == updates["package_code"],
-                Package.id != pkg.id,
-                Package.is_deleted.is_(False),
-            )
-            .first()
-        )
-        if dup:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Package code '{updates['package_code']}' already exists.",
-            )
+    updates.pop("package_code", None)
 
     new_min = updates.get("min_guests", pkg.min_guests)
     new_max = updates.get("max_guests", pkg.max_guests)
@@ -719,10 +707,19 @@ def update_package(
             setattr(pkg, field, val)
 
     today = get_kolkata_today()
-    if pkg.status in {PackageStatus.ACTIVE.value, PackageStatus.INACTIVE.value} and pkg.valid_to < today:
+    if (
+        pkg.status
+        in {
+            PackageStatus.PUBLISHED.value,
+            PackageStatus.UPCOMING.value,
+            PackageStatus.AVAILABLE.value,
+            PackageStatus.PAUSED.value,
+        }
+        and pkg.valid_to < today
+    ):
         pkg.status = PackageStatus.EXPIRED.value
     elif pkg.status == PackageStatus.EXPIRED.value and pkg.valid_to >= today:
-        pkg.status = PackageStatus.INACTIVE.value
+        pkg.status = PackageStatus.PAUSED.value
 
     try:
         db.commit()
@@ -742,7 +739,11 @@ def update_package_status(
 ):
     pkg = _get_package_or_404(db, package_id)
     target = data.status
-    if target == PackageStatus.ACTIVE.value:
+    if target in {
+        PackageStatus.PUBLISHED.value,
+        PackageStatus.UPCOMING.value,
+        PackageStatus.AVAILABLE.value,
+    }:
         errors = validate_package_for_activation(pkg)
         if errors:
             raise HTTPException(status_code=409, detail=" ".join(errors))
@@ -787,11 +788,12 @@ def check_package_availability(
     package_id: int,
     start_date: date,
     guest_count: int = Query(default=1, ge=1),
+    customer_id: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
 ):
     sync_expired_packages(db)
     pkg = _get_package_or_404(db, package_id)
-    return evaluate_package_availability(db, pkg, start_date, guest_count)
+    return evaluate_package_availability(db, pkg, start_date, guest_count, customer_id=customer_id)
 
 
 # ==========================================
@@ -897,10 +899,18 @@ def delete_package_item(item_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Package inclusion not found.")
 
     pkg = _get_package_or_404(db, item.package_id)
-    if pkg.status == PackageStatus.ACTIVE.value and len(pkg.items) <= 1:
+    if (
+        pkg.status
+        in {
+            PackageStatus.PUBLISHED.value,
+            PackageStatus.UPCOMING.value,
+            PackageStatus.AVAILABLE.value,
+        }
+        and len(pkg.items) <= 1
+    ):
         raise HTTPException(
             status_code=409,
-            detail="An Active package must have at least one inclusion. Deactivate the package or add another inclusion first.",
+            detail="A live package must have at least one inclusion. Pause the package or add another inclusion first.",
         )
 
     db.delete(item)
@@ -1205,7 +1215,7 @@ def create_booking(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found.")
 
-    avail = evaluate_package_availability(db, pkg, data.start_date, data.guest_count)
+    avail = evaluate_package_availability(db, pkg, data.start_date, data.guest_count, customer_id=data.customer_id)
     if not avail["available"]:
         raise HTTPException(status_code=409, detail=" ".join(avail["reasons"]))
 
@@ -1507,6 +1517,46 @@ def update_packages_customer(
         raise HTTPException(status_code=409, detail="Customer update conflicts with existing database information.") from exc
 
 
+@router.delete("/customers/{customer_id}")
+def delete_packages_customer(customer_id: int, db: Session = Depends(get_db)):
+    cust = db.get(Customer, customer_id)
+    if not cust:
+        raise HTTPException(status_code=404, detail="Customer not found.")
+
+    has_pkg_booking = (
+        db.query(PackageBooking.id)
+        .filter(PackageBooking.customer_id == customer_id, PackageBooking.is_deleted.is_(False))
+        .first()
+    )
+    has_invoice = (
+        db.query(Invoice.id)
+        .filter(Invoice.customer_id == customer_id)
+        .first()
+    )
+    has_order = (
+        db.query(Order.id)
+        .filter(Order.customer_id == customer_id)
+        .first()
+    )
+    if has_pkg_booking or has_invoice or has_order:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete customer '{cust.full_name}' because booking, order, or invoice records exist.",
+        )
+
+    name = cust.full_name
+    try:
+        db.delete(cust)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete customer '{name}' because related records exist.",
+        ) from exc
+    return {"message": f"Customer '{name}' deleted successfully."}
+
+
 # ==========================================
 # 9. INVOICES & PAYMENTS (REUSES MASTER TABLES)
 # ==========================================
@@ -1583,6 +1633,47 @@ def create_package_invoice(
     db.commit()
     db.refresh(inv)
     return _serialize_invoice(inv, booking)
+
+
+@router.delete("/invoices/{invoice_id}")
+def delete_package_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    inv = (
+        db.query(Invoice)
+        .filter(Invoice.id == invoice_id, Invoice.source_module == "PACKAGE")
+        .with_for_update()
+        .first()
+    )
+    if not inv:
+        raise HTTPException(status_code=404, detail="Package invoice not found.")
+
+    payment_count = db.query(Payment.id).filter(Payment.invoice_id == inv.id).count()
+    if payment_count > 0 or inv.payment_status != PaymentStatus.PENDING or money(inv.paid_amount) > Decimal("0.00"):
+        raise HTTPException(
+            status_code=409,
+            detail="Invoices with recorded payments or completed settlements cannot be deleted.",
+        )
+
+    invoice_number = inv.invoice_number
+    if inv.package_booking_id:
+        booking = db.get(PackageBooking, inv.package_booking_id)
+        if booking:
+            record_package_booking_history(
+                db,
+                booking_id=booking.id,
+                action="INVOICE_DELETED",
+                previous_status=booking.status,
+                new_status=booking.status,
+                changed_by=current_user.id,
+                reason=f"Unpaid invoice {invoice_number} deleted",
+            )
+
+    db.delete(inv)
+    db.commit()
+    return {"message": f"Invoice {invoice_number} deleted successfully."}
 
 
 @router.get("/invoices/{invoice_id}")

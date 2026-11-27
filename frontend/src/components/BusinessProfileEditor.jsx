@@ -15,7 +15,11 @@ import {
 import { resolveImageUrl } from "../utils/mediaUtils";
 import { uploadFounderImage, deleteFounderImage } from "../services/businessProfileService";
 import { BUTTON_VARIANTS, INPUT_STYLES, CARD_STYLES } from "../utils/themeTokens";
-import { validateEmailAddress, validateMobileNumber } from "../utils/validation";
+import {
+  sanitizeMobileInput,
+  validateEmailAddress,
+  validateMobileNumber,
+} from "../utils/validation";
 
 export default function BusinessProfileEditor({
   profile,
@@ -539,10 +543,18 @@ export default function BusinessProfileEditor({
               </label>
               <input
                 type="tel"
+                inputMode="numeric"
                 name="business_phone"
                 value={formData.business_phone}
-                onChange={handleChange}
-                maxLength={15}
+                onChange={(e) =>
+                  handleChange({
+                    target: {
+                      name: "business_phone",
+                      value: sanitizeMobileInput(e.target.value),
+                    },
+                  })
+                }
+                maxLength={10}
                 placeholder="e.g. 9876543210"
                 className={INPUT_STYLES.base}
               />

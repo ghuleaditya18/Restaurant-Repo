@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none">
+  <rect width="320" height="180" fill="#111827"/>
+  <circle cx="60" cy="40" r="52" fill="#10B981" fill-opacity="0.14"/>
+  <rect x="20" y="140" width="280" height="6" rx="3" fill="#1E293B"/>
+  <path d="M44 120L52 72C54 62 62 56 72 56H204C214 56 222 62 227 71L242 93L270 98C277 100 282 106 282 114V127C282 131 279 134 274 134H48C43 134 40 130 40 125L44 120Z" fill="#059669"/>
+  <path d="M64 66H202L220 92H58L64 66Z" fill="#0D1420"/>
+  <rect x="132" y="66" width="6" height="26" fill="#059669"/>
+  <rect x="78" y="49" width="110" height="5" rx="2.5" fill="#94A3B8"/>
+  <circle cx="92" cy="133" r="22" fill="#0D1420" stroke="#E2E8F0" stroke-width="5"/>
+  <circle cx="92" cy="133" r="8" fill="#10B981"/>
+  <circle cx="232" cy="133" r="22" fill="#0D1420" stroke="#E2E8F0" stroke-width="5"/>
+  <circle cx="232" cy="133" r="8" fill="#10B981"/>
+  <text x="20" y="34" fill="#F8FAFC" font-family="Inter, sans-serif" font-size="13" font-weight="700" letter-spacing="1">SUV FLEET</text>
+</svg>

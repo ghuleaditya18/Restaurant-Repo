@@ -22,13 +22,15 @@ import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { BUTTON_VARIANTS, CARD_STYLES } from "../../utils/themeTokens";
 import VillaDataTable from "../villas/VillaDataTable";
-import { packagesApi, pkgDate, pkgError, pkgMoney } from "./packagesApi";
+import { notifyPackagesRefresh, packagesApi, pkgDate, pkgError, pkgMoney } from "./packagesApi";
 
 export default function PackagesDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [recentPage, setRecentPage] = useState(1);
+  const recentPageSize = 5;
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -36,6 +38,7 @@ export default function PackagesDashboard() {
     try {
       const res = await packagesApi.dashboard();
       setData(res.data);
+      notifyPackagesRefresh();
     } catch (err) {
       setError(pkgError(err));
     } finally {
@@ -48,7 +51,12 @@ export default function PackagesDashboard() {
   }, [loadDashboard]);
 
   const stats = data?.statistics || {};
-  const alerts = data?.alerts || [];
+  const allRecentBookings = data?.recent_bookings || [];
+  const recentTotalPages = Math.max(1, Math.ceil(allRecentBookings.length / recentPageSize));
+  const paginatedRecentBookings = allRecentBookings.slice(
+    (recentPage - 1) * recentPageSize,
+    recentPage * recentPageSize
+  );
 
   const recentColumns = [
     {
@@ -122,8 +130,7 @@ export default function PackagesDashboard() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Packages Dashboard"
-        description="Real-time package inventory, upcoming bookings, operational alerts, and revenue overview."
+        title="Dashboard"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -168,27 +175,27 @@ export default function PackagesDashboard() {
         />
         <StatCard
           compact
-          title="Active Packages"
-          value={loading ? "—" : stats.active_packages ?? 0}
-          description="Available for bookings"
+          title="Available Packages"
+          value={loading ? "—" : stats.available_packages ?? stats.active_packages ?? 0}
+          description="Open for bookings"
           icon={CheckCircle2}
           color="emerald"
-          onClick={() => navigate("/packages/catalog?status=Active")}
+          onClick={() => navigate("/packages/catalog?status=Available")}
         />
         <StatCard
           compact
-          title="Inactive Packages"
-          value={loading ? "—" : stats.inactive_packages ?? 0}
+          title="Paused Packages"
+          value={loading ? "—" : stats.paused_packages ?? stats.inactive_packages ?? 0}
           description="Temporarily paused"
           icon={PauseCircle}
           color="slate"
-          onClick={() => navigate("/packages/catalog?status=Inactive")}
+          onClick={() => navigate("/packages/catalog?status=Paused")}
         />
         <StatCard
           compact
           title="Draft Packages"
           value={loading ? "—" : stats.draft_packages ?? 0}
-          description="Awaiting inclusions / activation"
+          description="Awaiting inclusions"
           icon={FileEdit}
           color="sky"
           onClick={() => navigate("/packages/catalog?status=Draft")}
@@ -240,31 +247,6 @@ export default function PackagesDashboard() {
         />
       </div>
 
-      {/* OPERATIONAL ALERTS */}
-      {!loading && alerts.length > 0 && (
-        <div className="space-y-2">
-          {alerts.map((al) => (
-            <AlertBanner
-              key={al.id}
-              variant={al.severity || "warning"}
-              title={al.title}
-              message={al.message}
-              action={
-                al.route ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(al.route)}
-                    className={BUTTON_VARIANTS.secondary}
-                  >
-                    Review
-                  </button>
-                ) : null
-              }
-            />
-          ))}
-        </div>
-      )}
-
       {/* QUICK ACTIONS */}
       <div className={CARD_STYLES.base}>
         <div className="flex items-center justify-between mb-3">
@@ -309,13 +291,20 @@ export default function PackagesDashboard() {
           </button>
         }
         columns={recentColumns}
-        rows={data?.recent_bookings || []}
+        rows={paginatedRecentBookings}
         loading={loading}
         loadingMessage="Loading recent package bookings..."
         emptyTitle="No package bookings recorded yet"
         emptyDescription="Create a package booking to track reservations and settlements here."
         tableMinWidth="min-w-[880px]"
         onRowClick={(b) => navigate(`/packages/bookings?search=${b.booking_number}`)}
+        pagination={{
+          currentPage: recentPage,
+          totalPages: recentTotalPages,
+          totalRecords: allRecentBookings.length,
+          pageSize: recentPageSize,
+          onPageChange: setRecentPage,
+        }}
       />
     </div>
   );

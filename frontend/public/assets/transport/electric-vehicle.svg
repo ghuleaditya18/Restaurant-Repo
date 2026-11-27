@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none">
+  <rect width="320" height="180" fill="#062019"/>
+  <circle cx="255" cy="42" r="52" fill="#10B981" fill-opacity="0.2"/>
+  <rect x="20" y="138" width="280" height="6" rx="3" fill="#064E3B"/>
+  <path d="M52 114L72 78C77 69 86 64 96 64H198C209 64 219 70 226 79L246 96L270 103C276 105 280 111 280 117V126C280 130 277 133 272 133H50C45 133 42 129 42 124V119C42 116 46 114 52 114Z" fill="#10B981"/>
+  <path d="M84 73H190L214 95H74L84 73Z" fill="#042F2E"/>
+  <path d="M266 26L255 44H265L258 60L275 40H265L266 26Z" fill="#34D399"/>
+  <circle cx="96" cy="133" r="19" fill="#042F2E" stroke="#A7F3D0" stroke-width="4"/>
+  <circle cx="96" cy="133" r="7" fill="#34D399"/>
+  <circle cx="228" cy="133" r="19" fill="#042F2E" stroke="#A7F3D0" stroke-width="4"/>
+  <circle cx="228" cy="133" r="7" fill="#34D399"/>
+  <text x="20" y="34" fill="#A7F3D0" font-family="Inter, sans-serif" font-size="13" font-weight="700" letter-spacing="1">ELECTRIC VEHICLE</text>
+</svg>

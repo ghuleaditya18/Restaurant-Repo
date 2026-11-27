@@ -28,6 +28,9 @@ import {
   Tag,
   Compass,
   UserCheck,
+  Car,
+  Route,
+  Fuel,
 } from "lucide-react";
 
 const restaurantMenuItems = [
@@ -84,6 +87,20 @@ const activitiesMenuItems = [
   { name: "Invoices", path: "/activities/invoices", icon: FileText },
   { name: "Reports", path: "/activities/reports", icon: BarChart3 },
   { name: "Settings", path: "/activities/settings", icon: Settings },
+];
+
+const transportMenuItems = [
+  { name: "Dashboard", path: "/transport/dashboard", icon: LayoutDashboard, end: true },
+  { name: "Vehicles", path: "/transport/vehicles", icon: Car },
+  { name: "Drivers", path: "/transport/drivers", icon: UserCheck },
+  { name: "Routes", path: "/transport/routes", icon: Route },
+  { name: "Bookings", path: "/transport/bookings", icon: ClipboardList },
+  { name: "Trip Schedule", path: "/transport/schedule", icon: CalendarDays },
+  { name: "Maintenance", path: "/transport/maintenance", icon: Wrench },
+  { name: "Expenses", path: "/transport/expenses", icon: Fuel },
+  { name: "Invoices", path: "/transport/invoices", icon: FileText },
+  { name: "Reports", path: "/transport/reports", icon: BarChart3 },
+  { name: "Settings", path: "/transport/settings", icon: Settings },
 ];
 
 function formatRole(role, context) {
@@ -263,7 +280,9 @@ function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
                       ? "/packages/settings?tab=profile"
                       : ctx === "ACTIVITY"
                         ? "/activities/settings?tab=profile"
-                        : "/settings?tab=profile"
+                        : ctx === "TRANSPORT"
+                          ? "/transport/settings?tab=profile"
+                          : "/settings?tab=profile"
                 );
               }}
               className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-[#8A9AB2] transition hover:bg-[#151D29] hover:text-white cursor-pointer min-h-[36px]"
@@ -363,6 +382,7 @@ function Sidebar({
   const isVilla = normalizedContext === "VILLA";
   const isPackage = normalizedContext === "PACKAGE";
   const isActivity = normalizedContext === "ACTIVITY";
+  const isTransport = normalizedContext === "TRANSPORT";
   const visibleMenuItems = isSpa
     ? spaMenuItems
     : isVilla
@@ -371,7 +391,9 @@ function Sidebar({
         ? packagesMenuItems
         : isActivity
           ? activitiesMenuItems
-          : restaurantMenuItems;
+          : isTransport
+            ? transportMenuItems
+            : restaurantMenuItems;
   const brandTitle = APP_NAME;
   const brandLink = isSpa
     ? "/spa/dashboard"
@@ -381,7 +403,9 @@ function Sidebar({
         ? "/packages/dashboard"
         : isActivity
           ? "/activities/dashboard"
-          : "/";
+          : isTransport
+            ? "/transport/dashboard"
+            : "/";
   const BrandIcon = isSpa
     ? Sparkles
     : isVilla
@@ -390,7 +414,9 @@ function Sidebar({
         ? Package
         : isActivity
           ? Compass
-          : ChefHat;
+          : isTransport
+            ? Car
+            : ChefHat;
   const navHeading = isSpa
     ? "Spa Navigation"
     : isVilla
@@ -399,7 +425,9 @@ function Sidebar({
         ? "Packages Navigation"
         : isActivity
           ? "Activities Navigation"
-          : "Restaurant Navigation";
+          : isTransport
+            ? "Transport Navigation"
+            : "Restaurant Navigation";
 
   return (
     <>

@@ -84,6 +84,29 @@ from app.models.activities import (
     ActivityMedia,
     ActivityBookingHistory,
     ActivityUsageLog,
+    ActivityInstructorAssignment,
+)
+from app.models.transport import (
+    VehicleStatus,
+    DriverAvailabilityStatus,
+    DriverEmploymentStatus,
+    RouteType,
+    ServicePricingModel,
+    TransportBookingType,
+    TransportBookingStatus,
+    MaintenanceStatus,
+    TransportVehicleCategory,
+    TransportVehicle,
+    TransportDriver,
+    TransportRoute,
+    TransportServiceType,
+    TransportBooking,
+    TransportBookingPassenger,
+    TransportSchedule,
+    TransportAssignment,
+    TransportBookingHistory,
+    TransportMaintenanceRecord,
+    TransportFuelRecord,
 )
 
 __all__ = [
@@ -140,4 +163,9 @@ __all__ = [
     "ActivityBookingType", "ActivityStatus", "ActivityCategory", "SessionStatus", "ActivityBookingStatus", "AttendanceStatus",
     "Activity", "ActivityResource", "ActivitySchedule", "ActivitySession", "ActivityBooking",
     "ActivityParticipant", "ActivityMedia", "ActivityBookingHistory", "ActivityUsageLog",
+    "VehicleStatus", "DriverAvailabilityStatus", "DriverEmploymentStatus", "RouteType",
+    "ServicePricingModel", "TransportBookingType", "TransportBookingStatus", "MaintenanceStatus",
+    "TransportVehicleCategory", "TransportVehicle", "TransportDriver", "TransportRoute",
+    "TransportServiceType", "TransportBooking", "TransportBookingPassenger", "TransportSchedule",
+    "TransportAssignment", "TransportBookingHistory", "TransportMaintenanceRecord", "TransportFuelRecord",
 ]

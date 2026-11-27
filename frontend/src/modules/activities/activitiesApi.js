@@ -2,10 +2,38 @@ import api from "../../services/api";
 
 const base = "/api/activities";
 
+export const ACTIVITY_NOTIFICATIONS_EVENT = "newaraai:activity-notifications-refresh";
+
+export function emitActivityNotificationsRefresh() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ACTIVITY_NOTIFICATIONS_EVENT));
+  }
+}
+
+if (!api.__activitiesNotifInterceptorAdded) {
+  api.__activitiesNotifInterceptorAdded = true;
+  api.interceptors.response.use(
+    (response) => {
+      const url = String(response?.config?.url || "");
+      const method = String(response?.config?.method || "get").toLowerCase();
+      if (url.includes("/api/activities") && method !== "get") {
+        emitActivityNotificationsRefresh();
+      }
+      return response;
+    },
+    (error) => Promise.reject(error)
+  );
+}
+
 export const activitiesApi = {
   dashboard: () => api.get(`${base}/dashboard`),
+  notifications: () => api.get(`${base}/notifications`),
   settings: () => api.get(`${base}/settings`),
   staff: (params) => api.get(`${base}/staff`, { params }),
+  createStaff: (data) => api.post(`${base}/staff`, data),
+  updateStaff: (id, data) => api.patch(`${base}/staff/${id}`, data),
+  deleteStaff: (id) => api.delete(`${base}/staff/${id}`),
+  bulkDeleteStaff: (ids) => api.post(`${base}/staff/bulk-delete`, { ids }),
 
   // Activities CRUD
   list: (params) => api.get(`${base}/activities`, { params }),
@@ -14,6 +42,7 @@ export const activitiesApi = {
   update: (id, data) => api.patch(`${base}/activities/${id}`, data),
   updateStatus: (id, status) => api.post(`${base}/activities/${id}/status`, { status }),
   remove: (id) => api.delete(`${base}/activities/${id}`),
+  bulkRemove: (ids) => api.post(`${base}/activities/bulk-delete`, { ids }),
 
   // Resources (for time_slot activities)
   listResources: (activityId) => api.get(`${base}/activities/${activityId}/resources`),
@@ -39,6 +68,8 @@ export const activitiesApi = {
   // Weekly Schedules & Session Generation
   listSchedules: (activityId) => api.get(`${base}/activities/${activityId}/schedules`),
   createSchedule: (activityId, data) => api.post(`${base}/activities/${activityId}/schedules`, data),
+  deleteSchedule: (scheduleId) => api.delete(`${base}/schedules/${scheduleId}`),
+  bulkDeleteSchedules: (ids) => api.post(`${base}/schedules/bulk-delete`, { ids }),
   generateSessions: (scheduleId, data) => api.post(`${base}/schedules/${scheduleId}/generate-sessions`, data),
 
   // Sessions
@@ -46,6 +77,8 @@ export const activitiesApi = {
   sessionDetail: (id) => api.get(`${base}/sessions/${id}`),
   createSession: (data) => api.post(`${base}/sessions`, data),
   updateSession: (id, data) => api.patch(`${base}/sessions/${id}`, data),
+  deleteSession: (id) => api.delete(`${base}/sessions/${id}`),
+  bulkDeleteSessions: (ids) => api.post(`${base}/sessions/bulk-delete`, { ids }),
   sessionRoster: (sessionId) => api.get(`${base}/sessions/${sessionId}/roster`),
 
   // Bookings & Participants
@@ -54,24 +87,33 @@ export const activitiesApi = {
   createBooking: (data) => api.post(`${base}/bookings`, data),
   bookingStatus: (id, status, reason = null) =>
     api.patch(`${base}/bookings/${id}/status`, reason ? { status, reason } : { status }),
+  deleteBooking: (id) => api.delete(`${base}/bookings/${id}`),
+  bulkDeleteBookings: (ids) => api.post(`${base}/bookings/bulk-delete`, { ids }),
   bookingHistory: (id) => api.get(`${base}/bookings/${id}/history`),
   listParticipants: (bookingId) => api.get(`${base}/bookings/${bookingId}/participants`),
   updateParticipant: (participantId, data) => api.patch(`${base}/participants/${participantId}`, data),
+  bulkUpdateParticipants: (data) => api.post(`${base}/participants/bulk-update`, data),
 
   // Walk-in Usage Logs
   usageLogs: (params) => api.get(`${base}/usage-logs`, { params }),
   createUsageLog: (data) => api.post(`${base}/usage-logs`, data),
+  deleteUsageLog: (id) => api.delete(`${base}/usage-logs/${id}`),
+  bulkDeleteUsageLogs: (ids) => api.post(`${base}/usage-logs/bulk-delete`, { ids }),
 
   // Customers (shared master customers table)
   customers: (params) => api.get(`${base}/customers`, { params }),
   customerDetail: (id) => api.get(`${base}/customers/${id}`),
   createCustomer: (data) => api.post(`${base}/customers`, data),
   updateCustomer: (id, data) => api.patch(`${base}/customers/${id}`, data),
+  deleteCustomer: (id) => api.delete(`${base}/customers/${id}`),
+  bulkDeleteCustomers: (ids) => api.post(`${base}/customers/bulk-delete`, { ids }),
 
   // Invoices & Payments
   invoices: (params) => api.get(`${base}/invoices`, { params }),
   invoiceDetail: (id) => api.get(`${base}/invoices/${id}`),
   createInvoice: (data) => api.post(`${base}/invoices`, data),
+  deleteInvoice: (id) => api.delete(`${base}/invoices/${id}`),
+  bulkDeleteInvoices: (ids) => api.post(`${base}/invoices/bulk-delete`, { ids }),
   invoicePayments: (id) => api.get(`${base}/invoices/${id}/payments`),
   recordPayment: (invoiceId, data) => api.post(`${base}/invoices/${invoiceId}/payments`, data),
   downloadInvoicePdf: async (id) => {

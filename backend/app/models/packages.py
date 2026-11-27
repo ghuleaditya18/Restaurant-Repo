@@ -36,8 +36,10 @@ class PackageCategory(str, Enum):
 
 class PackageStatus(str, Enum):
     DRAFT = "Draft"
-    ACTIVE = "Active"
-    INACTIVE = "Inactive"
+    PUBLISHED = "Published"
+    UPCOMING = "Upcoming"
+    AVAILABLE = "Available"
+    PAUSED = "Paused"
     EXPIRED = "Expired"
     ARCHIVED = "Archived"
 

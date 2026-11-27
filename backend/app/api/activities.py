@@ -15,22 +15,26 @@ import datetime
 import hashlib
 import io
 import math
+import secrets
 from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.deps import get_current_user, require_activity_context
 from app.core.date_utils import get_kolkata_now, get_kolkata_today
+from app.core.security import hash_password
 from app.db.session import get_db
-from app.models import Customer, Invoice, Payment, User
+from app.models import Customer, Invoice, Order, Payment, Staff, User
 from app.models.activities import (
     Activity,
     ActivityBooking,
     ActivityBookingHistory,
+    ActivityInstructorAssignment,
     ActivityMedia,
     ActivityParticipant,
     ActivityResource,
@@ -38,16 +42,20 @@ from app.models.activities import (
     ActivitySession,
     ActivityUsageLog,
 )
-from app.models.entities import PaymentMethod, PaymentStatus
+from app.models.entities import PaymentMethod, PaymentStatus, UserRole
 from app.schemas.activities import (
     ActivityCreate,
     ActivityInvoiceCreate,
     ActivityMediaOut,
     ActivityOut,
+    ActivityStaffCreate,
+    ActivityStaffUpdate,
     ActivityUpdate,
     BookingCreate,
     BookingOut,
     BookingStatusUpdate,
+    BulkDeleteRequest,
+    BulkParticipantUpdateRequest,
     CustomerCreate,
     CustomerOut,
     ParticipantOut,
@@ -268,6 +276,17 @@ def _serialize_activity(a: Activity, db: Session, *, include_children: bool = Fa
         )
     ) or 0
 
+    assigned_rows = db.execute(
+        select(ActivityInstructorAssignment, User, Staff)
+        .join(User, ActivityInstructorAssignment.staff_user_id == User.id)
+        .outerjoin(Staff, Staff.user_id == User.id)
+        .where(
+            ActivityInstructorAssignment.activity_id == a.id,
+            User.business_context == BUSINESS_CONTEXT,
+        )
+        .order_by(User.full_name)
+    ).all()
+
     payload = {
         "id": a.id,
         "business_context": a.business_context,
@@ -286,6 +305,18 @@ def _serialize_activity(a: Activity, db: Session, *, include_children: bool = Fa
         "max_age": a.max_age,
         "requires_waiver": a.requires_waiver,
         "default_staff_id": a.default_staff_id,
+        "assigned_instructor_ids": [u.id for _, u, _ in assigned_rows],
+        "assigned_instructors": [
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "email": u.email,
+                "employee_code": st.employee_code if st else None,
+                "designation": st.designation if st else "Instructor",
+                "is_active": u.is_active,
+            }
+            for _, u, st in assigned_rows
+        ],
         "is_complimentary": a.is_complimentary,
         "price_per_person": str(a.price_per_person) if a.price_per_person is not None else None,
         "price_per_group": str(a.price_per_group) if a.price_per_group is not None else None,
@@ -451,8 +482,42 @@ def get_dashboard(
         "revenue_today": str(revenue_today),
     }
 
-    # Operational alerts
-    alerts = []
+    # Operational alerts shared with Header Notification Bar & Dashboard
+    alerts, todays_sess_rows = _compute_activity_alerts(db, today=today)
+
+    todays_sessions = [_enrich_session(s, db) for s in todays_sess_rows[:100]]
+
+    upcoming_rows = (
+        db.execute(
+            select(ActivityBooking)
+            .where(
+                ActivityBooking.business_context == BUSINESS_CONTEXT,
+                ActivityBooking.is_deleted.is_(False),
+                ActivityBooking.status.in_(["Pending", "Confirmed"]),
+                ActivityBooking.booking_date >= today,
+            )
+            .options(selectinload(ActivityBooking.participants), selectinload(ActivityBooking.history))
+            .order_by(ActivityBooking.booking_date, ActivityBooking.id)
+            .limit(100)
+        )
+        .scalars()
+        .all()
+    )
+    upcoming_booking_list = [_enrich_booking(b, db) for b in upcoming_rows]
+
+    return {
+        "statistics": stats,
+        "alerts": alerts,
+        "todays_sessions": todays_sessions,
+        "upcoming_bookings": upcoming_booking_list,
+    }
+
+
+def _compute_activity_alerts(db: Session, *, today: datetime.date | None = None) -> tuple[list[dict], list[ActivitySession]]:
+    if today is None:
+        today = get_kolkata_today()
+
+    alerts: list[dict] = []
 
     todays_sess_rows = (
         db.execute(
@@ -470,17 +535,21 @@ def get_dashboard(
         .all()
     )
 
-    unassigned_count = 0
+    upcoming_unassigned = db.scalar(
+        select(func.count(ActivitySession.id))
+        .join(Activity, ActivitySession.activity_id == Activity.id)
+        .where(
+            Activity.business_context == BUSINESS_CONTEXT,
+            ActivitySession.session_date >= today,
+            ActivitySession.status.in_(["Scheduled", "In Progress"]),
+            ActivitySession.assigned_staff_id.is_(None),
+        )
+    ) or 0
+
     full_count = 0
     below_min_count = 0
-    upcoming_sess_count = 0
-
     for s in todays_sess_rows:
         if s.status in ("Scheduled", "In Progress"):
-            if s.assigned_staff_id is None:
-                unassigned_count += 1
-            if s.status == "Scheduled":
-                upcoming_sess_count += 1
             booked = db.scalar(
                 select(func.coalesce(func.sum(ActivityBooking.participant_count), 0)).where(
                     ActivityBooking.session_id == s.id,
@@ -494,40 +563,30 @@ def get_dashboard(
             if booked < min_req:
                 below_min_count += 1
 
-    if unassigned_count > 0:
+    if upcoming_unassigned > 0:
         alerts.append({
             "id": "unassigned_staff",
             "severity": "warning",
-            "title": f"{unassigned_count} session(s) without assigned instructor",
-            "message": "Assign instructors to today's scheduled sessions before start time.",
+            "title": f"{upcoming_unassigned} session(s) without assigned instructor",
+            "message": "Assign instructors to scheduled sessions before start time.",
             "route": "/activities/schedule",
         })
 
-    if below_min_count > 0:
+    pending_bookings = db.scalar(
+        select(func.count(ActivityBooking.id)).where(
+            ActivityBooking.business_context == BUSINESS_CONTEXT,
+            ActivityBooking.is_deleted.is_(False),
+            ActivityBooking.status == "Pending",
+            ActivityBooking.booking_date >= today,
+        )
+    ) or 0
+    if pending_bookings > 0:
         alerts.append({
-            "id": "below_minimum",
+            "id": "pending_bookings",
             "severity": "warning",
-            "title": f"{below_min_count} session(s) below minimum participant count",
-            "message": "Advisory notice: coordinator review recommended. Sessions are never auto-cancelled.",
-            "route": "/activities/schedule",
-        })
-
-    if full_count > 0:
-        alerts.append({
-            "id": "full_sessions",
-            "severity": "info",
-            "title": f"{full_count} fully booked session(s) today",
-            "message": "Capacity reached; additional guests should be placed in another session.",
-            "route": "/activities/schedule",
-        })
-
-    if upcoming_sess_count > 0:
-        alerts.append({
-            "id": "upcoming_sessions",
-            "severity": "info",
-            "title": f"{upcoming_sess_count} scheduled session(s) today",
-            "message": "Review rosters, assigned instructors, and equipment readiness.",
-            "route": "/activities/roster",
+            "title": f"{pending_bookings} booking(s) pending confirmation",
+            "message": "Review and confirm upcoming guest reservations.",
+            "route": "/activities/bookings?status=Pending",
         })
 
     unsigned_waivers = db.scalar(
@@ -551,32 +610,35 @@ def get_dashboard(
             "route": "/activities/roster",
         })
 
-    todays_sessions = [_enrich_session(s, db) for s in todays_sess_rows[:12]]
+    if below_min_count > 0:
+        alerts.append({
+            "id": "below_minimum",
+            "severity": "warning",
+            "title": f"{below_min_count} session(s) below minimum participant count today",
+            "message": "Advisory notice: coordinator review recommended. Sessions are never auto-cancelled.",
+            "route": "/activities/schedule",
+        })
 
-    upcoming_rows = (
-        db.execute(
-            select(ActivityBooking)
-            .where(
-                ActivityBooking.business_context == BUSINESS_CONTEXT,
-                ActivityBooking.is_deleted.is_(False),
-                ActivityBooking.status.in_(["Pending", "Confirmed"]),
-                ActivityBooking.booking_date >= today,
-            )
-            .options(selectinload(ActivityBooking.participants), selectinload(ActivityBooking.history))
-            .order_by(ActivityBooking.booking_date, ActivityBooking.id)
-            .limit(10)
-        )
-        .scalars()
-        .all()
-    )
-    upcoming_booking_list = [_enrich_booking(b, db) for b in upcoming_rows]
+    if full_count > 0:
+        alerts.append({
+            "id": "full_sessions",
+            "severity": "info",
+            "title": f"{full_count} fully booked session(s) today",
+            "message": "Capacity reached; additional guests should be placed in another session.",
+            "route": "/activities/schedule",
+        })
 
-    return {
-        "statistics": stats,
-        "alerts": alerts,
-        "todays_sessions": todays_sessions,
-        "upcoming_bookings": upcoming_booking_list,
-    }
+    return alerts, todays_sess_rows
+
+
+@router.get("/notifications")
+def get_activity_notifications(
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    """Live actionable operational notifications for the top-right header notification bar."""
+    alerts, _ = _compute_activity_alerts(db)
+    return {"unread_count": len(alerts), "items": alerts}
 
 
 # ==========================================
@@ -637,6 +699,38 @@ def get_activity(
     return _serialize_activity(a, db, include_children=True)
 
 
+def _sync_activity_instructors(db: Session, activity_id: int, instructor_ids: list[int] | None) -> None:
+    if instructor_ids is None:
+        return
+    clean_ids = list(dict.fromkeys(int(i) for i in instructor_ids))
+    db.query(ActivityInstructorAssignment).filter(
+        ActivityInstructorAssignment.activity_id == activity_id
+    ).delete(synchronize_session=False)
+    for uid in clean_ids:
+        u = db.scalar(select(User).where(User.id == uid, User.business_context == BUSINESS_CONTEXT))
+        if u:
+            db.add(ActivityInstructorAssignment(staff_user_id=uid, activity_id=activity_id))
+
+
+def _sync_staff_activities(db: Session, staff_user_id: int, activity_ids: list[int] | None) -> None:
+    if activity_ids is None:
+        return
+    clean_ids = list(dict.fromkeys(int(i) for i in activity_ids))
+    db.query(ActivityInstructorAssignment).filter(
+        ActivityInstructorAssignment.staff_user_id == staff_user_id
+    ).delete(synchronize_session=False)
+    for aid in clean_ids:
+        act = db.scalar(
+            select(Activity).where(
+                Activity.id == aid,
+                Activity.business_context == BUSINESS_CONTEXT,
+                Activity.is_deleted.is_(False),
+            )
+        )
+        if act:
+            db.add(ActivityInstructorAssignment(staff_user_id=staff_user_id, activity_id=aid))
+
+
 @router.post("/activities", status_code=status.HTTP_201_CREATED)
 def create_activity(
     data: ActivityCreate,
@@ -679,6 +773,12 @@ def create_activity(
     )
     db.add(a)
     try:
+        db.flush()
+        instructor_ids = list(data.assigned_instructor_ids or [])
+        if data.default_staff_id and data.default_staff_id not in instructor_ids:
+            instructor_ids.append(data.default_staff_id)
+        if instructor_ids:
+            _sync_activity_instructors(db, a.id, instructor_ids)
         db.commit()
         db.refresh(a)
     except Exception as exc:
@@ -737,8 +837,23 @@ def update_activity(
                 detail=f"Cannot reduce maximum participants below existing booking party size ({max_booking_party}).",
             )
 
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_none=True, exclude={"assigned_instructor_ids"}).items():
         setattr(a, field, value)
+
+    if data.assigned_instructor_ids is not None:
+        instructor_ids = list(data.assigned_instructor_ids)
+        if a.default_staff_id and a.default_staff_id not in instructor_ids:
+            instructor_ids.append(a.default_staff_id)
+        _sync_activity_instructors(db, a.id, instructor_ids)
+    elif data.default_staff_id:
+        existing_link = db.scalar(
+            select(ActivityInstructorAssignment).where(
+                ActivityInstructorAssignment.activity_id == a.id,
+                ActivityInstructorAssignment.staff_user_id == data.default_staff_id,
+            )
+        )
+        if not existing_link:
+            db.add(ActivityInstructorAssignment(staff_user_id=data.default_staff_id, activity_id=a.id))
 
     try:
         db.commit()
@@ -779,6 +894,69 @@ def update_activity_status(
     return {"message": f"Activity status updated to {new_status}"}
 
 
+def _purge_activity_bookings(db: Session, booking_ids: list[int]) -> None:
+    """Remove activity bookings and dependent invoices, payments, participants, and history in FK order."""
+    if not booking_ids:
+        return
+    invoice_ids = list(
+        db.scalars(
+            select(Invoice.id).where(
+                Invoice.source_module == BUSINESS_CONTEXT,
+                Invoice.source_reference_id.in_(booking_ids),
+            )
+        ).all()
+    )
+    if invoice_ids:
+        db.query(Payment).filter(
+            Payment.invoice_id.in_(invoice_ids),
+            Payment.source_module == BUSINESS_CONTEXT,
+        ).delete(synchronize_session=False)
+        db.query(Invoice).filter(
+            Invoice.id.in_(invoice_ids),
+            Invoice.source_module == BUSINESS_CONTEXT,
+        ).delete(synchronize_session=False)
+    db.query(ActivityParticipant).filter(ActivityParticipant.booking_id.in_(booking_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(ActivityBookingHistory).filter(ActivityBookingHistory.booking_id.in_(booking_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(ActivityBooking).filter(
+        ActivityBooking.id.in_(booking_ids),
+        ActivityBooking.business_context == BUSINESS_CONTEXT,
+    ).delete(synchronize_session=False)
+
+
+def _delete_or_archive_activity(db: Session, a: Activity) -> str:
+    """Delete an activity permanently if unused, or archive it when history exists. Returns 'deleted' or 'archived'."""
+    active_bookings = db.scalar(
+        select(func.count(ActivityBooking.id)).where(
+            ActivityBooking.activity_id == a.id,
+            ActivityBooking.is_deleted.is_(False),
+            ActivityBooking.status.in_(["Pending", "Confirmed"]),
+        )
+    ) or 0
+    if active_bookings:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete activity with active bookings. Archive or clear bookings first.",
+        )
+
+    has_history = (
+        (db.scalar(select(func.count(ActivityBooking.id)).where(ActivityBooking.activity_id == a.id)) or 0)
+        + (db.scalar(select(func.count(ActivitySession.id)).where(ActivitySession.activity_id == a.id)) or 0)
+        + (db.scalar(select(func.count(ActivityUsageLog.id)).where(ActivityUsageLog.activity_id == a.id)) or 0)
+    )
+    if has_history > 0:
+        a.is_deleted = True
+        a.deleted_at = get_kolkata_now()
+        a.status = "Archived"
+        return "archived"
+
+    db.delete(a)
+    return "deleted"
+
+
 @router.delete("/activities/{activity_id}")
 def delete_activity(
     activity_id: int,
@@ -793,37 +971,50 @@ def delete_activity(
     if not a:
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    active_bookings = db.scalar(
-        select(func.count(ActivityBooking.id)).where(
-            ActivityBooking.activity_id == activity_id,
-            ActivityBooking.is_deleted.is_(False),
-            ActivityBooking.status.in_(["Pending", "Confirmed"]),
-        )
-    ) or 0
-    if active_bookings:
-        raise HTTPException(
-            status_code=409,
-            detail="Cannot delete activity with active bookings. Archive it instead."
-        )
-
-    has_history = (
-        db.scalar(select(func.count(ActivityBooking.id)).where(ActivityBooking.activity_id == activity_id)) or 0
-    ) + (
-        db.scalar(select(func.count(ActivitySession.id)).where(ActivitySession.activity_id == activity_id)) or 0
-    ) + (
-        db.scalar(select(func.count(ActivityUsageLog.id)).where(ActivityUsageLog.activity_id == activity_id)) or 0
-    )
-
-    if has_history > 0:
-        a.is_deleted = True
-        a.deleted_at = get_kolkata_now()
-        a.status = "Archived"
-        db.commit()
-        return {"message": "Activity has booking/session history and was archived safely."}
-
-    db.delete(a)
+    outcome = _delete_or_archive_activity(db, a)
     db.commit()
+    if outcome == "archived":
+        return {"message": "Activity has booking/session history and was archived safely."}
     return {"message": "Activity deleted permanently."}
+
+
+@router.post("/activities/bulk-delete")
+def bulk_delete_activities(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    deleted = 0
+    archived = 0
+    failed: list[dict[str, Any]] = []
+    for activity_id in dict.fromkeys(data.ids):
+        a = db.scalar(
+            select(Activity).where(
+                Activity.id == activity_id,
+                Activity.business_context == BUSINESS_CONTEXT,
+                Activity.is_deleted.is_(False),
+            )
+        )
+        if not a:
+            failed.append({"id": activity_id, "name": f"#{activity_id}", "reason": "Activity not found or already archived."})
+            continue
+        try:
+            outcome = _delete_or_archive_activity(db, a)
+            db.flush()
+            if outcome == "archived":
+                archived += 1
+            else:
+                deleted += 1
+        except HTTPException as exc:
+            failed.append({"id": activity_id, "name": a.name, "reason": str(exc.detail)})
+    db.commit()
+    return {
+        "deleted": deleted,
+        "archived": archived,
+        "cleared": deleted + archived,
+        "failed": failed,
+        "message": f"Cleared {deleted + archived} activity record(s) ({deleted} deleted, {archived} archived).",
+    }
 
 
 # ==========================================
@@ -1013,6 +1204,47 @@ def create_schedule(
     db.commit()
     db.refresh(s)
     return {"id": s.id, "message": "Schedule created."}
+
+
+@router.delete("/schedules/{schedule_id}")
+def delete_schedule(
+    schedule_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    schedule = db.scalar(
+        select(ActivitySchedule)
+        .join(Activity, ActivitySchedule.activity_id == Activity.id)
+        .where(ActivitySchedule.id == schedule_id, Activity.business_context == BUSINESS_CONTEXT)
+    )
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Weekly schedule template not found.")
+    db.delete(schedule)
+    db.commit()
+    return {"message": "Weekly schedule template deleted."}
+
+
+@router.post("/schedules/bulk-delete")
+def bulk_delete_schedules(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    deleted = 0
+    failed: list[dict[str, Any]] = []
+    for schedule_id in dict.fromkeys(data.ids):
+        schedule = db.scalar(
+            select(ActivitySchedule)
+            .join(Activity, ActivitySchedule.activity_id == Activity.id)
+            .where(ActivitySchedule.id == schedule_id, Activity.business_context == BUSINESS_CONTEXT)
+        )
+        if not schedule:
+            failed.append({"id": schedule_id, "name": f"Template #{schedule_id}", "reason": "Template not found."})
+            continue
+        db.delete(schedule)
+        deleted += 1
+    db.commit()
+    return {"deleted": deleted, "failed": failed, "message": f"Deleted {deleted} schedule template(s)."}
 
 
 @router.post("/schedules/{schedule_id}/generate-sessions", status_code=201)
@@ -1279,6 +1511,67 @@ def update_session(
 
     db.commit()
     return {"message": "Session updated."}
+
+
+def _delete_session_record(db: Session, session: ActivitySession) -> None:
+    linked_bookings = db.scalar(
+        select(func.count(ActivityBooking.id)).where(
+            ActivityBooking.session_id == session.id,
+        )
+    ) or 0
+    if linked_bookings > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session has {linked_bookings} linked booking(s). Clear those bookings first.",
+        )
+    db.delete(session)
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    s = db.scalar(
+        select(ActivitySession)
+        .join(Activity, ActivitySession.activity_id == Activity.id)
+        .where(ActivitySession.id == session_id, Activity.business_context == BUSINESS_CONTEXT)
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Session not found")
+    _delete_session_record(db, s)
+    db.commit()
+    return {"message": "Session deleted."}
+
+
+@router.post("/sessions/bulk-delete")
+def bulk_delete_sessions(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    deleted = 0
+    failed: list[dict[str, Any]] = []
+    for session_id in dict.fromkeys(data.ids):
+        s = db.scalar(
+            select(ActivitySession)
+            .join(Activity, ActivitySession.activity_id == Activity.id)
+            .where(ActivitySession.id == session_id, Activity.business_context == BUSINESS_CONTEXT)
+            .options(joinedload(ActivitySession.activity))
+        )
+        if not s:
+            failed.append({"id": session_id, "name": f"Session #{session_id}", "reason": "Session not found."})
+            continue
+        label = f"{s.activity.name if s.activity else 'Session'} ({s.session_date})"
+        try:
+            _delete_session_record(db, s)
+            db.flush()
+            deleted += 1
+        except HTTPException as exc:
+            failed.append({"id": session_id, "name": label, "reason": str(exc.detail)})
+    db.commit()
+    return {"deleted": deleted, "failed": failed, "message": f"Deleted {deleted} session(s)."}
 
 
 # ==========================================
@@ -1632,6 +1925,55 @@ def update_booking_status(
     return {"message": f"Booking status updated to {data.status}"}
 
 
+@router.delete("/bookings/{booking_id}")
+def delete_booking(
+    booking_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    b = db.scalar(
+        select(ActivityBooking).where(
+            ActivityBooking.id == booking_id,
+            ActivityBooking.business_context == BUSINESS_CONTEXT,
+        )
+    )
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    booking_number = b.booking_number
+    _purge_activity_bookings(db, [booking_id])
+    db.commit()
+    return {"message": f"Booking {booking_number} and linked records cleared."}
+
+
+@router.post("/bookings/bulk-delete")
+def bulk_delete_bookings(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    unique_ids = list(dict.fromkeys(data.ids))
+    rows = db.execute(
+        select(ActivityBooking).where(
+            ActivityBooking.id.in_(unique_ids),
+            ActivityBooking.business_context == BUSINESS_CONTEXT,
+        )
+    ).scalars().all()
+    found_ids = [r.id for r in rows]
+    found_set = set(found_ids)
+    failed = [
+        {"id": bid, "name": f"Booking #{bid}", "reason": "Booking not found."}
+        for bid in unique_ids
+        if bid not in found_set
+    ]
+    _purge_activity_bookings(db, found_ids)
+    db.commit()
+    return {
+        "deleted": len(found_ids),
+        "failed": failed,
+        "message": f"Cleared {len(found_ids)} booking(s).",
+    }
+
+
 @router.get("/bookings/{booking_id}/history")
 def get_booking_history(
     booking_id: int,
@@ -1683,6 +2025,33 @@ def update_participant(
         setattr(p, field, value)
     db.commit()
     return {"message": "Participant updated."}
+
+
+@router.post("/participants/bulk-update")
+def bulk_update_participants(
+    data: BulkParticipantUpdateRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    if data.waiver_signed is None and data.attendance_status is None:
+        raise HTTPException(status_code=422, detail="Provide waiver_signed or attendance_status to update.")
+    rows = db.execute(
+        select(ActivityParticipant)
+        .join(ActivityBooking, ActivityParticipant.booking_id == ActivityBooking.id)
+        .where(
+            ActivityParticipant.id.in_(list(dict.fromkeys(data.ids))),
+            ActivityBooking.business_context == BUSINESS_CONTEXT,
+        )
+    ).scalars().all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No matching participants found.")
+    for p in rows:
+        if data.waiver_signed is not None:
+            p.waiver_signed = data.waiver_signed
+        if data.attendance_status is not None:
+            p.attendance_status = data.attendance_status
+    db.commit()
+    return {"updated": len(rows), "message": f"Updated {len(rows)} participant(s)."}
 
 
 # Session Roster
@@ -1833,6 +2202,48 @@ def create_usage_log(
     return {"id": log.id, "message": "Usage log created."}
 
 
+@router.delete("/usage-logs/{log_id}")
+def delete_usage_log(
+    log_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    log = db.scalar(
+        select(ActivityUsageLog)
+        .join(Activity, ActivityUsageLog.activity_id == Activity.id)
+        .where(ActivityUsageLog.id == log_id, Activity.business_context == BUSINESS_CONTEXT)
+    )
+    if not log:
+        raise HTTPException(status_code=404, detail="Walk-in usage log not found")
+    db.delete(log)
+    db.commit()
+    return {"message": "Walk-in usage log cleared."}
+
+
+@router.post("/usage-logs/bulk-delete")
+def bulk_delete_usage_logs(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    unique_ids = list(dict.fromkeys(data.ids))
+    rows = db.execute(
+        select(ActivityUsageLog)
+        .join(Activity, ActivityUsageLog.activity_id == Activity.id)
+        .where(ActivityUsageLog.id.in_(unique_ids), Activity.business_context == BUSINESS_CONTEXT)
+    ).scalars().all()
+    found_set = {r.id for r in rows}
+    failed = [
+        {"id": lid, "name": f"Log #{lid}", "reason": "Usage log not found."}
+        for lid in unique_ids
+        if lid not in found_set
+    ]
+    for r in rows:
+        db.delete(r)
+    db.commit()
+    return {"deleted": len(rows), "failed": failed, "message": f"Cleared {len(rows)} walk-in log(s)."}
+
+
 # ==========================================
 # CUSTOMERS (master customer table)
 # ==========================================
@@ -1946,6 +2357,73 @@ def update_customer(
     c.address = data.address
     db.commit()
     return {"message": "Customer updated."}
+
+
+def _delete_customer_record(db: Session, c: Customer) -> None:
+    act_bookings = db.scalar(
+        select(func.count(ActivityBooking.id)).where(
+            ActivityBooking.customer_id == c.id,
+        )
+    ) or 0
+    rest_orders = db.scalar(select(func.count(Order.id)).where(Order.customer_id == c.id)) or 0
+    invs = db.scalar(select(func.count(Invoice.id)).where(Invoice.customer_id == c.id)) or 0
+    if act_bookings or rest_orders or invs:
+        raise HTTPException(
+            status_code=409,
+            detail="Customer has linked bookings, invoices, or orders. Clear those records first.",
+        )
+    db.query(ActivityUsageLog).filter(ActivityUsageLog.customer_id == c.id).update(
+        {"customer_id": None}, synchronize_session=False
+    )
+    db.delete(c)
+
+
+@router.delete("/customers/{customer_id}")
+def delete_customer(
+    customer_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    c = db.get(Customer, customer_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    _delete_customer_record(db, c)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Customer is referenced by another module record and cannot be deleted.",
+        )
+    return {"message": "Customer removed."}
+
+
+@router.post("/customers/bulk-delete")
+def bulk_delete_customers(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    deleted = 0
+    failed: list[dict[str, Any]] = []
+    for customer_id in dict.fromkeys(data.ids):
+        c = db.get(Customer, customer_id)
+        if not c:
+            failed.append({"id": customer_id, "name": f"Customer #{customer_id}", "reason": "Customer not found."})
+            continue
+        name = c.full_name
+        try:
+            with db.begin_nested():
+                _delete_customer_record(db, c)
+                db.flush()
+            deleted += 1
+        except HTTPException as exc:
+            failed.append({"id": customer_id, "name": name, "reason": str(exc.detail)})
+        except IntegrityError:
+            failed.append({"id": customer_id, "name": name, "reason": "Customer is referenced by another record."})
+    db.commit()
+    return {"deleted": deleted, "failed": failed, "message": f"Deleted {deleted} customer(s)."}
 
 
 # ==========================================
@@ -2127,6 +2605,63 @@ def create_invoice(
     return _serialize_activity_invoice(inv, db)
 
 
+def _delete_invoice_record(db: Session, inv: Invoice) -> str:
+    payment_count = db.scalar(
+        select(func.count(Payment.id)).where(
+            Payment.invoice_id == inv.id,
+            Payment.source_module == BUSINESS_CONTEXT,
+        )
+    ) or 0
+    if payment_count or inv.payment_status != PaymentStatus.PENDING:
+        raise HTTPException(
+            status_code=409,
+            detail="Invoices with recorded payments or settled status cannot be deleted.",
+        )
+    inv_num = inv.invoice_number
+    db.delete(inv)
+    return inv_num
+
+
+@router.delete("/invoices/{invoice_id}")
+def delete_invoice(
+    invoice_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    inv = db.scalar(select(Invoice).where(Invoice.id == invoice_id, Invoice.source_module == BUSINESS_CONTEXT))
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    inv_num = _delete_invoice_record(db, inv)
+    db.commit()
+    return {"message": f"Invoice {inv_num} cleared."}
+
+
+@router.post("/invoices/bulk-delete")
+def bulk_delete_invoices(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    deleted = 0
+    failed: list[dict[str, Any]] = []
+    for invoice_id in dict.fromkeys(data.ids):
+        inv = db.scalar(
+            select(Invoice).where(Invoice.id == invoice_id, Invoice.source_module == BUSINESS_CONTEXT)
+        )
+        if not inv:
+            failed.append({"id": invoice_id, "name": f"Invoice #{invoice_id}", "reason": "Invoice not found."})
+            continue
+        inv_num = inv.invoice_number
+        try:
+            _delete_invoice_record(db, inv)
+            db.flush()
+            deleted += 1
+        except HTTPException as exc:
+            failed.append({"id": invoice_id, "name": inv_num, "reason": str(exc.detail)})
+    db.commit()
+    return {"deleted": deleted, "failed": failed, "message": f"Cleared {deleted} invoice(s)."}
+
+
 @router.post("/invoices/{invoice_id}/payments", status_code=201)
 def record_payment(
     invoice_id: int,
@@ -2275,26 +2810,266 @@ def delete_activity_media(
 
 
 # ==========================================
-# STAFF (for session assignment)
+# STAFF / INSTRUCTORS (activity-linked)
 # ==========================================
+
+def _serialize_activity_staff(u: User, st: Staff | None, db: Session, *, target_activity_id: int | None = None) -> dict:
+    assigns = db.execute(
+        select(ActivityInstructorAssignment, Activity)
+        .join(Activity, ActivityInstructorAssignment.activity_id == Activity.id)
+        .where(
+            ActivityInstructorAssignment.staff_user_id == u.id,
+            Activity.business_context == BUSINESS_CONTEXT,
+            Activity.is_deleted.is_(False),
+        )
+        .order_by(Activity.name)
+    ).all()
+    today = get_kolkata_today()
+    upcoming_sessions = db.scalar(
+        select(func.count(ActivitySession.id))
+        .join(Activity, ActivitySession.activity_id == Activity.id)
+        .where(
+            Activity.business_context == BUSINESS_CONTEXT,
+            ActivitySession.assigned_staff_id == u.id,
+            ActivitySession.session_date >= today,
+            ActivitySession.status.in_(["Scheduled", "In Progress"]),
+        )
+    ) or 0
+    assigned_ids = [act.id for _, act in assigns]
+    return {
+        "id": u.id,
+        "staff_id": st.id if st else None,
+        "full_name": u.full_name,
+        "email": u.email,
+        "role": str(getattr(u.role, "value", u.role)),
+        "is_active": u.is_active,
+        "employee_code": st.employee_code if st else None,
+        "phone": st.phone if st else "",
+        "designation": st.designation if st else "Activity Instructor",
+        "assigned_activity_ids": assigned_ids,
+        "assigned_activities": [
+            {"id": act.id, "name": act.name, "category": act.category}
+            for _, act in assigns
+        ],
+        "is_assigned_to_activity": target_activity_id in assigned_ids if target_activity_id else False,
+        "upcoming_session_count": upcoming_sessions,
+    }
+
 
 @router.get("/staff")
 def list_staff(
     search: str | None = None,
+    activity_id: int | None = None,
+    assigned_only: bool = False,
+    include_inactive: bool = False,
     current_user: User = Depends(require_activity_context),
     db: Session = Depends(get_db),
 ):
-    """List active staff available for session assignment."""
-    q = select(User).where(User.is_active.is_(True), User.business_context == BUSINESS_CONTEXT)
+    """List activity instructors & coordinators, optionally filtered/prioritized by activity."""
+    q = (
+        select(User, Staff)
+        .outerjoin(Staff, Staff.user_id == User.id)
+        .where(User.business_context == BUSINESS_CONTEXT)
+    )
+    if not include_inactive:
+        q = q.where(User.is_active.is_(True))
     if search:
-        like = f"%{search}%"
-        q = q.where(or_(User.full_name.ilike(like), User.email.ilike(like)))
-    rows = db.execute(q.order_by(User.full_name).limit(100)).scalars().all()
-    return [
-        {"id": u.id, "full_name": u.full_name, "email": u.email,
-         "role": str(getattr(u.role, "value", u.role))}
-        for u in rows
+        like = f"%{search.strip()}%"
+        q = q.where(
+            or_(
+                User.full_name.ilike(like),
+                User.email.ilike(like),
+                Staff.employee_code.ilike(like),
+                Staff.phone.ilike(like),
+                Staff.designation.ilike(like),
+            )
+        )
+    rows = db.execute(q.order_by(User.full_name).limit(200)).all()
+    items = [
+        _serialize_activity_staff(u, st, db, target_activity_id=activity_id)
+        for u, st in rows
     ]
+    if activity_id:
+        if assigned_only:
+            items = [i for i in items if i["is_assigned_to_activity"]]
+        else:
+            items.sort(key=lambda x: (not x["is_assigned_to_activity"], x["full_name"].lower()))
+    return items
+
+
+@router.post("/staff", status_code=201)
+def create_staff_member(
+    data: ActivityStaffCreate,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    if db.scalar(select(User).where(func.lower(User.email) == data.email.lower())):
+        raise HTTPException(status_code=409, detail="Email address is already registered.")
+
+    emp_code = (data.employee_code or "").strip().upper()
+    if not emp_code:
+        emp_code = f"ACT-{secrets.token_hex(3).upper()}"
+    if db.scalar(select(Staff).where(Staff.employee_code == emp_code)):
+        raise HTTPException(status_code=409, detail=f"Employee code '{emp_code}' already exists.")
+
+    new_user = User(
+        full_name=data.full_name,
+        email=data.email,
+        password_hash=hash_password(secrets.token_urlsafe(24)),
+        role=UserRole.STAFF,
+        business_context=BUSINESS_CONTEXT,
+        is_active=data.is_active,
+    )
+    db.add(new_user)
+    db.flush()
+
+    st = Staff(
+        user_id=new_user.id,
+        employee_code=emp_code,
+        phone=data.phone,
+        designation=(data.designation or "Activity Instructor").strip(),
+    )
+    db.add(st)
+    _sync_staff_activities(db, new_user.id, data.activity_ids)
+    db.commit()
+    db.refresh(new_user)
+    db.refresh(st)
+    return _serialize_activity_staff(new_user, st, db)
+
+
+@router.patch("/staff/{user_id}")
+def update_staff_member(
+    user_id: int,
+    data: ActivityStaffUpdate,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    u = db.scalar(select(User).where(User.id == user_id, User.business_context == BUSINESS_CONTEXT))
+    if not u:
+        raise HTTPException(status_code=404, detail="Instructor / staff member not found")
+
+    st = db.scalar(select(Staff).where(Staff.user_id == user_id))
+    if data.email and data.email.lower() != u.email.lower():
+        if db.scalar(select(User).where(func.lower(User.email) == data.email.lower(), User.id != user_id)):
+            raise HTTPException(status_code=409, detail="Email address is already in use.")
+        u.email = data.email
+
+    if data.full_name is not None:
+        cleaned = data.full_name.strip()
+        if len(cleaned) < 2:
+            raise HTTPException(status_code=422, detail="Full name must be at least 2 characters.")
+        u.full_name = cleaned
+
+    if data.is_active is not None:
+        if user_id == current_user.id and not data.is_active:
+            raise HTTPException(status_code=409, detail="Cannot deactivate the currently logged-in manager.")
+        u.is_active = data.is_active
+
+    emp_code = data.employee_code.strip().upper() if data.employee_code else (st.employee_code if st else f"ACT-{secrets.token_hex(3).upper()}")
+    if st:
+        if emp_code != st.employee_code and db.scalar(select(Staff).where(Staff.employee_code == emp_code, Staff.id != st.id)):
+            raise HTTPException(status_code=409, detail=f"Employee code '{emp_code}' already exists.")
+        st.employee_code = emp_code
+        if data.phone is not None:
+            st.phone = data.phone.strip()
+        if data.designation is not None:
+            st.designation = data.designation.strip() or "Activity Instructor"
+    else:
+        if db.scalar(select(Staff).where(Staff.employee_code == emp_code)):
+            emp_code = f"ACT-{secrets.token_hex(3).upper()}"
+        st = Staff(
+            user_id=u.id,
+            employee_code=emp_code,
+            phone=(data.phone or "").strip() or "0000000000",
+            designation=(data.designation or "Activity Instructor").strip(),
+        )
+        db.add(st)
+
+    if data.activity_ids is not None:
+        _sync_staff_activities(db, u.id, data.activity_ids)
+
+    db.commit()
+    db.refresh(u)
+    db.refresh(st)
+    return _serialize_activity_staff(u, st, db)
+
+
+def _delete_staff_record(db: Session, u: User, current_user_id: int) -> None:
+    role_val = str(getattr(u.role, "value", u.role)).lower()
+    if u.id == current_user_id or role_val == "manager":
+        raise HTTPException(status_code=409, detail="Manager account cannot be deleted.")
+
+    today = get_kolkata_today()
+    active_sessions = db.scalar(
+        select(func.count(ActivitySession.id))
+        .join(Activity, ActivitySession.activity_id == Activity.id)
+        .where(
+            Activity.business_context == BUSINESS_CONTEXT,
+            ActivitySession.assigned_staff_id == u.id,
+            ActivitySession.session_date >= today,
+            ActivitySession.status.in_(["Scheduled", "In Progress"]),
+        )
+    ) or 0
+    if active_sessions > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Instructor has {active_sessions} upcoming/active session(s). Reassign or clear them first.",
+        )
+
+    db.query(ActivityInstructorAssignment).filter(
+        ActivityInstructorAssignment.staff_user_id == u.id
+    ).delete(synchronize_session=False)
+    db.query(Activity).filter(Activity.default_staff_id == u.id).update({"default_staff_id": None}, synchronize_session=False)
+    db.query(ActivitySchedule).filter(ActivitySchedule.default_staff_id == u.id).update({"default_staff_id": None}, synchronize_session=False)
+    db.query(ActivitySession).filter(ActivitySession.assigned_staff_id == u.id).update({"assigned_staff_id": None}, synchronize_session=False)
+    db.query(Staff).filter(Staff.user_id == u.id).delete(synchronize_session=False)
+    db.delete(u)
+
+
+@router.delete("/staff/{user_id}")
+def delete_staff_member(
+    user_id: int,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    u = db.scalar(select(User).where(User.id == user_id, User.business_context == BUSINESS_CONTEXT))
+    if not u:
+        raise HTTPException(status_code=404, detail="Instructor / staff member not found")
+    name = u.full_name
+    _delete_staff_record(db, u, current_user.id)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Instructor has historical references and cannot be removed. Deactivate instead.")
+    return {"message": f"Instructor '{name}' removed."}
+
+
+@router.post("/staff/bulk-delete")
+def bulk_delete_staff(
+    data: BulkDeleteRequest,
+    current_user: User = Depends(require_activity_context),
+    db: Session = Depends(get_db),
+):
+    deleted = 0
+    failed: list[dict[str, Any]] = []
+    for uid in dict.fromkeys(data.ids):
+        u = db.scalar(select(User).where(User.id == uid, User.business_context == BUSINESS_CONTEXT))
+        if not u:
+            failed.append({"id": uid, "name": f"Staff #{uid}", "reason": "Instructor not found."})
+            continue
+        name = u.full_name
+        try:
+            with db.begin_nested():
+                _delete_staff_record(db, u, current_user.id)
+                db.flush()
+            deleted += 1
+        except HTTPException as exc:
+            failed.append({"id": uid, "name": name, "reason": str(exc.detail)})
+        except IntegrityError:
+            failed.append({"id": uid, "name": name, "reason": "Instructor has historical references."})
+    db.commit()
+    return {"deleted": deleted, "failed": failed, "message": f"Deleted {deleted} instructor(s)."}
 
 
 # ==========================================

@@ -109,7 +109,7 @@ export default function VillasDashboard() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Villas & Units Dashboard"
+        title="Dashboard"
         description="Real-time resort occupancy, arrivals and departures, housekeeping readiness, and revenue summary."
         actions={
           <div className="flex flex-wrap items-center gap-2">

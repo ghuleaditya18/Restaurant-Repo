@@ -36,6 +36,10 @@ export default function ActivityRoster() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingRoster, setLoadingRoster] = useState(false);
   const [error, setError] = useState("");
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [rosterPage, setRosterPage] = useState(1);
+  const rosterPageSize = 10;
 
   const loadSessions = useCallback(async () => {
     setLoadingSessions(true);
@@ -86,6 +90,8 @@ export default function ActivityRoster() {
 
   const handleSessionChange = (sid) => {
     setSelectedSessionId(sid);
+    setRosterPage(1);
+    setSelectedIds(new Set());
     if (sid) {
       setSearchParams({ sessionId: sid }, { replace: true });
     } else {
@@ -103,8 +109,50 @@ export default function ActivityRoster() {
     }
   };
 
+  const handleSelectRow = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (ids) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkRosterAction = async (payload, msg) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkUpdating(true);
+    try {
+      await activitiesApi.bulkUpdateParticipants({ ids, ...payload });
+      showSuccess(msg);
+      setSelectedIds(new Set());
+      await loadRoster(selectedSessionId);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkUpdating(false);
+    }
+  };
+
   const session = rosterData?.session;
   const roster = rosterData?.roster || [];
+  const rosterTotalPages = Math.max(1, Math.ceil(roster.length / rosterPageSize));
+  const pagedRoster = roster.slice(
+    (rosterPage - 1) * rosterPageSize,
+    rosterPage * rosterPageSize
+  );
   const presentCount = roster.filter((r) => r.attendance_status === "Present").length;
   const unsignedCount = roster.filter((r) => !r.waiver_signed).length;
 
@@ -264,9 +312,10 @@ export default function ActivityRoster() {
 
       {session && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-fit max-w-full">
             <StatCard
               compact
+              className="!p-2.5"
               title="Seats Booked / Capacity"
               value={`${session.seats_booked} / ${session.capacity}`}
               description={`${session.seats_remaining} remaining`}
@@ -275,6 +324,7 @@ export default function ActivityRoster() {
             />
             <StatCard
               compact
+              className="!p-2.5"
               title="Instructor"
               value={session.assigned_staff_name || "Unassigned"}
               description={actTime(session.start_time) + " – " + actTime(session.end_time)}
@@ -283,6 +333,7 @@ export default function ActivityRoster() {
             />
             <StatCard
               compact
+              className="!p-2.5"
               title="Checked In (Present)"
               value={presentCount}
               description={`Of ${roster.length} roster entries`}
@@ -291,6 +342,7 @@ export default function ActivityRoster() {
             />
             <StatCard
               compact
+              className="!p-2.5"
               title="Unsigned Waivers"
               value={unsignedCount}
               description={unsignedCount > 0 ? "Signatures needed" : "All waivers clear"}
@@ -309,6 +361,51 @@ export default function ActivityRoster() {
         </>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="print:hidden flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs dark:border-amber-900/60 dark:bg-amber-950/30">
+          <span className="font-semibold text-stone-800 dark:text-stone-100">
+            {selectedIds.size} participant(s) selected
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={bulkUpdating}
+              onClick={() => handleBulkRosterAction({ waiver_signed: true }, "Selected waivers marked signed.")}
+              className={BUTTON_VARIANTS.outline}
+            >
+              <ShieldCheck size={13} />
+              <span>Sign Waivers</span>
+            </button>
+            <button
+              type="button"
+              disabled={bulkUpdating}
+              onClick={() => handleBulkRosterAction({ attendance_status: "Present" }, "Selected participants marked Present.")}
+              className={BUTTON_VARIANTS.success}
+            >
+              <CheckCircle2 size={13} />
+              <span>Mark Present</span>
+            </button>
+            <button
+              type="button"
+              disabled={bulkUpdating}
+              onClick={() => handleBulkRosterAction({ attendance_status: "No Show" }, "Selected participants marked No Show.")}
+              className={BUTTON_VARIANTS.danger}
+            >
+              <XCircle size={13} />
+              <span>Mark No Show</span>
+            </button>
+            <button
+              type="button"
+              disabled={bulkUpdating}
+              onClick={() => setSelectedIds(new Set())}
+              className={BUTTON_VARIANTS.secondary}
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
+
       <VillaDataTable
         title={session ? `${session.activity_name} — ${actDate(session.session_date)}` : "Session Roster"}
         subtitle={
@@ -319,11 +416,22 @@ export default function ActivityRoster() {
             : "Select a session above to inspect participant check-in and waivers"
         }
         columns={columns}
-        rows={roster}
+        rows={pagedRoster}
+        rowKey={(r) => r.participant_id}
         loading={loadingRoster}
         emptyTitle="No participants booked in this session"
         emptyDescription="Bookings assigned to this session will appear here automatically."
         tableMinWidth="min-w-[860px]"
+        selectedIds={selectedIds}
+        onSelectRow={handleSelectRow}
+        onSelectAll={handleSelectAll}
+        pagination={{
+          currentPage: rosterPage,
+          totalPages: rosterTotalPages,
+          totalRecords: roster.length,
+          pageSize: rosterPageSize,
+          onPageChange: setRosterPage,
+        }}
       />
     </div>
   );

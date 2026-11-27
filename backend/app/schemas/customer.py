@@ -35,6 +35,11 @@ def validate_phone(value: str) -> str:
     return value
 
 
+STRICT_EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$"
+)
+
+
 def validate_mandatory_email(value: str) -> str:
     if value is None:
         raise ValueError("Customer email is required.")
@@ -44,8 +49,8 @@ def validate_mandatory_email(value: str) -> str:
     if not value:
         raise ValueError("Customer email cannot be empty or whitespace only.")
 
-    if len(value) > 150 or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
-        raise ValueError("Enter a valid email address.")
+    if len(value) > 150 or ".." in value or not STRICT_EMAIL_RE.fullmatch(value):
+        raise ValueError("Enter a valid email address (e.g. name@example.com).")
 
     return value
 

@@ -42,6 +42,16 @@ import ActivityRoster from "./modules/activities/ActivityRoster";
 import ActivityCustomers from "./modules/activities/ActivityCustomers";
 import ActivityInvoices from "./modules/activities/ActivityInvoices";
 import ActivityReports from "./modules/activities/ActivityReports";
+import TransportDashboard from "./modules/transport/TransportDashboard";
+import TransportVehicles from "./modules/transport/TransportVehicles";
+import TransportDrivers from "./modules/transport/TransportDrivers";
+import TransportRoutesServices from "./modules/transport/TransportRoutesServices";
+import TransportBookings from "./modules/transport/TransportBookings";
+import TransportSchedule from "./modules/transport/TransportSchedule";
+import TransportMaintenance from "./modules/transport/TransportMaintenance";
+import TransportExpenses from "./modules/transport/TransportExpenses";
+import TransportInvoices from "./modules/transport/TransportInvoices";
+import TransportReports from "./modules/transport/TransportReports";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getModuleHomeRoute } from "./config/moduleRouting";
@@ -71,6 +81,7 @@ function AppRoutes() {
         ["villas", "VILLA"],
         ["packages", "PACKAGE"],
         ["activities", "ACTIVITY"],
+        ["transport", "TRANSPORT"],
       ].map(([path, context]) => (
         <Route
           key={path}
@@ -167,6 +178,28 @@ function AppRoutes() {
         <Route path="customers" element={<ActivityCustomers />} />
         <Route path="invoices" element={<ActivityInvoices />} />
         <Route path="reports" element={<ActivityReports />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+
+      {/* Transport Protected Routes */}
+      <Route
+        path="/transport"
+        element={
+          <ProtectedRoute allowedRoles={["MANAGER", "RECEPTIONIST"]} allowedContext="TRANSPORT">
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="dashboard" element={<TransportDashboard />} />
+        <Route path="vehicles" element={<TransportVehicles />} />
+        <Route path="drivers" element={<TransportDrivers />} />
+        <Route path="routes" element={<TransportRoutesServices />} />
+        <Route path="bookings" element={<TransportBookings />} />
+        <Route path="schedule" element={<TransportSchedule />} />
+        <Route path="maintenance" element={<TransportMaintenance />} />
+        <Route path="expenses" element={<TransportExpenses />} />
+        <Route path="invoices" element={<TransportInvoices />} />
+        <Route path="reports" element={<TransportReports />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 

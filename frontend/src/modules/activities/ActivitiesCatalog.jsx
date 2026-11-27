@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Archive,
   CalendarPlus,
   CheckCircle2,
   Clock,
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
 import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
@@ -64,6 +64,7 @@ const INITIAL_FORM = {
   max_age: "",
   requires_waiver: false,
   default_staff_id: "",
+  assigned_instructor_ids: [],
   is_complimentary: false,
   price_per_person: "",
   price_per_group: "",
@@ -91,11 +92,16 @@ export default function ActivitiesCatalog() {
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") || "");
   const [bookingTypeFilter, setBookingTypeFilter] = useState(searchParams.get("booking_type") || "");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
-  const [viewMode, setViewMode] = useState("cards");
+  const [viewMode, setViewMode] = useState("table");
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 12;
+
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   // Create / Edit Modal
   const [formOpen, setFormOpen] = useState(Boolean(searchParams.get("new")));
@@ -197,6 +203,7 @@ export default function ActivitiesCatalog() {
       max_age: act.max_age ?? "",
       requires_waiver: Boolean(act.requires_waiver),
       default_staff_id: act.default_staff_id ? String(act.default_staff_id) : "",
+      assigned_instructor_ids: Array.isArray(act.assigned_instructor_ids) ? act.assigned_instructor_ids : [],
       is_complimentary: Boolean(act.is_complimentary),
       price_per_person: act.price_per_person ?? "",
       price_per_group: act.price_per_group ?? "",
@@ -266,6 +273,7 @@ export default function ActivitiesCatalog() {
       max_age: form.max_age !== "" ? Number(form.max_age) : null,
       requires_waiver: Boolean(form.requires_waiver),
       default_staff_id: form.default_staff_id ? Number(form.default_staff_id) : null,
+      assigned_instructor_ids: (form.assigned_instructor_ids || []).map(Number),
       is_complimentary: Boolean(form.is_complimentary),
       price_per_person:
         !form.is_complimentary && String(form.price_per_person).trim() !== ""
@@ -321,6 +329,50 @@ export default function ActivitiesCatalog() {
       showError(actError(err));
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handleSelectRow = (id) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (ids) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    try {
+      const res = await activitiesApi.bulkRemove(ids);
+      const { cleared = 0, failed = [], message } = res.data || {};
+      setBulkFailures(failed);
+      setSelectedIds(new Set(failed.map((f) => f.id)));
+      setBulkDeleteOpen(false);
+      await loadActivities();
+      if (cleared > 0) showSuccess(message || `Cleared ${cleared} activity record(s).`);
+      if (failed.length > 0) showError(`${failed.length} activity record(s) could not be cleared.`);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -523,10 +575,10 @@ export default function ActivitiesCatalog() {
               <button
                 type="button"
                 onClick={() => setArchiveTarget(a)}
-                title="Archive Activity"
+                title="Delete / Archive Activity"
                 className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
               >
-                <Archive size={15} />
+                <Trash2 size={15} />
               </button>
             </>
           )}
@@ -543,13 +595,23 @@ export default function ActivitiesCatalog() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Activities Catalogue"
+        title="Catalogue"
         description="Manage resort activities, resources for Time Slot reservations, waiver & age rules, and activity photos."
         actions={
-          <button type="button" onClick={openCreate} className={BUTTON_VARIANTS.primary}>
-            <Plus size={15} />
-            <span>Create Activity</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/activities/schedule?tab=instructors")}
+              className={BUTTON_VARIANTS.secondary}
+            >
+              <Users size={15} />
+              <span>Manage Instructors</span>
+            </button>
+            <button type="button" onClick={openCreate} className={BUTTON_VARIANTS.primary}>
+              <Plus size={15} />
+              <span>Create Activity</span>
+            </button>
+          </div>
         }
       />
 
@@ -558,11 +620,11 @@ export default function ActivitiesCatalog() {
       )}
 
       {/* KPI SUMMARY */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard compact title="Matching Activities" value={loading ? "—" : totalRecords} icon={Compass} color="amber" />
-        <StatCard compact title="Active (This Page)" value={loading ? "—" : activeCount} icon={CheckCircle2} color="emerald" />
-        <StatCard compact title="Session / Time Slot" value={loading ? "—" : `${sessionCount} / ${timeSlotCount}`} icon={Layers} color="indigo" />
-        <StatCard compact title="Walk-In Activities" value={loading ? "—" : walkInCount} icon={Users} color="sky" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-fit max-w-full">
+        <StatCard compact className="!p-2.5" title="Matching Activities" value={loading ? "—" : totalRecords} icon={Compass} color="amber" />
+        <StatCard compact className="!p-2.5" title="Active (This Page)" value={loading ? "—" : activeCount} icon={CheckCircle2} color="emerald" />
+        <StatCard compact className="!p-2.5" title="Session / Time Slot" value={loading ? "—" : `${sessionCount} / ${timeSlotCount}`} icon={Layers} color="indigo" />
+        <StatCard compact className="!p-2.5" title="Walk-In Activities" value={loading ? "—" : walkInCount} icon={Users} color="sky" />
       </div>
 
       {/* BALANCED TOOLBAR */}
@@ -614,18 +676,6 @@ export default function ActivitiesCatalog() {
           <div className="inline-flex items-center rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] p-0.5 shrink-0">
             <button
               type="button"
-              onClick={() => setViewMode("cards")}
-              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                viewMode === "cards"
-                  ? "bg-white dark:bg-[#101722] text-[#172033] dark:text-white shadow-2xs"
-                  : "text-stone-500"
-              }`}
-            >
-              <LayoutGrid size={13} />
-              <span>Cards</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode("table")}
               className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                 viewMode === "table"
@@ -636,43 +686,81 @@ export default function ActivitiesCatalog() {
               <List size={13} />
               <span>Table</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                viewMode === "cards"
+                  ? "bg-white dark:bg-[#101722] text-[#172033] dark:text-white shadow-2xs"
+                  : "text-stone-500"
+              }`}
+            >
+              <LayoutGrid size={13} />
+              <span>Cards</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* CARDS OR TABLE VIEW */}
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setBulkDeleteOpen(true)}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="warning"
+          title="Some activities could not be cleared"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" | ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
+      {/* TABLE OR CARDS VIEW */}
       {viewMode === "cards" ? (
         loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className={`${CARD_STYLES.base} h-72 animate-pulse bg-stone-100 dark:bg-[#151D29]`} />
+              <div key={i} className={`${CARD_STYLES.base} h-56 animate-pulse bg-stone-100 dark:bg-[#151D29]`} />
             ))}
           </div>
         ) : activities.length === 0 ? (
-          <div className={`${CARD_STYLES.base} py-12 text-center`}>
-            <Compass size={32} className="mx-auto text-stone-400 mb-2" />
+          <div className={`${CARD_STYLES.base} py-10 text-center`}>
+            <Compass size={30} className="mx-auto text-stone-400 mb-2" />
             <p className="text-sm font-semibold">No activities found</p>
             <p className="text-xs text-stone-500 mt-1">Adjust filters or create your first activity.</p>
           </div>
         ) : (
           <VillaCardCarousel
             title="Activities"
-            subtitle="Scroll horizontally or switch to Table view for compact inspection"
+            subtitle="Compact activity cards — switch to Table view for full directory management"
             itemCount={activities.length}
           >
             {activities.map((a) => (
               <div
                 key={a.id}
-                className="w-[300px] sm:w-[320px] shrink-0 snap-start rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs overflow-hidden flex flex-col justify-between transition hover:border-amber-400/70"
+                className="w-[260px] sm:w-[272px] shrink-0 snap-start rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs overflow-hidden flex flex-col justify-between transition hover:border-amber-400/70"
               >
                 <div>
                   <div
                     onClick={() => openDetail(a.id, "overview")}
-                    className="relative h-40 w-full overflow-hidden bg-stone-100 dark:bg-[#151D29] cursor-pointer"
+                    className="relative h-32 w-full overflow-hidden bg-stone-100 dark:bg-[#151D29] cursor-pointer"
                   >
                     <ActivityCoverImage src={a.cover_image_url} alt={a.name} />
-                    <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5">
-                      <span className="rounded-full bg-black/65 backdrop-blur-xs px-2.5 py-0.5 text-[10px] font-bold text-white">
+                    <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
+                      {a.status !== "Archived" && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(a.id)}
+                          onChange={() => handleSelectRow(a.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${a.name}`}
+                          className="h-4 w-4 rounded border-white/80 accent-amber-500 cursor-pointer"
+                        />
+                      )}
+                      <span className="rounded-full bg-black/65 backdrop-blur-xs px-2 py-0.5 text-[10px] font-bold text-white">
                         {a.category}
                       </span>
                       <StatusBadge
@@ -681,12 +769,12 @@ export default function ActivitiesCatalog() {
                         size="sm"
                       />
                     </div>
-                    <div className="absolute top-2.5 right-2.5">
+                    <div className="absolute top-2 right-2">
                       <StatusBadge status={a.status} label={a.status} size="sm" />
                     </div>
                   </div>
 
-                  <div className="p-4 space-y-2.5">
+                  <div className="p-3 space-y-1.5">
                     <div>
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC] line-clamp-1">
@@ -704,62 +792,74 @@ export default function ActivitiesCatalog() {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-xs text-stone-600 dark:text-stone-300 pt-1">
-                      <div className="flex items-center gap-1.5">
-                        <Clock size={13} className="text-amber-500 shrink-0" />
+                    <div className="flex items-center justify-between gap-2 text-xs text-stone-600 dark:text-stone-300 pt-0.5">
+                      <div className="flex items-center gap-1">
+                        <Clock size={12} className="text-amber-500 shrink-0" />
                         <span>{a.duration_minutes} mins</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Users size={13} className="text-amber-500 shrink-0" />
+                      <div className="flex items-center gap-1">
+                        <Users size={12} className="text-amber-500 shrink-0" />
                         <span>{a.min_participants}–{a.max_participants} guests</span>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                      {a.requires_waiver && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-300">
-                          <ShieldAlert size={11} />
-                          Waiver Required
-                        </span>
-                      )}
-                      {a.booking_type === "time_slot" && (
-                        <span className="rounded-md bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900/50 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-300">
-                          {(a.resources || []).length} resource(s)
-                        </span>
-                      )}
-                    </div>
+                    {(a.requires_waiver || a.booking_type === "time_slot") && (
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        {a.requires_waiver && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-300">
+                            <ShieldAlert size={10} />
+                            Waiver
+                          </span>
+                        )}
+                        {a.booking_type === "time_slot" && (
+                          <span className="rounded-md bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800 dark:text-sky-300">
+                            {(a.resources || []).length} resource(s)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="border-t border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC]/70 dark:bg-[#151D29]/60 px-4 py-2.5 flex items-center justify-between gap-2">
+                <div className="border-t border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC]/70 dark:bg-[#151D29]/60 px-3 py-2 flex items-center justify-between gap-1.5">
                   <span className="text-xs font-bold text-[#172033] dark:text-white truncate">
                     {priceDisplay(a)}
                   </span>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => openDetail(a.id, "overview")}
                       title="Details, Resources & Media"
-                      className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
+                      className="rounded-lg p-1 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
                     >
-                      <Eye size={15} />
+                      <Eye size={14} />
                     </button>
                     <button
                       type="button"
                       onClick={() => openEdit(a)}
                       title="Edit Activity"
-                      className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800 cursor-pointer"
+                      className="rounded-lg p-1 text-stone-600 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800 cursor-pointer"
                     >
-                      <Edit3 size={15} />
+                      <Edit3 size={14} />
                     </button>
                     {a.status === "Active" && (
                       <button
                         type="button"
                         onClick={() => navigate(`/activities/bookings?new=1&activityId=${a.id}`)}
                         title="Book / Log Usage"
-                        className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                        className="rounded-lg p-1 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
                       >
-                        <CalendarPlus size={15} />
+                        <CalendarPlus size={14} />
+                      </button>
+                    )}
+                    {a.status !== "Archived" && (
+                      <button
+                        type="button"
+                        onClick={() => setArchiveTarget(a)}
+                        title="Delete / Archive Activity"
+                        className="rounded-lg p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     )}
                   </div>
@@ -777,6 +877,10 @@ export default function ActivitiesCatalog() {
           emptyTitle="No activities match filters"
           tableMinWidth="min-w-[920px]"
           onRowClick={(a) => openDetail(a.id, "overview")}
+          selectedIds={selectedIds}
+          onSelectRow={handleSelectRow}
+          onSelectAll={handleSelectAll}
+          isRowSelectable={(a) => a.status !== "Archived"}
           pagination={{
             currentPage: page,
             totalPages,
@@ -960,7 +1064,9 @@ export default function ActivitiesCatalog() {
               >
                 <option value="">None</option>
                 {staffList.map((u) => (
-                  <option key={u.id} value={u.id}>{u.full_name}</option>
+                  <option key={u.id} value={u.id}>
+                    {u.full_name} {u.designation ? `(${u.designation})` : ""}
+                  </option>
                 ))}
               </select>
             </div>
@@ -982,6 +1088,63 @@ export default function ActivitiesCatalog() {
               />
               <span>Complimentary Activity</span>
             </label>
+          </div>
+
+          <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                Assigned Instructors (Qualified for this Activity)
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setFormOpen(false);
+                  navigate("/activities/schedule?tab=instructors");
+                }}
+                className="text-xs font-semibold text-amber-600 hover:underline cursor-pointer"
+              >
+                + Add / Manage Instructors
+              </button>
+            </div>
+            {staffList.length === 0 ? (
+              <p className="text-xs text-stone-500">
+                No instructors configured yet. Click &quot;+ Add / Manage Instructors&quot; to create staff.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {staffList.map((u) => {
+                  const checked = (form.assigned_instructor_ids || []).includes(u.id);
+                  return (
+                    <label
+                      key={u.id}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+                        checked
+                          ? "border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                          : "border-[#E5E9F0] dark:border-[#1E293B] text-stone-600 dark:text-stone-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setForm((prev) => {
+                            const cur = prev.assigned_instructor_ids || [];
+                            return {
+                              ...prev,
+                              assigned_instructor_ids: cur.includes(u.id)
+                                ? cur.filter((id) => id !== u.id)
+                                : [...cur, u.id],
+                            };
+                          })
+                        }
+                        className="h-3.5 w-3.5 accent-amber-500"
+                      />
+                      <span>{u.full_name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {!form.is_complimentary && (
@@ -1356,10 +1519,20 @@ export default function ActivitiesCatalog() {
         isOpen={Boolean(archiveTarget)}
         onClose={() => setArchiveTarget(null)}
         onConfirm={handleConfirmArchive}
-        title="Archive Activity?"
-        message={`Archive "${archiveTarget?.name}"? Historical bookings and sessions will remain intact, and the activity will be hidden from active booking creation.`}
-        confirmText="Archive Activity"
+        title="Delete / Archive Activity?"
+        message={`Clear "${archiveTarget?.name}"? Unused activities are deleted permanently; activities with booking/session history are archived safely.`}
+        confirmText="Clear Activity"
         loading={archiving}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={`Clear ${selectedIds.size} Selected Activity Record(s)?`}
+        message="Unused activities will be deleted permanently and activities with history will be archived (unless active Pending/Confirmed bookings remain)."
+        confirmText="Clear Selected"
+        loading={bulkDeleting}
       />
     </div>
   );

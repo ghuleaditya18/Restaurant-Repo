@@ -8,18 +8,22 @@ import {
   FileText,
   IndianRupee,
   Search,
+  Trash2,
   Wallet,
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { useNotification } from "../../context/NotificationContext";
+import useBulkSelection from "../../hooks/useBulkSelection";
 import { BUTTON_VARIANTS, CARD_STYLES, INPUT_STYLES } from "../../utils/themeTokens";
 import VillaDataTable from "../villas/VillaDataTable";
-import { packagesApi, pkgDateTime, pkgError, pkgMoney } from "./packagesApi";
+import { notifyPackagesRefresh, packagesApi, pkgDateTime, pkgError, pkgMoney } from "./packagesApi";
 
 const PAYMENT_METHODS = ["Cash", "UPI", "Card", "Net Banking"];
 const PAYMENT_TYPES = ["Advance", "Partial", "Full"];
@@ -42,6 +46,7 @@ function savePdfBlob(blob, filename) {
 export default function PackageInvoices() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { showSuccess, showError } = useNotification();
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
 
   const preselectedBookingId = searchParams.get("bookingId") || "";
 
@@ -55,7 +60,14 @@ export default function PackageInvoices() {
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 15;
+  const pageSize = 10;
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingOne, setDeletingOne] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   // Generate Invoice Modal
   const [genOpen, setGenOpen] = useState(Boolean(preselectedBookingId));
@@ -115,6 +127,58 @@ export default function PackageInvoices() {
     setPage(1);
   }, [searchQuery, statusFilter]);
 
+  useEffect(() => {
+    clear();
+    setBulkFailures([]);
+  }, [searchQuery, statusFilter, page, clear]);
+
+  const handleDeleteInvoice = async () => {
+    if (!deleteTarget) return;
+    setDeletingOne(true);
+    setDeleteError("");
+    try {
+      await packagesApi.deleteInvoice(deleteTarget.id);
+      showSuccess(`Invoice ${deleteTarget.invoice_number} deleted.`);
+      setDeleteTarget(null);
+      notifyPackagesRefresh();
+      await loadData();
+    } catch (err) {
+      setDeleteError(pkgError(err));
+    } finally {
+      setDeletingOne(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    const deleted = [];
+    const failed = [];
+    for (const id of selectedIds) {
+      const target = invoices.find((inv) => inv.id === id);
+      try {
+        await packagesApi.deleteInvoice(id);
+        deleted.push(id);
+      } catch (err) {
+        failed.push({ id, name: target?.invoice_number || `#${id}`, reason: pkgError(err) });
+      }
+    }
+    await loadData();
+    notifyPackagesRefresh();
+    clear();
+    failed.forEach((f) => toggle(f.id));
+    setBulkFailures(failed);
+    setBulkDeleting(false);
+    setBulkConfirmOpen(false);
+    if (deleted.length > 0 && failed.length === 0) {
+      showSuccess(`Deleted ${deleted.length} invoice${deleted.length === 1 ? "" : "s"}.`);
+    } else if (deleted.length > 0 && failed.length > 0) {
+      showSuccess(`Deleted ${deleted.length} invoice(s). ${failed.length} could not be deleted.`);
+    } else if (failed.length > 0) {
+      showError("Selected invoices with recorded payments cannot be deleted.");
+    }
+  };
+
   const handleGenerateInvoice = async (e) => {
     e.preventDefault();
     setGenError("");
@@ -132,6 +196,7 @@ export default function PackageInvoices() {
       showSuccess(`Invoice ${res.data.invoice_number} generated.`);
       setGenOpen(false);
       setGenForm({ booking_id: "", gst_rate: "18.00", notes: "" });
+      notifyPackagesRefresh();
       await loadData();
     } catch (err) {
       setGenError(pkgError(err));
@@ -140,13 +205,23 @@ export default function PackageInvoices() {
     }
   };
 
+  const computeHalfPaymentAmount = (inv) => {
+    const balance = Number(inv?.balance_due || 0);
+    const total = Number(inv?.total_amount || balance);
+    const halfTotal = Number((total / 2).toFixed(2));
+    if (balance <= 0) return "0.00";
+    if (balance >= halfTotal) return halfTotal.toFixed(2);
+    return Number((balance / 2).toFixed(2)).toFixed(2);
+  };
+
   const openPayModal = (inv) => {
+    const balance = Number(inv.balance_due || 0);
     setPayTarget(inv);
     setPayError("");
     setPayForm({
-      amount: String(inv.balance_due ?? ""),
+      amount: balance.toFixed(2),
       payment_method: "UPI",
-      payment_type: Number(inv.paid_amount || 0) === 0 ? "Advance" : "Full",
+      payment_type: "Full",
       reference_number: "",
     });
   };
@@ -174,6 +249,7 @@ export default function PackageInvoices() {
       });
       showSuccess(`Recorded ${pkgMoney(amt)} payment on ${payTarget.invoice_number}.`);
       setPayTarget(null);
+      notifyPackagesRefresh();
       await loadData();
       if (detailInvoice?.id === payTarget.id && res.data?.invoice) {
         setDetailInvoice(res.data.invoice);
@@ -286,44 +362,70 @@ export default function PackageInvoices() {
       label: "Actions",
       align: "right",
       cellClassName: "whitespace-nowrap",
-      render: (inv) => (
-        <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => openDetail(inv.id)}
-            title="View Invoice & Payment History"
-            className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
-          >
-            <Eye size={15} />
-          </button>
-          {Number(inv.balance_due || 0) > 0 && inv.booking_status !== "Cancelled" && (
+      render: (inv) => {
+        const canPay = Number(inv.balance_due || 0) > 0 && inv.booking_status !== "Cancelled";
+        const canDelete =
+          Number(inv.paid_amount || 0) === 0 && inv.payment_status === "Pending";
+        return (
+          <div className="inline-flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
-              onClick={() => openPayModal(inv)}
-              title="Record Payment (Advance / Partial / Full)"
-              className="rounded-lg px-2 py-1 text-xs font-semibold bg-amber-100 dark:bg-[#30251C] text-amber-900 dark:text-[#FFB02E] hover:brightness-95 cursor-pointer"
+              disabled={!canPay}
+              onClick={() => canPay && openPayModal(inv)}
+              title={
+                canPay
+                  ? "Record Payment (Advance / Partial / Full)"
+                  : inv.booking_status === "Cancelled"
+                    ? "Booking is cancelled"
+                    : "Invoice is fully paid"
+              }
+              className="rounded-lg px-2.5 py-1 text-xs font-semibold bg-amber-100 dark:bg-[#30251C] text-amber-900 dark:text-[#FFB02E] hover:brightness-95 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer transition"
             >
               Pay
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => handleDownloadPdf(inv)}
-            title="Download Invoice PDF"
-            className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
-          >
-            <Download size={15} />
-          </button>
-        </div>
-      ),
+            <button
+              type="button"
+              onClick={() => openDetail(inv.id)}
+              title="View Invoice & Payment History"
+              className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
+            >
+              <Eye size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDownloadPdf(inv)}
+              title="Download Invoice PDF"
+              className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+            >
+              <Download size={15} />
+            </button>
+            <button
+              type="button"
+              disabled={!canDelete}
+              onClick={() => {
+                if (!canDelete) return;
+                setDeleteError("");
+                setDeleteTarget(inv);
+              }}
+              title={
+                canDelete
+                  ? "Delete Unpaid Invoice"
+                  : "Invoices with recorded payments cannot be deleted"
+              }
+              className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer transition"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Invoices & Payments"
-        description="Manage package invoices, advance/partial/full payments across Cash, UPI, Card, Net Banking, and PDF receipts."
+        title="Invoices"
         actions={
           <button
             type="button"
@@ -341,7 +443,7 @@ export default function PackageInvoices() {
 
       {pageError && <AlertBanner variant="error" message={pageError} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-4xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard compact title="Invoiced Total (Page)" value={loading ? "—" : pkgMoney(totals.total)} icon={FileText} color="amber" />
         <StatCard compact title="Collected (Page)" value={loading ? "—" : pkgMoney(totals.paid)} icon={IndianRupee} color="emerald" />
         <StatCard compact title="Outstanding Balance (Page)" value={loading ? "—" : pkgMoney(totals.balance)} icon={Wallet} color={totals.balance > 0 ? "rose" : "emerald"} />
@@ -384,6 +486,25 @@ export default function PackageInvoices() {
         </div>
       </div>
 
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onDelete={() => setBulkConfirmOpen(true)}
+        onClear={() => {
+          clear();
+          setBulkFailures([]);
+        }}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="error"
+          title="Some invoices could not be deleted"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" · ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
       <VillaDataTable
         columns={columns}
         rows={invoices}
@@ -393,6 +514,15 @@ export default function PackageInvoices() {
         emptyDescription="Generate an invoice for any active package booking to collect payments."
         tableMinWidth="min-w-[920px]"
         onRowClick={(inv) => openDetail(inv.id)}
+        selectedIds={selectedIds}
+        onSelectRow={(id) => {
+          setBulkFailures([]);
+          toggle(id);
+        }}
+        onSelectAll={(ids) => {
+          setBulkFailures([]);
+          toggleMany(ids);
+        }}
         pagination={{
           currentPage: page,
           totalPages,
@@ -503,10 +633,17 @@ export default function PackageInvoices() {
                 value={payForm.payment_type}
                 onChange={(e) => {
                   const nextType = e.target.value;
+                  const fullAmt = Number(payTarget.balance_due || 0).toFixed(2);
+                  const halfAmt = computeHalfPaymentAmount(payTarget);
                   setPayForm((f) => ({
                     ...f,
                     payment_type: nextType,
-                    amount: nextType === "Full" ? String(payTarget.balance_due) : f.amount,
+                    amount:
+                      nextType === "Full"
+                        ? fullAmt
+                        : nextType === "Partial"
+                          ? halfAmt
+                          : f.amount,
                   }));
                 }}
                 className={INPUT_STYLES.select}
@@ -540,10 +677,25 @@ export default function PackageInvoices() {
                 min="0.01"
                 max={payTarget.balance_due}
                 required
+                readOnly={payForm.payment_type === "Full"}
                 value={payForm.amount}
-                onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))}
-                className={INPUT_STYLES.base}
+                onChange={(e) => {
+                  if (payForm.payment_type === "Full") return;
+                  setPayForm((f) => ({ ...f, amount: e.target.value }));
+                }}
+                className={`${INPUT_STYLES.base} ${
+                  payForm.payment_type === "Full"
+                    ? "bg-stone-100 dark:bg-stone-800/80 text-stone-600 dark:text-stone-300 cursor-not-allowed"
+                    : ""
+                }`}
               />
+              <p className="mt-1 text-[11px] text-stone-500">
+                {payForm.payment_type === "Full"
+                  ? "Full payment locks amount to the remaining balance due."
+                  : payForm.payment_type === "Partial"
+                    ? "Auto-set to 50% of total (editable)."
+                    : "Enter the advance amount up to the remaining balance."}
+              </p>
             </div>
             <div>
               <label className="block text-xs font-bold uppercase mb-1">Transaction Reference</label>
@@ -651,6 +803,30 @@ export default function PackageInvoices() {
           </div>
         )}
       </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        onConfirm={handleDeleteInvoice}
+        title="Delete Invoice"
+        recordName={deleteTarget?.invoice_number || ""}
+        message="Only unpaid Pending invoices with zero recorded payments can be deleted."
+        loading={deletingOne}
+        errorMessage={deleteError}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkConfirmOpen}
+        onClose={() => setBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={`Delete ${selectedIds.size} Selected Invoice${selectedIds.size === 1 ? "" : "s"}`}
+        recordName={`${selectedIds.size} selected invoice(s)`}
+        message="Unpaid Pending invoices will be deleted. Invoices with recorded payments remain protected."
+        loading={bulkDeleting}
+      />
     </div>
   );
 }

@@ -160,6 +160,18 @@ def require_activity_context(
     return current_user
 
 
+def require_transport_context(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    biz_context = getattr(current_user, "business_context", "RESTAURANT") or "RESTAURANT"
+    if str(biz_context).upper() not in {"TRANSPORT", "TRANSPORTS"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Transport account required"
+        )
+    return current_user
+
+
 def require_restaurant_context_image(
     current_user: User = Depends(require_restaurant_context)
 ) -> User:
@@ -168,5 +180,11 @@ def require_restaurant_context_image(
 
 def require_spa_context_image(
     current_user: User = Depends(require_spa_context)
+) -> User:
+    return current_user
+
+
+def require_transport_context_image(
+    current_user: User = Depends(require_transport_context)
 ) -> User:
     return current_user

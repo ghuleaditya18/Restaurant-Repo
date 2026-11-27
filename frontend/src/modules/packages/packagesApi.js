@@ -2,8 +2,15 @@ import api from "../../services/api";
 
 const base = "/api/packages";
 
+export function notifyPackagesRefresh() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("newaraai:package-notifications-refresh"));
+  }
+}
+
 export const packagesApi = {
   dashboard: () => api.get(`${base}/dashboard`),
+  notifications: () => api.get(`${base}/notifications`),
   categories: () => api.get(`${base}/categories`),
   settings: () => api.get(`${base}/settings`),
 
@@ -56,11 +63,13 @@ export const packagesApi = {
   createCustomer: (data) => api.post(`${base}/customers`, data),
   customerDetail: (id) => api.get(`${base}/customers/${id}`),
   updateCustomer: (id, data) => api.patch(`${base}/customers/${id}`, data),
+  deleteCustomer: (id) => api.delete(`${base}/customers/${id}`),
 
   // Invoices & Payments
   invoices: (params) => api.get(`${base}/invoices`, { params }),
   invoiceDetail: (id) => api.get(`${base}/invoices/${id}`),
   createInvoice: (data) => api.post(`${base}/invoices`, data),
+  deleteInvoice: (id) => api.delete(`${base}/invoices/${id}`),
   invoicePayments: (id) => api.get(`${base}/invoices/${id}/payments`),
   recordPayment: (invoiceId, data) => api.post(`${base}/invoices/${invoiceId}/payments`, data),
   downloadInvoicePdf: async (id) => {

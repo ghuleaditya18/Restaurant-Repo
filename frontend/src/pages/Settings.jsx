@@ -32,6 +32,7 @@ import {
   BookOpen,
   Package,
   Compass,
+  Car,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -40,13 +41,14 @@ import { useTheme } from "../context/ThemeContext";
 import { updateProfile, uploadProfileImage, deleteProfileImage } from "../services/authService";
 import { getBusinessProfile, updateBusinessProfile } from "../services/businessProfileService";
 import { resolveImageUrl } from "../utils/mediaUtils";
-import { validateMobileNumber } from "../utils/validation";
+import { sanitizeMobileInput, validateEmailAddress, validateMobileNumber } from "../utils/validation";
 import BusinessProfileEditor from "../components/BusinessProfileEditor";
 import PageHeader from "../components/PageHeader";
 import { SPA_HELP_SECTIONS } from "../config/spaSettingsConfig";
 import { VILLAS_HELP_SECTIONS, VILLAS_ABOUT_CONFIG } from "../config/villasSettingsConfig";
 import { PACKAGES_HELP_SECTIONS, PACKAGES_ABOUT_CONFIG } from "../config/packagesSettingsConfig";
 import { ACTIVITIES_HELP_SECTIONS, ACTIVITIES_ABOUT_CONFIG } from "../config/activitiesSettingsConfig";
+import { TRANSPORT_HELP_SECTIONS, TRANSPORT_ABOUT_CONFIG } from "../config/transportSettingsConfig";
 import { villasApi, villaMoney, villaError, formatTime12h } from "../modules/villas/villasApi";
 import {
   BUTTON_VARIANTS,
@@ -238,6 +240,7 @@ export default function Settings() {
   const isVillaContext = user?.business_context === "VILLA";
   const isPackageContext = user?.business_context === "PACKAGE";
   const isActivityContext = user?.business_context === "ACTIVITY";
+  const isTransportContext = user?.business_context === "TRANSPORT";
   const currentHelpSections = isSpaContext
     ? SPA_HELP_SECTIONS
     : isVillaContext
@@ -246,7 +249,9 @@ export default function Settings() {
         ? PACKAGES_HELP_SECTIONS
         : isActivityContext
           ? ACTIVITIES_HELP_SECTIONS
-          : HELP_SECTIONS;
+          : isTransportContext
+            ? TRANSPORT_HELP_SECTIONS
+            : HELP_SECTIONS;
   const isManager = (user?.role || "").toLowerCase() === "manager" || (user?.role || "").toLowerCase() === "admin";
 
   const { themeMode, setThemeMode } = useTheme();
@@ -455,7 +460,10 @@ export default function Settings() {
 
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
-    setProfileForm((prev) => ({ ...prev, [name]: value }));
+    setProfileForm((prev) => ({
+      ...prev,
+      [name]: name === "phone" ? sanitizeMobileInput(value) : value,
+    }));
   };
 
   const handleProfileCancel = async () => {
@@ -495,20 +503,18 @@ export default function Settings() {
       return;
     }
 
-    const trimmedEmail = profileForm.email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-      setProfileError("Please enter a valid email address.");
+    const emailCheck = validateEmailAddress(profileForm.email, { required: true });
+    if (!emailCheck.valid) {
+      setProfileError(emailCheck.error);
       return;
     }
+    const trimmedEmail = emailCheck.normalized;
 
     const trimmedPhone = profileForm.phone.trim();
     if (trimmedPhone) {
-      const phoneRegex = /^[6-9][0-9]{9}$/;
-      if (!phoneRegex.test(trimmedPhone)) {
-        setProfileError(
-          "Phone number must be a valid 10-digit mobile number starting with 6, 7, 8, or 9."
-        );
+      const phoneCheck = validateMobileNumber(trimmedPhone, { required: false });
+      if (!phoneCheck.valid) {
+        setProfileError(phoneCheck.error);
         return;
       }
     }
@@ -576,7 +582,7 @@ export default function Settings() {
         title={
           isSpaContext
             ? "Spa Facility Settings"
-            : isVillaContext || isPackageContext || isActivityContext
+            : isVillaContext || isPackageContext || isActivityContext || isTransportContext
               ? "Settings"
               : "System Settings"
         }
@@ -712,8 +718,12 @@ export default function Settings() {
                           : isVillaContext
                             ? "Villas Manager"
                             : isPackageContext
-                              ? "Packages Manager"
-                              : "Receptionist User")}
+                            ? "Packages Manager"
+                            : isActivityContext
+                              ? "Activities Manager"
+                              : isTransportContext
+                                ? "Transport Manager"
+                                : "Receptionist User")}
                     </h2>
                   </div>
                   <p className="mt-0.5 text-xs sm:text-sm text-stone-500 dark:text-stone-400 truncate">
@@ -721,7 +731,7 @@ export default function Settings() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
                     <span className="rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 font-semibold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-                      {isSpaContext ? "Role: Spa Receptionist" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
+                      {isSpaContext ? "Role: Spa Receptionist" : isTransportContext ? "Role: Transport Manager" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
                     </span>
                     <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
                       {isSpaContext
@@ -730,7 +740,11 @@ export default function Settings() {
                           ? "Context: Villas & Units"
                           : isPackageContext
                             ? "Context: Packages"
-                            : "Context: Restaurant"}
+                            : isActivityContext
+                              ? "Context: Activities"
+                              : isTransportContext
+                                ? "Context: Transport Management"
+                                : "Context: Restaurant"}
                     </span>
                     {user?.phone ? (
                       <span className="inline-flex items-center gap-1 text-stone-500 dark:text-stone-400">
@@ -915,10 +929,11 @@ export default function Settings() {
                     <div className="relative">
                       <input
                         type="tel"
+                        inputMode="numeric"
                         name="phone"
                         value={profileForm.phone}
                         onChange={handleProfileChange}
-                        maxLength={15}
+                        maxLength={10}
                         disabled={profileSaving}
                         placeholder="e.g. 9876543210"
                         className={INPUT_STYLES.base}
@@ -1563,7 +1578,9 @@ export default function Settings() {
                         ? "Packages"
                         : isActivityContext
                           ? "Activities Management"
-                          : "Restaurant"}
+                          : isTransportContext
+                            ? "Transport Management"
+                            : "Restaurant"}
                 </p>
               </div>
               <div className="rounded-xl bg-stone-50/70 dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800 p-2.5">
@@ -1612,7 +1629,7 @@ export default function Settings() {
                   Complete Your Business Profile
                 </h3>
                 <p className="mt-1.5 text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
-                  Some business information still needs to be added before your {isSpaContext ? "spa facility" : isVillaContext ? "villas property" : isPackageContext ? "packages" : isActivityContext ? "activities" : "restaurant"} profile is fully configured.
+                  Some business information still needs to be added before your {isSpaContext ? "spa facility" : isVillaContext ? "villas property" : isPackageContext ? "packages" : isActivityContext ? "activities" : isTransportContext ? "transport" : "restaurant"} profile is fully configured.
                 </p>
               </div>
 
@@ -1663,7 +1680,7 @@ export default function Settings() {
                   <div className="flex flex-wrap items-center gap-2">
                     {bizProfile.business_type && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF7E8] dark:bg-[#30251C] border border-[#FFEDD5] dark:border-[#9A3412]/40 px-3 py-0.5 text-xs font-semibold text-[#9A3412] dark:text-[#FFB02E]">
-                        {isSpaContext ? <Sparkles size={13} /> : isVillaContext ? <Building2 size={13} /> : isPackageContext ? <Package size={13} /> : isActivityContext ? <Compass size={13} /> : <Utensils size={13} />}
+                        {isSpaContext ? <Sparkles size={13} /> : isVillaContext ? <Building2 size={13} /> : isPackageContext ? <Package size={13} /> : isActivityContext ? <Compass size={13} /> : isTransportContext ? <Car size={13} /> : <Utensils size={13} />}
                         {bizProfile.business_type}
                       </span>
                     )}
@@ -1714,10 +1731,10 @@ export default function Settings() {
 
                   <div className="hidden sm:flex flex-col items-center justify-center rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-b from-amber-50/60 to-white dark:from-amber-950/20 dark:to-[#101722] p-5 text-center w-48 shadow-2xs">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs">
-                      {isSpaContext ? <Sparkles size={24} /> : isVillaContext ? <Building2 size={24} /> : isPackageContext ? <Package size={24} /> : isActivityContext ? <Compass size={24} /> : <ChefHat size={24} />}
+                      {isSpaContext ? <Sparkles size={24} /> : isVillaContext ? <Building2 size={24} /> : isPackageContext ? <Package size={24} /> : isActivityContext ? <Compass size={24} /> : isTransportContext ? <Car size={24} /> : <ChefHat size={24} />}
                     </div>
                     <h4 className="mt-2.5 text-xs font-bold text-stone-900 dark:text-stone-100">
-                      {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : isPackageContext ? PACKAGES_ABOUT_CONFIG.applicationName : isActivityContext ? ACTIVITIES_ABOUT_CONFIG.applicationName : "Restaurant & Dining"}
+                      {isSpaContext ? "Spa & Wellness" : isVillaContext ? "Villas & Units" : isPackageContext ? PACKAGES_ABOUT_CONFIG.applicationName : isActivityContext ? ACTIVITIES_ABOUT_CONFIG.applicationName : isTransportContext ? TRANSPORT_ABOUT_CONFIG.applicationName : "Restaurant & Dining"}
                     </h4>
                     <p className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400 leading-tight">
                       Verified Business Identity

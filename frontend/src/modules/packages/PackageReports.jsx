@@ -116,8 +116,7 @@ export default function PackageReports() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Packages Reports"
-        description="Sales, category performance, revenue collection, package statuses, cancellations, and outstanding balances."
+        title="Reports"
         actions={
           <button type="button" onClick={handleExportCsv} className={BUTTON_VARIANTS.secondary}>
             <Download size={15} />

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Edit3, Eye, Mail, Phone, Search, UserPlus, Users } from "lucide-react";
+import { Edit3, Eye, Mail, Phone, Search, Trash2, UserPlus, Users } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
@@ -43,6 +45,12 @@ export default function ActivityCustomers() {
   const [saving, setSaving] = useState(false);
 
   const [detail, setDetail] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -111,12 +119,10 @@ export default function ActivityCustomers() {
       setFormError(phoneCheck.error);
       return;
     }
-    if (form.email.trim()) {
-      const emailCheck = validateEmailAddress(form.email, { required: false });
-      if (!emailCheck.valid) {
-        setFormError(emailCheck.error);
-        return;
-      }
+    const emailCheck = validateEmailAddress(form.email, { required: true });
+    if (!emailCheck.valid) {
+      setFormError(emailCheck.error);
+      return;
     }
 
     setSaving(true);
@@ -124,7 +130,7 @@ export default function ActivityCustomers() {
       const payload = {
         full_name: form.full_name.trim(),
         phone: phoneCheck.normalized,
-        email: form.email.trim() || null,
+        email: emailCheck.normalized,
         address: form.address.trim() || null,
       };
       if (editing) {
@@ -140,6 +146,70 @@ export default function ActivityCustomers() {
       setFormError(actError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSelectRow = (id) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (ids) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await activitiesApi.deleteCustomer(deleteTarget.id);
+      showSuccess(res.data?.message || `Customer "${deleteTarget.full_name}" removed.`);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.id);
+        return next;
+      });
+      setDeleteTarget(null);
+      await loadCustomers();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    try {
+      const res = await activitiesApi.bulkDeleteCustomers(ids);
+      const { deleted = 0, failed = [], message } = res.data || {};
+      setBulkFailures(failed);
+      setSelectedIds(new Set(failed.map((f) => f.id)));
+      setBulkDeleteOpen(false);
+      await loadCustomers();
+      if (deleted > 0) showSuccess(message || `Deleted ${deleted} customer(s).`);
+      if (failed.length > 0) showError(`${failed.length} customer(s) could not be deleted.`);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -213,6 +283,14 @@ export default function ActivityCustomers() {
           >
             <Edit3 size={15} />
           </button>
+          <button
+            type="button"
+            onClick={() => setDeleteTarget(c)}
+            title="Delete Customer"
+            className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+          >
+            <Trash2 size={15} />
+          </button>
         </div>
       ),
     },
@@ -233,10 +311,11 @@ export default function ActivityCustomers() {
 
       {pageError && <AlertBanner variant="error" message={pageError} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
-        <StatCard compact title="Total Customers" value={loading ? "—" : totalRecords} icon={Users} color="amber" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-fit max-w-full">
+        <StatCard compact className="!p-2.5" title="Total Customers" value={loading ? "—" : totalRecords} icon={Users} color="amber" />
         <StatCard
           compact
+          className="!p-2.5"
           title="Repeat Activity Guests"
           value={loading ? "—" : customers.filter((c) => (c.activity_bookings_count || 0) >= 2).length}
           icon={Users}
@@ -244,6 +323,7 @@ export default function ActivityCustomers() {
         />
         <StatCard
           compact
+          className="!p-2.5"
           title="With Activity Bookings"
           value={loading ? "—" : customers.filter((c) => (c.activity_bookings_count || 0) > 0).length}
           icon={Users}
@@ -266,6 +346,22 @@ export default function ActivityCustomers() {
         </div>
       </div>
 
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setBulkDeleteOpen(true)}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="warning"
+          title="Some customers could not be deleted"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" | ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
       <VillaDataTable
         title="Customer Directory"
         columns={columns}
@@ -274,6 +370,9 @@ export default function ActivityCustomers() {
         emptyTitle="No customers found"
         tableMinWidth="min-w-[740px]"
         onRowClick={(c) => openDetail(c.id)}
+        selectedIds={selectedIds}
+        onSelectRow={handleSelectRow}
+        onSelectAll={handleSelectAll}
         pagination={{
           currentPage: page,
           totalPages,
@@ -312,9 +411,10 @@ export default function ActivityCustomers() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-bold">Email</label>
+            <label className="mb-1 block text-xs font-bold">Email *</label>
             <input
               type="email"
+              required
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               className={INPUT_STYLES.base}
@@ -380,6 +480,26 @@ export default function ActivityCustomers() {
           </div>
         )}
       </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Customer?"
+        message={`Remove "${deleteTarget?.full_name || "Customer"}"? Customers with existing bookings, invoices, or orders must have those records cleared first.`}
+        confirmText="Delete Customer"
+        loading={deleting}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={`Delete ${selectedIds.size} Selected Customer(s)?`}
+        message="Eligible customers with no linked bookings, invoices, or orders will be deleted permanently."
+        confirmText="Delete Selected"
+        loading={bulkDeleting}
+      />
     </div>
   );
 }

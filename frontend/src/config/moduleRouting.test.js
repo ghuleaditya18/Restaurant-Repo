@@ -22,6 +22,8 @@ test("module API routing sends Restaurant and Spa to port 8000, Villas to port 8
   assert.equal(getModuleApiBaseUrl("PACKAGES"), PACKAGES_API_BASE_URL);
   assert.equal(getModuleApiBaseUrl("ACTIVITY"), ACTIVITIES_API_BASE_URL);
   assert.equal(getModuleApiBaseUrl("ACTIVITIES"), ACTIVITIES_API_BASE_URL);
+  assert.equal(getModuleApiBaseUrl("TRANSPORT"), DEFAULT_API_BASE_URL);
+  assert.equal(getModuleApiBaseUrl("TRANSPORTS"), DEFAULT_API_BASE_URL);
 
   assert.equal(DEFAULT_API_BASE_URL, "http://127.0.0.1:8000");
   assert.equal(VILLAS_API_BASE_URL, "http://127.0.0.1:8001");
@@ -50,6 +52,8 @@ test("module home routes and aliases normalize consistently", () => {
   assert.equal(normalizeModuleContext("packages"), "PACKAGE");
   assert.equal(getModuleHomeRoute("ACTIVITY"), "/activities/dashboard");
   assert.equal(normalizeModuleContext("activities"), "ACTIVITY");
+  assert.equal(getModuleHomeRoute("TRANSPORT"), "/transport/dashboard");
+  assert.equal(normalizeModuleContext("transports"), "TRANSPORT");
 });
 
 test("clearSessionAuthStorage removes token, api_base_url, and auth_context on logout or module switch", () => {

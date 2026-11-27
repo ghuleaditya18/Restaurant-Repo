@@ -3,6 +3,13 @@ const STRICT_EMAIL_REGEX =
   /^[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
 
 /**
+ * Strip non-digit characters and cap mobile number input to 10 digits.
+ */
+export function sanitizeMobileInput(rawValue) {
+  return String(rawValue || "").replace(/\D/g, "").slice(0, 10);
+}
+
+/**
  * Normalize and validate an Indian 10-digit mobile number (starting with 6, 7, 8, or 9).
  * Accepts optional leading +91 / 91 with spaces or hyphens and normalizes to 10 digits.
  */

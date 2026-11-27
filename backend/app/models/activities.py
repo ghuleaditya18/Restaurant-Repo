@@ -164,6 +164,9 @@ class Activity(ActTimestampMixin, Base):
     media: Mapped[list[ActivityMedia]] = relationship(
         back_populates="activity", cascade="all, delete-orphan"
     )
+    instructor_assignments: Mapped[list[ActivityInstructorAssignment]] = relationship(
+        back_populates="activity", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         UniqueConstraint("business_context", "activity_code", name="uq_activities_context_code"),
@@ -437,4 +440,27 @@ class ActivityUsageLog(ActTimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("participant_count >= 1", name="ck_act_usage_participants_positive"),
         CheckConstraint("amount_charged >= 0", name="ck_act_usage_amount_non_negative"),
+    )
+
+
+# ==========================================
+# 10. ACTIVITY INSTRUCTOR ASSIGNMENTS
+# ==========================================
+
+class ActivityInstructorAssignment(ActTimestampMixin, Base):
+    __tablename__ = "activity_instructor_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    staff_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    activity_id: Mapped[int] = mapped_column(
+        ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    specialty_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    activity: Mapped[Activity] = relationship(back_populates="instructor_assignments")
+
+    __table_args__ = (
+        UniqueConstraint("staff_user_id", "activity_id", name="uq_act_instructor_activity"),
     )

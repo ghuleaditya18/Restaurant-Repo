@@ -97,7 +97,7 @@ class PackageItemUpdate(BaseModel):
 
 class PackageCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=150)
-    package_code: str = Field(..., min_length=2, max_length=50)
+    package_code: str | None = Field(default=None, max_length=50)
     category: str = Field(..., min_length=2, max_length=50)
     description: str | None = Field(default=None, max_length=4000)
     duration_nights: int = Field(..., ge=1, le=365)
@@ -125,11 +125,8 @@ class PackageCreate(BaseModel):
 
     @field_validator("package_code")
     @classmethod
-    def clean_code(cls, value: str) -> str:
-        cleaned = re.sub(r"\s+", "-", value.strip().upper())
-        if not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{1,49}", cleaned):
-            raise ValueError("Package code must contain 2-50 alphanumeric characters, hyphens, or underscores.")
-        return cleaned
+    def clean_code(cls, value: str | None) -> str | None:
+        return _clean_text(value)
 
     @field_validator("category")
     @classmethod
@@ -169,7 +166,6 @@ class PackageCreate(BaseModel):
 
 class PackageUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=150)
-    package_code: str | None = Field(default=None, min_length=2, max_length=50)
     category: str | None = Field(default=None, min_length=2, max_length=50)
     description: str | None = Field(default=None, max_length=4000)
     duration_nights: int | None = Field(default=None, ge=1, le=365)
@@ -194,16 +190,6 @@ class PackageUpdate(BaseModel):
         cleaned = value.strip()
         if len(cleaned) < 2:
             raise ValueError("Package name must contain at least 2 characters.")
-        return cleaned
-
-    @field_validator("package_code")
-    @classmethod
-    def clean_code(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        cleaned = re.sub(r"\s+", "-", value.strip().upper())
-        if not re.fullmatch(r"[A-Z0-9][A-Z0-9_-]{1,49}", cleaned):
-            raise ValueError("Package code must contain 2-50 alphanumeric characters, hyphens, or underscores.")
         return cleaned
 
     @field_validator("category")

@@ -11,12 +11,15 @@ import {
   History,
   Search,
   ShieldAlert,
+  Trash2,
   UserPlus,
   Users,
   XCircle,
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
@@ -125,6 +128,17 @@ export default function ActivityBookings() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+
+  // Selection & Clear/Delete Modals
+  const [selectedBookingIds, setSelectedBookingIds] = useState(() => new Set());
+  const [selectedLogIds, setSelectedLogIds] = useState(() => new Set());
+  const [deleteBookingTarget, setDeleteBookingTarget] = useState(null);
+  const [deletingBooking, setDeletingBooking] = useState(false);
+  const [deleteLogTarget, setDeleteLogTarget] = useState(null);
+  const [deletingLog, setDeletingLog] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -398,19 +412,17 @@ export default function ActivityBookings() {
       setCustError(phoneCheck.error);
       return;
     }
-    if (custForm.email.trim()) {
-      const emailCheck = validateEmailAddress(custForm.email, { required: false });
-      if (!emailCheck.valid) {
-        setCustError(emailCheck.error);
-        return;
-      }
+    const emailCheck = validateEmailAddress(custForm.email, { required: true });
+    if (!emailCheck.valid) {
+      setCustError(emailCheck.error);
+      return;
     }
     setSavingCust(true);
     try {
       const res = await activitiesApi.createCustomer({
         full_name: custForm.full_name.trim(),
         phone: phoneCheck.normalized,
-        email: custForm.email.trim() || null,
+        email: emailCheck.normalized,
         address: custForm.address.trim() || null,
       });
       const listRes = await activitiesApi.customers({ page: 1, page_size: 100 });
@@ -479,6 +491,98 @@ export default function ActivityBookings() {
     }
   };
 
+  const toggleIdInSet = (setter, id) => {
+    setBulkFailures([]);
+    setter((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllIdsInSet = (setter, ids) => {
+    setBulkFailures([]);
+    setter((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDeleteBooking = async () => {
+    if (!deleteBookingTarget) return;
+    setDeletingBooking(true);
+    try {
+      const res = await activitiesApi.deleteBooking(deleteBookingTarget.id);
+      showSuccess(res.data?.message || `Booking ${deleteBookingTarget.booking_number} cleared.`);
+      if (detailBooking?.id === deleteBookingTarget.id) setDetailBooking(null);
+      setDeleteBookingTarget(null);
+      setSelectedBookingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteBookingTarget.id);
+        return next;
+      });
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeletingBooking(false);
+    }
+  };
+
+  const handleConfirmDeleteLog = async () => {
+    if (!deleteLogTarget) return;
+    setDeletingLog(true);
+    try {
+      const res = await activitiesApi.deleteUsageLog(deleteLogTarget.id);
+      showSuccess(res.data?.message || "Walk-in usage log cleared.");
+      setDeleteLogTarget(null);
+      setSelectedLogIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteLogTarget.id);
+        return next;
+      });
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeletingLog(false);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    const isWalkIn = tab === "walkin";
+    const ids = Array.from(isWalkIn ? selectedLogIds : selectedBookingIds);
+    if (!ids.length) return;
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    try {
+      const res = isWalkIn
+        ? await activitiesApi.bulkDeleteUsageLogs(ids)
+        : await activitiesApi.bulkDeleteBookings(ids);
+      const { deleted = 0, failed = [], message } = res.data || {};
+      setBulkFailures(failed);
+      if (isWalkIn) {
+        setSelectedLogIds(new Set(failed.map((f) => f.id)));
+      } else {
+        setSelectedBookingIds(new Set(failed.map((f) => f.id)));
+      }
+      setBulkDeleteOpen(false);
+      await loadData();
+      if (deleted > 0) showSuccess(message || `Cleared ${deleted} record(s).`);
+      if (failed.length > 0) showError(`${failed.length} record(s) could not be cleared.`);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const bookingColumns = [
     {
       key: "booking_number",
@@ -492,6 +596,9 @@ export default function ActivityBookings() {
         <div>
           <div className="font-semibold">{b.customer_name}</div>
           <div className="text-xs text-stone-500">{b.customer_phone || "—"}</div>
+          {b.customer_email && (
+            <div className="text-[11px] text-stone-400 truncate max-w-[180px]">{b.customer_email}</div>
+          )}
         </div>
       ),
     },
@@ -592,11 +699,19 @@ export default function ActivityBookings() {
                 setCancelReason("");
               }}
               title="Cancel Booking"
-              className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+              className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
             >
               <XCircle size={15} />
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setDeleteBookingTarget(b)}
+            title="Delete / Clear Booking"
+            className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+          >
+            <Trash2 size={15} />
+          </button>
         </div>
       ),
     },
@@ -629,6 +744,22 @@ export default function ActivityBookings() {
       render: (l) => (Number(l.amount_charged || 0) === 0 ? "Complimentary" : actMoney(l.amount_charged)),
     },
     { key: "notes", label: "Notes", render: (l) => l.notes || "—" },
+    {
+      key: "actions",
+      label: "Actions",
+      align: "right",
+      cellClassName: "whitespace-nowrap",
+      render: (l) => (
+        <button
+          type="button"
+          onClick={() => setDeleteLogTarget(l)}
+          title="Delete / Clear Walk-In Log"
+          className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+        >
+          <Trash2 size={15} />
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -655,18 +786,20 @@ export default function ActivityBookings() {
         <AlertBanner variant="error" message={pageError} onDismiss={() => setPageError("")} />
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard compact title="Bookings Loaded" value={loading ? "—" : bookings.length} icon={CalendarCheck2} color="amber" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-fit max-w-full">
+        <StatCard compact className="!p-2.5" title="Bookings Loaded" value={loading ? "—" : bookings.length} icon={CalendarCheck2} color="amber" />
         <StatCard
           compact
+          className="!p-2.5"
           title="Confirmed / Pending"
           value={loading ? "—" : bookings.filter((b) => ["Pending", "Confirmed"].includes(b.status)).length}
           icon={Clock}
           color="sky"
         />
-        <StatCard compact title="Walk-In Entries" value={loading ? "—" : usageLogs.length} icon={Footprints} color="emerald" />
+        <StatCard compact className="!p-2.5" title="Walk-In Entries" value={loading ? "—" : usageLogs.length} icon={Footprints} color="emerald" />
         <StatCard
           compact
+          className="!p-2.5"
           title="Booking Value (Page)"
           value={loading ? "—" : actMoney(bookings.reduce((s, b) => s + Number(b.total_amount || 0), 0))}
           icon={Users}
@@ -760,6 +893,22 @@ export default function ActivityBookings() {
         </div>
       </div>
 
+      <BulkSelectionBar
+        count={tab === "walkin" ? selectedLogIds.size : selectedBookingIds.size}
+        onClear={() => (tab === "walkin" ? setSelectedLogIds(new Set()) : setSelectedBookingIds(new Set()))}
+        onDelete={() => setBulkDeleteOpen(true)}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="warning"
+          title="Some records could not be cleared"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" | ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
       {tab === "bookings" ? (
         <VillaDataTable
           title="Activity Bookings"
@@ -767,8 +916,11 @@ export default function ActivityBookings() {
           rows={bookings}
           loading={loading}
           emptyTitle="No activity bookings found"
-          tableMinWidth="min-w-[940px]"
+          tableMinWidth="min-w-[960px]"
           onRowClick={(b) => openDetail(b.id)}
+          selectedIds={selectedBookingIds}
+          onSelectRow={(id) => toggleIdInSet(setSelectedBookingIds, id)}
+          onSelectAll={(ids) => toggleAllIdsInSet(setSelectedBookingIds, ids)}
           pagination={{
             currentPage: page,
             totalPages,
@@ -785,7 +937,10 @@ export default function ActivityBookings() {
           rows={usageLogs}
           loading={loading}
           emptyTitle="No walk-in usage entries recorded"
-          tableMinWidth="min-w-[760px]"
+          tableMinWidth="min-w-[780px]"
+          selectedIds={selectedLogIds}
+          onSelectRow={(id) => toggleIdInSet(setSelectedLogIds, id)}
+          onSelectAll={(ids) => toggleAllIdsInSet(setSelectedLogIds, ids)}
           pagination={{
             currentPage: page,
             totalPages,
@@ -1258,7 +1413,8 @@ export default function ActivityBookings() {
           />
           <input
             type="email"
-            placeholder="Email (optional)"
+            required
+            placeholder="Email *"
             value={custForm.email}
             onChange={(e) => setCustForm({ ...custForm, email: e.target.value })}
             className={INPUT_STYLES.base}
@@ -1430,11 +1586,19 @@ export default function ActivityBookings() {
                       setCancelTarget(detailBooking);
                       setCancelReason("");
                     }}
-                    className={BUTTON_VARIANTS.danger}
+                    className={BUTTON_VARIANTS.secondary}
                   >
                     Cancel Booking
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setDeleteBookingTarget(detailBooking)}
+                  className={BUTTON_VARIANTS.danger}
+                >
+                  <Trash2 size={14} />
+                  <span>Clear Booking</span>
+                </button>
               </div>
             </div>
 
@@ -1488,6 +1652,44 @@ export default function ActivityBookings() {
           </div>
         </form>
       </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteBookingTarget)}
+        onClose={() => setDeleteBookingTarget(null)}
+        onConfirm={handleConfirmDeleteBooking}
+        title={`Clear Booking ${deleteBookingTarget?.booking_number || ""}?`}
+        message="This permanently removes the selected booking along with its participant records, history, and any linked invoice/payment records."
+        confirmText="Clear Booking"
+        loading={deletingBooking}
+      />
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteLogTarget)}
+        onClose={() => setDeleteLogTarget(null)}
+        onConfirm={handleConfirmDeleteLog}
+        title="Clear Walk-In Usage Log?"
+        message={`Remove the walk-in usage entry for "${deleteLogTarget?.activity_name || "Activity"}"?`}
+        confirmText="Clear Entry"
+        loading={deletingLog}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title={
+          tab === "walkin"
+            ? `Clear ${selectedLogIds.size} Walk-In Usage Log(s)?`
+            : `Clear ${selectedBookingIds.size} Selected Booking(s)?`
+        }
+        message={
+          tab === "walkin"
+            ? "Selected walk-in usage logs will be permanently deleted."
+            : "Selected bookings and their linked participants, history, and invoices will be permanently deleted."
+        }
+        confirmText="Clear Selected"
+        loading={bulkDeleting}
+      />
     </div>
   );
 }

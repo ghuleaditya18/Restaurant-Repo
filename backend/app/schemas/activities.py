@@ -3,9 +3,15 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+import re
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+_STRICT_EMAIL_REGEX = re.compile(
+    r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$"
+)
 
 
 # ==========================================
@@ -41,6 +47,7 @@ class ActivityBase(BaseModel):
     max_age: int | None = None
     requires_waiver: bool = False
     default_staff_id: int | None = None
+    assigned_instructor_ids: list[int] | None = None
     is_complimentary: bool = False
     price_per_person: Decimal | None = None
     price_per_group: Decimal | None = None
@@ -88,6 +95,7 @@ class ActivityUpdate(BaseModel):
     max_age: int | None = None
     requires_waiver: bool | None = None
     default_staff_id: int | None = None
+    assigned_instructor_ids: list[int] | None = None
     is_complimentary: bool | None = None
     price_per_person: Decimal | None = None
     price_per_group: Decimal | None = None
@@ -447,8 +455,35 @@ class CustomerOut(BaseModel):
 class CustomerCreate(BaseModel):
     full_name: str
     phone: str
-    email: str | None = None
+    email: str
     address: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        cleaned = str(v or "").strip().lower()
+        if not cleaned:
+            raise ValueError("Email address is required.")
+        if len(cleaned) > 150 or ".." in cleaned or not _STRICT_EMAIL_REGEX.match(cleaned):
+            raise ValueError("Enter a valid email address (e.g. name@example.com).")
+        return cleaned
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[int] = Field(min_length=1)
+
+
+class BulkParticipantUpdateRequest(BaseModel):
+    ids: list[int] = Field(min_length=1)
+    waiver_signed: bool | None = None
+    attendance_status: str | None = None
+
+    @field_validator("attendance_status")
+    @classmethod
+    def validate_attendance_status(cls, v: str | None) -> str | None:
+        if v is not None and v not in ATTENDANCE_STATUSES:
+            raise ValueError(f"attendance_status must be one of {ATTENDANCE_STATUSES}")
+        return v
 
 
 # ==========================================
@@ -493,3 +528,61 @@ class ResourceAvailabilityCheck(BaseModel):
     start_time: str  # HH:MM
     end_time: str
     exclude_booking_id: int | None = None
+
+
+# ==========================================
+# INSTRUCTOR / STAFF SCHEMAS
+# ==========================================
+
+class ActivityStaffCreate(BaseModel):
+    full_name: str
+    email: str
+    phone: str
+    employee_code: str | None = None
+    designation: str = "Activity Instructor"
+    activity_ids: list[int] = []
+    is_active: bool = True
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, v: str) -> str:
+        cleaned = str(v or "").strip()
+        if len(cleaned) < 2:
+            raise ValueError("Full name must be at least 2 characters.")
+        return cleaned
+
+    @field_validator("email")
+    @classmethod
+    def validate_staff_email(cls, v: str) -> str:
+        cleaned = str(v or "").strip().lower()
+        if not cleaned or len(cleaned) > 150 or ".." in cleaned or not _STRICT_EMAIL_REGEX.match(cleaned):
+            raise ValueError("Enter a valid email address (e.g. name@example.com).")
+        return cleaned
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        cleaned = str(v or "").strip()
+        if not cleaned:
+            raise ValueError("Phone number is required.")
+        return cleaned
+
+
+class ActivityStaffUpdate(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    employee_code: str | None = None
+    designation: str | None = None
+    activity_ids: list[int] | None = None
+    is_active: bool | None = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_staff_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        cleaned = str(v).strip().lower()
+        if not cleaned or len(cleaned) > 150 or ".." in cleaned or not _STRICT_EMAIL_REGEX.match(cleaned):
+            raise ValueError("Enter a valid email address (e.g. name@example.com).")
+        return cleaned

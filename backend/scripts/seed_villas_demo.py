@@ -125,21 +125,21 @@ def run_seed(db, apply: bool) -> dict[str, int]:
     # 1. Villas
     villa_specs = [
         {
-            "name": "DEMO Sahyadri Ridge Villa",
+            "name": "Sahyadri Ridge Villa",
             "address": "North Crest Estate, Lonavala",
             "description": "Panoramic valley-view estate featuring private plunge pool villas and sunset decks.",
             "image_url": "/assets/villas/plunge-pool.jpg",
             "is_active": True,
         },
         {
-            "name": "DEMO Konkan Lagoon Residence",
+            "name": "Konkan Lagoon Residence",
             "address": "Backwater Cove, Alibaug",
             "description": "Coastal garden suites steps away from private boardwalks and tropical palms.",
             "image_url": "/assets/villas/coastal-lagoon.jpg",
             "is_active": True,
         },
         {
-            "name": "DEMO Mist Canopy Retreat",
+            "name": "Mist Canopy Retreat",
             "address": "Shola Reserve Wing, Mahabaleshwar",
             "description": "Secluded woodland loft suites tucked under native evergreen canopy.",
             "image_url": "/assets/villas/forest-canopy.jpg",
@@ -184,14 +184,14 @@ def run_seed(db, apply: bool) -> dict[str, int]:
 
     # 3. Units
     unit_specs = [
-        ("Sahyadri 101 - Infinity Pool", "DEMO Sahyadri Ridge Villa", "Plunge Pool Villa", 4, 2, "12500.00", "Ready", "/assets/villas/plunge-pool.jpg"),
-        ("Sahyadri 102 - Valley Terrace", "DEMO Sahyadri Ridge Villa", "Plunge Pool Villa", 4, 2, "11800.00", "Inspected", "/assets/villas/plunge-pool.jpg"),
-        ("Sahyadri 103 - Cliff Pavilion", "DEMO Sahyadri Ridge Villa", "Heritage Family Pavilion", 6, 3, "16500.00", "Needs Cleaning", "/assets/villas/garden-pavilion.jpg"),
-        ("Lagoon 201 - Palm Courtyard", "DEMO Konkan Lagoon Residence", "Garden Courtyard Suite", 2, 1, "7800.00", "Ready", "/assets/villas/garden-pavilion.jpg"),
-        ("Lagoon 202 - Backwater Deck", "DEMO Konkan Lagoon Residence", "Garden Courtyard Suite", 3, 1, "8400.00", "Cleaning", "/assets/villas/coastal-lagoon.jpg"),
-        ("Lagoon 203 - Cove Pool Villa", "DEMO Konkan Lagoon Residence", "Plunge Pool Villa", 4, 2, "13200.00", "Out of Order", "/assets/villas/coastal-lagoon.jpg"),
-        ("Canopy 301 - Whispering Pines", "DEMO Mist Canopy Retreat", "Treehouse Canopy Loft", 2, 1, "9200.00", "Ready", "/assets/villas/forest-canopy.jpg"),
-        ("Canopy 302 - Cloud Loft", "DEMO Mist Canopy Retreat", "Treehouse Canopy Loft", 3, 2, "10400.00", "Inspected", "/assets/villas/forest-canopy.jpg"),
+        ("Sahyadri 101 - Infinity Pool", "Sahyadri Ridge Villa", "Plunge Pool Villa", 4, 2, "12500.00", "Ready", "/assets/villas/plunge-pool.jpg"),
+        ("Sahyadri 102 - Valley Terrace", "Sahyadri Ridge Villa", "Plunge Pool Villa", 4, 2, "11800.00", "Inspected", "/assets/villas/plunge-pool.jpg"),
+        ("Sahyadri 103 - Cliff Pavilion", "Sahyadri Ridge Villa", "Heritage Family Pavilion", 6, 3, "16500.00", "Needs Cleaning", "/assets/villas/garden-pavilion.jpg"),
+        ("Lagoon 201 - Palm Courtyard", "Konkan Lagoon Residence", "Garden Courtyard Suite", 2, 1, "7800.00", "Ready", "/assets/villas/garden-pavilion.jpg"),
+        ("Lagoon 202 - Backwater Deck", "Konkan Lagoon Residence", "Garden Courtyard Suite", 3, 1, "8400.00", "Cleaning", "/assets/villas/coastal-lagoon.jpg"),
+        ("Lagoon 203 - Cove Pool Villa", "Konkan Lagoon Residence", "Plunge Pool Villa", 4, 2, "13200.00", "Out of Order", "/assets/villas/coastal-lagoon.jpg"),
+        ("Canopy 301 - Whispering Pines", "Mist Canopy Retreat", "Treehouse Canopy Loft", 2, 1, "9200.00", "Ready", "/assets/villas/forest-canopy.jpg"),
+        ("Canopy 302 - Cloud Loft", "Mist Canopy Retreat", "Treehouse Canopy Loft", 3, 2, "10400.00", "Inspected", "/assets/villas/forest-canopy.jpg"),
     ]
     units_by_name = {}
     for name, v_name, c_name, cap, br, rate, hk, img_url in unit_specs:
@@ -224,9 +224,9 @@ def run_seed(db, apply: bool) -> dict[str, int]:
 
     # 4. Seasonal Rates
     rate_specs = [
-        ("Sahyadri 101 - Infinity Pool", "DEMO Peak Ridge Season", today + timedelta(days=5), today + timedelta(days=20), "14900.00"),
-        ("Lagoon 201 - Palm Courtyard", "DEMO Coastal Long Weekend", today + timedelta(days=10), today + timedelta(days=18), "9600.00"),
-        ("Canopy 301 - Whispering Pines", "DEMO Misty Escape Premium", today + timedelta(days=3), today + timedelta(days=15), "11200.00"),
+        ("Sahyadri 101 - Infinity Pool", "Peak Ridge Season", today + timedelta(days=5), today + timedelta(days=20), "14900.00"),
+        ("Lagoon 201 - Palm Courtyard", "Coastal Long Weekend", today + timedelta(days=10), today + timedelta(days=18), "9600.00"),
+        ("Canopy 301 - Whispering Pines", "Misty Escape Premium", today + timedelta(days=3), today + timedelta(days=15), "11200.00"),
     ]
     for u_name, r_name, s_dt, e_dt, r_amt in rate_specs:
         u = units_by_name[u_name]
@@ -245,7 +245,7 @@ def run_seed(db, apply: bool) -> dict[str, int]:
             today + timedelta(days=1),
             today + timedelta(days=6),
             "Maintenance",
-            "DEMO Plunge pool filtration pump replacement",
+            "Plunge pool filtration pump replacement",
             "Engineering crew replacing circulation pump and resealing deck tiles.",
         ),
         (
@@ -253,7 +253,7 @@ def run_seed(db, apply: bool) -> dict[str, int]:
             today + timedelta(days=24),
             today + timedelta(days=28),
             "Owner",
-            "DEMO Owner family winter hold",
+            "Owner family winter hold",
             "Reserved for ownership family retreat.",
         ),
     ]
@@ -278,12 +278,12 @@ def run_seed(db, apply: bool) -> dict[str, int]:
 
     # 6. Guest Service Catalogue
     service_specs = [
-        ("DEMO Private Floating Breakfast", "Artisanal breakfast platter served poolside in-villa", "1850.00", True),
-        ("DEMO Chauffeur Airport Transfer", "Private SUV pickup or drop-off with refreshments", "3500.00", True),
-        ("DEMO Private Bonfire & BBQ Evening", "Dedicated host, courtyard firepit, and coastal grill", "4200.00", True),
-        ("DEMO Guided Rainforest Nature Walk", "Morning naturalist-led trail tour for up to 4 guests", "1500.00", True),
-        ("DEMO In-Villa Private Chef Dinner", "4-course customized tasting menu cooked live", "6500.00", True),
-        ("DEMO Seasonal Kayak Excursion", "Guided lagoon kayak session (seasonal off-peak)", "2100.00", False),
+        ("Private Floating Breakfast", "Artisanal breakfast platter served poolside in-villa", "1850.00", True),
+        ("Chauffeur Airport Transfer", "Private SUV pickup or drop-off with refreshments", "3500.00", True),
+        ("Private Bonfire & BBQ Evening", "Dedicated host, courtyard firepit, and coastal grill", "4200.00", True),
+        ("Guided Rainforest Nature Walk", "Morning naturalist-led trail tour for up to 4 guests", "1500.00", True),
+        ("In-Villa Private Chef Dinner", "4-course customized tasting menu cooked live", "6500.00", True),
+        ("Seasonal Kayak Excursion", "Guided lagoon kayak session (seasonal off-peak)", "2100.00", False),
     ]
     services_by_name = {}
     for name, desc, price, active in service_specs:
@@ -300,8 +300,8 @@ def run_seed(db, apply: bool) -> dict[str, int]:
 
     # 7. Demo Villas Operational Staff (role=STAFF, distinct from existing manager accounts)
     staff_specs = [
-        ("demo.concierge@villas.local", "Raghavendra Kulkarni", "VILLA-DEMO-01", "9820001001", "Senior Villa Concierge"),
-        ("demo.housekeeping@villas.local", "Nandini Sawant", "VILLA-DEMO-02", "9820001002", "Executive Housekeeper"),
+        ("concierge@villas.local", "Raghavendra Kulkarni", "VILLA-DEMO-01", "9820001001", "Senior Villa Concierge"),
+        ("housekeeping@villas.local", "Nandini Sawant", "VILLA-DEMO-02", "9820001002", "Executive Housekeeper"),
     ]
     staff_rows = []
     for email, full_name, code, phone, desig in staff_specs:

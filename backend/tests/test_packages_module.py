@@ -315,21 +315,28 @@ class TestPackagesModule(unittest.TestCase):
         self.assertEqual(res.status_code, 201, res.text)
         pkg = res.json()
         self.assertEqual(pkg["status"], "Draft")
+        self.assertRegex(pkg["package_code"], r"^PKG-\d{4}$")
 
-        # Duplicate package_code rejected -> 409
-        dup = self._create_package(package_code=pkg["package_code"])
-        self.assertEqual(dup.status_code, 409)
+        # Auto-generated unique package_code -> creating second package never duplicates codes
+        res2 = self._create_package(package_code=pkg["package_code"])
+        self.assertEqual(res2.status_code, 201, res2.text)
+        self.assertNotEqual(res2.json()["package_code"], pkg["package_code"])
+
+        # Seasonal offer auto-generates SEAS-XXXX code
+        seas_res = self._create_package(category="Seasonal", is_seasonal_offer=True)
+        self.assertEqual(seas_res.status_code, 201, seas_res.text)
+        self.assertRegex(seas_res.json()["package_code"], r"^SEAS-\d{4}$")
 
         # Invalid date range -> 422
         today = get_kolkata_today()
         bad_dates = self._create_package(valid_from=today.isoformat(), valid_to=(today - timedelta(days=1)).isoformat())
         self.assertEqual(bad_dates.status_code, 422)
 
-        # Activation blocked without inclusions -> 409
+        # Making Available blocked without inclusions -> 409
         act_fail = self.client.post(
             f"/api/packages/packages/{pkg['id']}/status",
             headers=self.pkg_headers,
-            json={"status": "Active"},
+            json={"status": "Available"},
         )
         self.assertEqual(act_fail.status_code, 409)
 
@@ -377,29 +384,45 @@ class TestPackagesModule(unittest.TestCase):
         )
         self.assertEqual(bad_ref.status_code, 404)
 
-        # Now activation succeeds
-        act_ok = self.client.post(
-            f"/api/packages/packages/{pkg['id']}/status",
-            headers=self.pkg_headers,
-            json={"status": "Active"},
-        )
-        self.assertEqual(act_ok.status_code, 200, act_ok.text)
-        self.assertEqual(act_ok.json()["status"], "Active")
+        # Transition across Published -> Upcoming -> Available succeeds
+        for st in ("Published", "Upcoming", "Available"):
+            st_res = self.client.post(
+                f"/api/packages/packages/{pkg['id']}/status",
+                headers=self.pkg_headers,
+                json={"status": st},
+            )
+            self.assertEqual(st_res.status_code, 200, st_res.text)
+            self.assertEqual(st_res.json()["status"], st)
 
-        # Delete second inclusion succeeds; deleting last inclusion of Active package fails -> 409
+        # Delete second inclusion succeeds; deleting last inclusion of Available package fails -> 409
         del_2 = self.client.delete(f"/api/packages/items/{item2.json()['id']}", headers=self.pkg_headers)
         self.assertEqual(del_2.status_code, 200)
         del_last = self.client.delete(f"/api/packages/items/{item1.json()['id']}", headers=self.pkg_headers)
         self.assertEqual(del_last.status_code, 409)
 
-        # Deactivate & archive
-        deact = self.client.post(
-            f"/api/packages/packages/{pkg['id']}/status",
+        # Pause & archive
+        for st in ("Paused", "Archived"):
+            st_res = self.client.post(
+                f"/api/packages/packages/{pkg['id']}/status",
+                headers=self.pkg_headers,
+                json={"status": st},
+            )
+            self.assertEqual(st_res.status_code, 200)
+            self.assertEqual(st_res.json()["status"], st)
+
+        # Strict customer email & 10-digit mobile regex validation
+        bad_phone = self.client.post(
+            "/api/packages/customers",
             headers=self.pkg_headers,
-            json={"status": "Inactive"},
+            json={"full_name": "Bad Phone Guest", "phone": "51234567890", "email": "valid@example.test"},
         )
-        self.assertEqual(deact.status_code, 200)
-        self.assertEqual(deact.json()["status"], "Inactive")
+        self.assertEqual(bad_phone.status_code, 422)
+        bad_email = self.client.post(
+            "/api/packages/customers",
+            headers=self.pkg_headers,
+            json={"full_name": "Bad Email Guest", "phone": "9876543219", "email": "bad..email@example.test"},
+        )
+        self.assertEqual(bad_email.status_code, 422)
 
     # 3. MEDIA UPLOAD, RETRIEVAL & DELETE
     def test_03_package_media_upload_and_validation(self):
@@ -452,7 +475,7 @@ class TestPackagesModule(unittest.TestCase):
                 {"inclusion_type": "Spa Service", "description": "Daily Ayurveda", "quantity": 1, "reference_id": self.spa_service_id}
             ],
         ).json()
-        self.client.post(f"/api/packages/packages/{pkg_person['id']}/status", headers=self.pkg_headers, json={"status": "Active"})
+        self.client.post(f"/api/packages/packages/{pkg_person['id']}/status", headers=self.pkg_headers, json={"status": "Available"})
 
         pkg_night = self._create_package(
             name="Weekend Per Night",
@@ -465,7 +488,7 @@ class TestPackagesModule(unittest.TestCase):
                 {"inclusion_type": "Meal Plan", "description": "Breakfast Included", "quantity": 3, "reference_id": self.menu_item_id}
             ],
         ).json()
-        self.client.post(f"/api/packages/packages/{pkg_night['id']}/status", headers=self.pkg_headers, json={"status": "Active"})
+        self.client.post(f"/api/packages/packages/{pkg_night['id']}/status", headers=self.pkg_headers, json={"status": "Available"})
 
         # Add blackout on pkg_person for days 10..12
         blk = self.client.post(
@@ -522,6 +545,39 @@ class TestPackagesModule(unittest.TestCase):
         self.assertRegex(b1["booking_number"], rf"^PKG-{today.year}-\d{{4}}$")
         self.assertEqual(Decimal(str(b1["total_amount"])), Decimal("15000.75"))
 
+        # Same customer CANNOT book the same package on same/overlapping date -> 409 + availability warns
+        dup_avail = self.client.get(
+            f"/api/packages/packages/{pkg_person['id']}/availability",
+            headers=self.pkg_headers,
+            params={"start_date": (today + timedelta(days=2)).isoformat(), "guest_count": 3, "customer_id": cust["id"]},
+        )
+        self.assertEqual(dup_avail.status_code, 200)
+        self.assertFalse(dup_avail.json()["available"])
+        dup_bk = self.client.post(
+            "/api/packages/bookings",
+            headers=self.pkg_headers,
+            json={
+                "package_id": pkg_person["id"],
+                "customer_id": cust["id"],
+                "start_date": (today + timedelta(days=2)).isoformat(),
+                "guest_count": 3,
+            },
+        )
+        self.assertEqual(dup_bk.status_code, 409)
+
+        # Same customer CAN book the same package on another non-overlapping available date
+        another_date_bk = self.client.post(
+            "/api/packages/bookings",
+            headers=self.pkg_headers,
+            json={
+                "package_id": pkg_person["id"],
+                "customer_id": cust["id"],
+                "start_date": (today + timedelta(days=20)).isoformat(),
+                "guest_count": 2,
+            },
+        )
+        self.assertEqual(another_date_bk.status_code, 201, another_date_bk.text)
+
         # Valid Per Night booking: 7500.50 * 3 = 22501.50
         bk_night = self.client.post(
             "/api/packages/bookings",
@@ -555,10 +611,10 @@ class TestPackagesModule(unittest.TestCase):
             items=[{"inclusion_type": "Other", "description": "Day pass", "quantity": 1}],
         ).json()
         exp_list = self.client.get("/api/packages/packages", headers=self.pkg_headers, params={"status": "Expired"}).json()
-        # Note: Draft stays Draft unless Active/Inactive; set via DB or test Inactive -> Expired
+        # Note: Draft stays Draft unless Available/Paused/Published/Upcoming; set via DB to test Expired sync
         db = TestSession()
         p_row = db.get(packages_service.Package, exp_pkg["id"])
-        p_row.status = "Active"
+        p_row.status = "Available"
         db.commit()
         db.close()
 
@@ -585,7 +641,7 @@ class TestPackagesModule(unittest.TestCase):
             price="10000.00",
             items=[{"inclusion_type": "Amenity", "description": "Full Resort Access", "quantity": 1}],
         ).json()
-        self.client.post(f"/api/packages/packages/{pkg['id']}/status", headers=self.pkg_headers, json={"status": "Active"})
+        self.client.post(f"/api/packages/packages/{pkg['id']}/status", headers=self.pkg_headers, json={"status": "Available"})
 
         # Booking 1 -> generate invoice, Advance + Partial + Full payment, PDF
         bk_res = self.client.post(
@@ -681,17 +737,19 @@ class TestPackagesModule(unittest.TestCase):
             409,
         )
 
-        # Booking 2: Cancellation requires reason
-        bk2 = self.client.post(
+        # Booking 2 on a non-overlapping date: Cancellation requires reason
+        bk2_res = self.client.post(
             "/api/packages/bookings",
             headers=self.pkg_headers,
             json={
                 "package_id": pkg["id"],
                 "customer_id": cust["id"],
-                "start_date": (today + timedelta(days=5)).isoformat(),
+                "start_date": (today + timedelta(days=10)).isoformat(),
                 "guest_count": 2,
             },
-        ).json()
+        )
+        self.assertEqual(bk2_res.status_code, 201, bk2_res.text)
+        bk2 = bk2_res.json()
         cancel_no_reason = self.client.patch(
             f"/api/packages/bookings/{bk2['id']}/status",
             headers=self.pkg_headers,
@@ -707,10 +765,47 @@ class TestPackagesModule(unittest.TestCase):
         self.assertEqual(cancel_ok.json()["status"], "Cancelled")
         self.assertGreaterEqual(len(cancel_ok.json()["history"]), 2)
 
-        # Dashboard & Reports reflect real data
+        # Dashboard, notifications bar & Reports reflect real data
         dash = self.client.get("/api/packages/dashboard", headers=self.pkg_headers)
         self.assertEqual(dash.status_code, 200)
         self.assertGreaterEqual(dash.json()["statistics"]["total_bookings"], 2)
+
+        notif = self.client.get("/api/packages/notifications", headers=self.pkg_headers)
+        self.assertEqual(notif.status_code, 200)
+        self.assertIn("items", notif.json())
+
+        # Customer & Invoice delete guards (409 when linked/paid, 200 when clean/unpaid)
+        self.assertEqual(
+            self.client.delete(f"/api/packages/customers/{cust['id']}", headers=self.pkg_headers).status_code,
+            409,
+        )
+        unused_cust = self._create_customer()
+        self.assertEqual(
+            self.client.delete(f"/api/packages/customers/{unused_cust['id']}", headers=self.pkg_headers).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/packages/invoices/{inv_id}", headers=self.pkg_headers).status_code,
+            409,
+        )
+        unpaid_bk = self.client.post(
+            "/api/packages/bookings",
+            headers=self.pkg_headers,
+            json={
+                "package_id": pkg["id"],
+                "customer_id": cust["id"],
+                "start_date": (today + timedelta(days=25)).isoformat(),
+                "guest_count": 2,
+                "generate_invoice": True,
+            },
+        ).json()
+        self.assertEqual(
+            self.client.delete(
+                f"/api/packages/invoices/{unpaid_bk['invoice_id']}",
+                headers=self.pkg_headers,
+            ).status_code,
+            200,
+        )
 
         rep = self.client.get("/api/packages/reports", headers=self.pkg_headers)
         self.assertEqual(rep.status_code, 200)
@@ -799,7 +894,7 @@ class TestPackagesModule(unittest.TestCase):
             self.client.post(
                 f"/api/packages/packages/{pkg['id']}/status",
                 headers=self.pkg_headers,
-                json={"status": "Active"},
+                json={"status": "Available"},
             ).status_code,
             200,
         )

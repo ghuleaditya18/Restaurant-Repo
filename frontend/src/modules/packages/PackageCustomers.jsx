@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
-import { Edit3, Eye, Mail, Phone, Search, UserPlus, Users } from "lucide-react";
+import { Edit3, Eye, Mail, Phone, Search, Trash2, UserPlus, Users } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { useNotification } from "../../context/NotificationContext";
+import useBulkSelection from "../../hooks/useBulkSelection";
 import { BUTTON_VARIANTS, CARD_STYLES, INPUT_STYLES } from "../../utils/themeTokens";
-import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
+import {
+  sanitizeMobileInput,
+  validateEmailAddress,
+  validateMobileNumber,
+} from "../../utils/validation";
 import VillaDataTable from "../villas/VillaDataTable";
 import { packagesApi, pkgDate, pkgError, pkgMoney } from "./packagesApi";
 
@@ -21,6 +28,7 @@ const INITIAL_FORM = {
 
 export default function PackageCustomers() {
   const { showSuccess, showError } = useNotification();
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
@@ -28,7 +36,7 @@ export default function PackageCustomers() {
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 15;
+  const pageSize = 10;
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -37,6 +45,12 @@ export default function PackageCustomers() {
   const [saving, setSaving] = useState(false);
 
   const [detail, setDetail] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingOne, setDeletingOne] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
@@ -64,6 +78,56 @@ export default function PackageCustomers() {
   useEffect(() => {
     setPage(1);
   }, [searchQuery]);
+
+  useEffect(() => {
+    clear();
+    setBulkFailures([]);
+  }, [searchQuery, page, clear]);
+
+  const handleDeleteCustomer = async () => {
+    if (!deleteTarget) return;
+    setDeletingOne(true);
+    setDeleteError("");
+    try {
+      await packagesApi.deleteCustomer(deleteTarget.id);
+      showSuccess(`Customer "${deleteTarget.full_name}" deleted.`);
+      setDeleteTarget(null);
+      await loadCustomers();
+    } catch (err) {
+      setDeleteError(pkgError(err));
+    } finally {
+      setDeletingOne(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    const deleted = [];
+    const failed = [];
+    for (const id of selectedIds) {
+      const target = customers.find((c) => c.id === id);
+      try {
+        await packagesApi.deleteCustomer(id);
+        deleted.push(id);
+      } catch (err) {
+        failed.push({ id, name: target?.full_name || `#${id}`, reason: pkgError(err) });
+      }
+    }
+    await loadCustomers();
+    clear();
+    failed.forEach((f) => toggle(f.id));
+    setBulkFailures(failed);
+    setBulkDeleting(false);
+    setBulkConfirmOpen(false);
+    if (deleted.length > 0 && failed.length === 0) {
+      showSuccess(`Deleted ${deleted.length} customer${deleted.length === 1 ? "" : "s"}.`);
+    } else if (deleted.length > 0 && failed.length > 0) {
+      showSuccess(`Deleted ${deleted.length} customer(s). ${failed.length} could not be deleted.`);
+    } else if (failed.length > 0) {
+      showError("Selected customers could not be deleted because bookings or invoices exist.");
+    }
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -205,6 +269,23 @@ export default function PackageCustomers() {
           >
             <Edit3 size={15} />
           </button>
+          <button
+            type="button"
+            disabled={(c.package_bookings_count ?? 0) > 0}
+            onClick={() => {
+              if ((c.package_bookings_count ?? 0) > 0) return;
+              setDeleteError("");
+              setDeleteTarget(c);
+            }}
+            title={
+              (c.package_bookings_count ?? 0) > 0
+                ? "Customers with package bookings cannot be deleted"
+                : "Delete Customer"
+            }
+            className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer transition"
+          >
+            <Trash2 size={15} />
+          </button>
         </div>
       ),
     },
@@ -214,7 +295,6 @@ export default function PackageCustomers() {
     <div className="space-y-4">
       <PageHeader
         title="Customers"
-        description="Shared NewaraAI customer directory with package booking history and spend tracking."
         actions={
           <button type="button" onClick={openCreate} className={BUTTON_VARIANTS.primary}>
             <UserPlus size={16} />
@@ -225,7 +305,7 @@ export default function PackageCustomers() {
 
       {pageError && <AlertBanner variant="error" message={pageError} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-3xl">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard compact title="Total Customers" value={loading ? "—" : totalRecords} icon={Users} color="amber" />
         <StatCard
           compact
@@ -267,6 +347,25 @@ export default function PackageCustomers() {
         </div>
       </div>
 
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onDelete={() => setBulkConfirmOpen(true)}
+        onClear={() => {
+          clear();
+          setBulkFailures([]);
+        }}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="error"
+          title="Some customers could not be deleted"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" · ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
       <VillaDataTable
         columns={columns}
         rows={customers}
@@ -276,6 +375,15 @@ export default function PackageCustomers() {
         emptyDescription="Register a customer to link them to package bookings."
         tableMinWidth="min-w-[780px]"
         onRowClick={(c) => openDetail(c.id)}
+        selectedIds={selectedIds}
+        onSelectRow={(id) => {
+          setBulkFailures([]);
+          toggle(id);
+        }}
+        onSelectAll={(ids) => {
+          setBulkFailures([]);
+          toggleMany(ids);
+        }}
         pagination={{
           currentPage: page,
           totalPages,
@@ -308,9 +416,12 @@ export default function PackageCustomers() {
             <label className="block text-xs font-bold uppercase mb-1">Mobile Number *</label>
             <input
               type="tel"
+              inputMode="numeric"
+              maxLength={10}
               required
               value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, phone: sanitizeMobileInput(e.target.value) }))}
+              placeholder="10-digit mobile (6-9...)"
               className={INPUT_STYLES.base}
             />
           </div>
@@ -386,6 +497,30 @@ export default function PackageCustomers() {
           </div>
         )}
       </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => {
+          setDeleteTarget(null);
+          setDeleteError("");
+        }}
+        onConfirm={handleDeleteCustomer}
+        title="Delete Customer"
+        recordName={deleteTarget ? `${deleteTarget.full_name} (${deleteTarget.phone})` : ""}
+        message="Only customers with zero bookings, orders, or invoices can be deleted."
+        loading={deletingOne}
+        errorMessage={deleteError}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkConfirmOpen}
+        onClose={() => setBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={`Delete ${selectedIds.size} Selected Customer${selectedIds.size === 1 ? "" : "s"}`}
+        recordName={`${selectedIds.size} selected customer(s)`}
+        message="Customers without bookings or billing records will be removed. Customers with linked records will remain untouched."
+        loading={bulkDeleting}
+      />
     </div>
   );
 }

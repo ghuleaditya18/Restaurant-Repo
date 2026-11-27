@@ -23,6 +23,7 @@ from app.api.business_profile import router as business_profile_router
 from app.api.villas import router as villas_router
 from app.api.packages import router as packages_router
 from app.api.activities import router as activities_router
+from app.api.transport import router as transport_router
 
 from app.core.image_upload import UPLOAD_ROOT
 from app.db.session import engine, get_db
@@ -58,7 +59,10 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
     ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,6 +99,8 @@ app.include_router(villas_router, prefix="/api/villas", tags=["Villas & Units"])
 app.include_router(packages_router, prefix="/api/packages", tags=["Packages"])
 
 app.include_router(activities_router, prefix="/api/activities", tags=["Activities"])
+
+app.include_router(transport_router, prefix="/api/transport", tags=["Transport"])
 
 # Serves uploaded menu photos and supplier bills
 app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")

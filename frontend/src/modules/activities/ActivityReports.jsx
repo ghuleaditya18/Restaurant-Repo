@@ -4,12 +4,15 @@ import {
   Download,
   IndianRupee,
   Search,
+  Trash2,
   TrendingUp,
   Users,
   Wallet,
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
@@ -54,6 +57,13 @@ export default function ActivityReports() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
+
   const loadReports = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -88,7 +98,83 @@ export default function ActivityReports() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
+    setBulkFailures([]);
   }, [activeTab, filters]);
+
+  const handleSelectRow = (id) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (ids) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      let res;
+      if (activeTab === "sessions") res = await activitiesApi.deleteSession(deleteTarget.id);
+      else if (activeTab === "usage") res = await activitiesApi.deleteUsageLog(deleteTarget.id);
+      else if (activeTab === "revenue") res = await activitiesApi.deleteInvoice(deleteTarget.id);
+      else res = await activitiesApi.deleteBooking(deleteTarget.id);
+
+      showSuccess(res.data?.message || "Record cleared.");
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.id);
+        return next;
+      });
+      setDeleteTarget(null);
+      await loadReports();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    try {
+      let res;
+      if (activeTab === "sessions") res = await activitiesApi.bulkDeleteSessions(ids);
+      else if (activeTab === "usage") res = await activitiesApi.bulkDeleteUsageLogs(ids);
+      else if (activeTab === "revenue") res = await activitiesApi.bulkDeleteInvoices(ids);
+      else res = await activitiesApi.bulkDeleteBookings(ids);
+
+      const { deleted = 0, failed = [], message } = res.data || {};
+      setBulkFailures(failed);
+      setSelectedIds(new Set(failed.map((f) => f.id)));
+      setBulkDeleteOpen(false);
+      await loadReports();
+      if (deleted > 0) showSuccess(message || `Cleared ${deleted} record(s).`);
+      if (failed.length > 0) showError(`${failed.length} record(s) could not be cleared.`);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const handleExportCsv = async () => {
     try {
@@ -170,14 +256,41 @@ export default function ActivityReports() {
     { key: "payment_status", label: "Status", align: "center", render: (r) => <StatusBadge status={r.payment_status} size="sm" /> },
   ];
 
-  const activeColumns =
-    activeTab === "sessions"
+  const deleteActionColumn = {
+    key: "actions",
+    label: "Actions",
+    align: "right",
+    cellClassName: "whitespace-nowrap",
+    render: (r) => {
+      if (activeTab === "revenue" && r.payment_status !== "Pending") {
+        return <span className="text-[11px] text-stone-400">Protected</span>;
+      }
+      return (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeleteTarget(r);
+          }}
+          title="Delete / Clear Record"
+          className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+        >
+          <Trash2 size={15} />
+        </button>
+      );
+    },
+  };
+
+  const activeColumns = [
+    ...(activeTab === "sessions"
       ? sessionColumns
       : activeTab === "usage"
         ? usageColumns
         : activeTab === "revenue"
           ? revenueColumns
-          : bookingsColumns;
+          : bookingsColumns),
+    deleteActionColumn,
+  ];
 
   return (
     <div className="space-y-4">
@@ -251,11 +364,11 @@ export default function ActivityReports() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard compact title="Total Booked Value" value={loading ? "—" : actMoney(summary.total_booked_value)} icon={TrendingUp} color="amber" />
-        <StatCard compact title="Revenue Collected" value={loading ? "—" : actMoney(summary.revenue_collected)} icon={IndianRupee} color="emerald" />
-        <StatCard compact title="Outstanding Balance" value={loading ? "—" : actMoney(summary.outstanding_balance)} icon={Wallet} color={Number(summary.outstanding_balance || 0) > 0 ? "rose" : "emerald"} />
-        <StatCard compact title="Total Participants" value={loading ? "—" : summary.total_participants ?? 0} description={`${summary.cancelled_bookings ?? 0} cancelled`} icon={Users} color="sky" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-fit max-w-full">
+        <StatCard compact className="!p-2.5" title="Total Booked Value" value={loading ? "—" : actMoney(summary.total_booked_value)} icon={TrendingUp} color="amber" />
+        <StatCard compact className="!p-2.5" title="Revenue Collected" value={loading ? "—" : actMoney(summary.revenue_collected)} icon={IndianRupee} color="emerald" />
+        <StatCard compact className="!p-2.5" title="Outstanding Balance" value={loading ? "—" : actMoney(summary.outstanding_balance)} icon={Wallet} color={Number(summary.outstanding_balance || 0) > 0 ? "rose" : "emerald"} />
+        <StatCard compact className="!p-2.5" title="Total Participants" value={loading ? "—" : summary.total_participants ?? 0} description={`${summary.cancelled_bookings ?? 0} cancelled`} icon={Users} color="sky" />
       </div>
 
       <div className="flex flex-wrap gap-1.5 rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1.5 shadow-2xs">
@@ -276,6 +389,22 @@ export default function ActivityReports() {
         ))}
       </div>
 
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setBulkDeleteOpen(true)}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="warning"
+          title="Some report records could not be cleared"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" | ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
       <VillaDataTable
         title={REPORT_TABS.find((t) => t.key === activeTab)?.label || "Report"}
         columns={activeColumns}
@@ -283,6 +412,12 @@ export default function ActivityReports() {
         loading={loading}
         emptyTitle="No report records match the selected filters"
         tableMinWidth="min-w-[840px]"
+        selectedIds={selectedIds}
+        onSelectRow={handleSelectRow}
+        onSelectAll={handleSelectAll}
+        isRowSelectable={
+          activeTab === "revenue" ? (r) => r.payment_status === "Pending" : () => true
+        }
         pagination={{
           currentPage: report?.page || 1,
           totalPages: report?.total_pages || 1,
@@ -290,6 +425,26 @@ export default function ActivityReports() {
           pageSize,
           onPageChange: setPage,
         }}
+      />
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Clear Report Record?"
+        message="This permanently removes the selected record from the system."
+        confirmText="Clear Record"
+        loading={deleting}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={`Clear ${selectedIds.size} Selected Report Record(s)?`}
+        message="Selected eligible records will be permanently cleared."
+        confirmText="Clear Selected"
+        loading={bulkDeleting}
       />
     </div>
   );

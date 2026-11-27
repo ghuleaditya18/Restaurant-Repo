@@ -442,6 +442,317 @@ class TestActivitiesModule(unittest.TestCase):
         self.assertEqual(csv_res.status_code, 200)
         self.assertIn("text/csv", csv_res.headers["content-type"])
 
+    def test_05_email_required_and_single_bulk_clear_endpoints(self):
+        today = get_kolkata_today()
+
+        # 1. Customer requires valid email
+        no_email = self.client.post(
+            "/api/activities/customers",
+            headers=self.act_headers,
+            json={"full_name": "Missing Email", "phone": "9876500001", "email": ""},
+        )
+        self.assertEqual(no_email.status_code, 422)
+
+        bad_email = self.client.post(
+            "/api/activities/customers",
+            headers=self.act_headers,
+            json={"full_name": "Bad Email", "phone": "9876500001", "email": "not-an-email"},
+        )
+        self.assertEqual(bad_email.status_code, 422)
+
+        c1 = self.client.post(
+            "/api/activities/customers",
+            headers=self.act_headers,
+            json={"full_name": "Clear Guest 1", "phone": "9876500001", "email": "clear1@example.test"},
+        )
+        c2 = self.client.post(
+            "/api/activities/customers",
+            headers=self.act_headers,
+            json={"full_name": "Clear Guest 2", "phone": "9876500002", "email": "clear2@example.test"},
+        )
+        self.assertEqual(c1.status_code, 201)
+        self.assertEqual(c2.status_code, 201)
+        c1_id, c2_id = c1.json()["id"], c2.json()["id"]
+
+        # 2. Activity + Schedule + Session + Bookings + Pending Invoice + Usage Log
+        act = self.client.post(
+            "/api/activities/activities",
+            headers=self.act_headers,
+            json={
+                "name": "Temp Clear Session",
+                "activity_code": "ACT-CLEAR-01",
+                "category": "Outdoor",
+                "booking_type": "session",
+                "duration_minutes": 45,
+                "min_participants": 1,
+                "max_participants": 6,
+                "price_per_person": "300.00",
+                "status": "Active",
+            },
+        )
+        self.assertEqual(act.status_code, 201)
+        act_id = act.json()["id"]
+
+        sched = self.client.post(
+            f"/api/activities/activities/{act_id}/schedules",
+            headers=self.act_headers,
+            json={
+                "activity_id": act_id,
+                "operating_weekdays": [0, 1, 2],
+                "start_time": "09:00",
+                "end_time": "10:00",
+                "valid_from": str(today),
+                "valid_to": str(today + timedelta(days=7)),
+                "default_capacity": 6,
+            },
+        )
+        self.assertEqual(sched.status_code, 201)
+        sched_id = sched.json()["id"]
+
+        sess = self.client.post(
+            "/api/activities/sessions",
+            headers=self.act_headers,
+            json={
+                "activity_id": act_id,
+                "session_date": str(today + timedelta(days=2)),
+                "start_time": "09:00",
+                "end_time": "10:00",
+                "capacity": 6,
+            },
+        )
+        self.assertEqual(sess.status_code, 201)
+        sess_id = sess.json()["id"]
+
+        bk1 = self.client.post(
+            "/api/activities/bookings",
+            headers=self.act_headers,
+            json={
+                "activity_id": act_id,
+                "customer_id": c1_id,
+                "session_id": sess_id,
+                "booking_date": str(today),
+                "participant_count": 2,
+                "pricing_method": "per_person",
+                "participants": [
+                    {"participant_name": "P1", "age": 22, "waiver_signed": False},
+                    {"participant_name": "P2", "age": 24, "waiver_signed": False},
+                ],
+            },
+        )
+        self.assertEqual(bk1.status_code, 201)
+        bk1_id = bk1.json()["id"]
+
+        # Bulk update participants (roster checkboxes)
+        parts = self.client.get(f"/api/activities/bookings/{bk1_id}/participants", headers=self.act_headers).json()
+        p_ids = [p["id"] for p in parts]
+        bulk_p = self.client.post(
+            "/api/activities/participants/bulk-update",
+            headers=self.act_headers,
+            json={"ids": p_ids, "waiver_signed": True, "attendance_status": "Present"},
+        )
+        self.assertEqual(bulk_p.status_code, 200)
+        self.assertEqual(bulk_p.json()["updated"], 2)
+
+        # Unpaid invoice can be cleared via DELETE
+        inv = self.client.post(
+            "/api/activities/invoices",
+            headers=self.act_headers,
+            json={"booking_id": bk1_id, "gst_rate": "18.00"},
+        )
+        self.assertEqual(inv.status_code, 201)
+        inv_id = inv.json()["id"]
+        self.assertEqual(
+            self.client.delete(f"/api/activities/invoices/{inv_id}", headers=self.act_headers).status_code,
+            200,
+        )
+
+        # Customer with active booking cannot be deleted (409), Session cannot be deleted (409)
+        self.assertEqual(
+            self.client.delete(f"/api/activities/customers/{c1_id}", headers=self.act_headers).status_code,
+            409,
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/activities/sessions/{sess_id}", headers=self.act_headers).status_code,
+            409,
+        )
+
+        # Clear booking, then session, schedule, and customers cleanly via bulk/single delete
+        self.assertEqual(
+            self.client.post(
+                "/api/activities/bookings/bulk-delete",
+                headers=self.act_headers,
+                json={"ids": [bk1_id]},
+            ).json()["deleted"],
+            1,
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/activities/sessions/{sess_id}", headers=self.act_headers).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/activities/schedules/{sched_id}", headers=self.act_headers).status_code,
+            200,
+        )
+        bulk_cust = self.client.post(
+            "/api/activities/customers/bulk-delete",
+            headers=self.act_headers,
+            json={"ids": [c1_id, c2_id]},
+        )
+        self.assertEqual(bulk_cust.status_code, 200)
+        self.assertEqual(bulk_cust.json()["deleted"], 2)
+
+        # Walk-in usage log single delete
+        walk_act = self.client.post(
+            "/api/activities/activities",
+            headers=self.act_headers,
+            json={
+                "name": "Temp Walkin Clear",
+                "activity_code": "ACT-WLK-CLR",
+                "category": "Indoor",
+                "booking_type": "walk_in",
+                "duration_minutes": 30,
+                "min_participants": 1,
+                "max_participants": 4,
+                "is_complimentary": True,
+                "status": "Active",
+            },
+        )
+        w_id = walk_act.json()["id"]
+        wlog = self.client.post(
+            "/api/activities/usage-logs",
+            headers=self.act_headers,
+            json={"activity_id": w_id, "usage_date": str(today), "participant_count": 1},
+        )
+        self.assertEqual(wlog.status_code, 201)
+        wlog_id = wlog.json()["id"]
+        self.assertEqual(
+            self.client.post(
+                "/api/activities/usage-logs/bulk-delete",
+                headers=self.act_headers,
+                json={"ids": [wlog_id]},
+            ).json()["deleted"],
+            1,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/api/activities/activities/bulk-delete",
+                headers=self.act_headers,
+                json={"ids": [act_id, w_id]},
+            ).json()["cleared"],
+            2,
+        )
+
+    def test_06_staff_creation_activity_assignment_and_live_notifications(self):
+        today = get_kolkata_today()
+        act = self.client.post(
+            "/api/activities/activities",
+            headers=self.act_headers,
+            json={
+                "name": "Sunset Pilates",
+                "activity_code": "ACT-PILATES-01",
+                "category": "Indoor",
+                "booking_type": "session",
+                "duration_minutes": 60,
+                "min_participants": 1,
+                "max_participants": 8,
+                "price_per_person": "400.00",
+                "status": "Active",
+            },
+        )
+        self.assertEqual(act.status_code, 201)
+        act_id = act.json()["id"]
+
+        # Create instructor linked to this specific activity
+        ins1 = self.client.post(
+            "/api/activities/staff",
+            headers=self.act_headers,
+            json={
+                "full_name": "Meera Coach",
+                "email": "meera.coach@example.test",
+                "phone": "9876511111",
+                "designation": "Pilates Instructor",
+                "activity_ids": [act_id],
+            },
+        )
+        self.assertEqual(ins1.status_code, 201)
+        ins1_id = ins1.json()["id"]
+        self.assertEqual(ins1.json()["assigned_activity_ids"], [act_id])
+
+        ins2 = self.client.post(
+            "/api/activities/staff",
+            headers=self.act_headers,
+            json={
+                "full_name": "Arav Guide",
+                "email": "arav.guide@example.test",
+                "phone": "9876522222",
+                "designation": "Trail Guide",
+                "activity_ids": [],
+            },
+        )
+        self.assertEqual(ins2.status_code, 201)
+        ins2_id = ins2.json()["id"]
+
+        # Filtering/prioritizing by activity_id marks Meera as assigned to activity
+        staff_list = self.client.get(
+            f"/api/activities/staff?activity_id={act_id}&assigned_only=true",
+            headers=self.act_headers,
+        ).json()
+        self.assertEqual([s["id"] for s in staff_list], [ins1_id])
+
+        # Create unassigned session today -> notifications include unassigned_staff
+        sess = self.client.post(
+            "/api/activities/sessions",
+            headers=self.act_headers,
+            json={
+                "activity_id": act_id,
+                "session_date": str(today),
+                "start_time": "17:00",
+                "end_time": "18:00",
+                "capacity": 8,
+            },
+        )
+        self.assertEqual(sess.status_code, 201)
+        sess_id = sess.json()["id"]
+
+        notif_before = self.client.get("/api/activities/notifications", headers=self.act_headers).json()
+        self.assertTrue(any(n["id"] == "unassigned_staff" for n in notif_before["items"]))
+
+        # Assign instructor -> unassigned_staff notification clears
+        self.assertEqual(
+            self.client.patch(
+                f"/api/activities/sessions/{sess_id}",
+                headers=self.act_headers,
+                json={"assigned_staff_id": ins1_id},
+            ).status_code,
+            200,
+        )
+        notif_after = self.client.get("/api/activities/notifications", headers=self.act_headers).json()
+        self.assertFalse(any(n["id"] == "unassigned_staff" for n in notif_after["items"]))
+
+        # Cannot delete instructor assigned to upcoming session (409)
+        self.assertEqual(
+            self.client.delete(f"/api/activities/staff/{ins1_id}", headers=self.act_headers).status_code,
+            409,
+        )
+
+        # Unassign and clear session + delete both instructors cleanly
+        self.client.patch(
+            f"/api/activities/sessions/{sess_id}",
+            headers=self.act_headers,
+            json={"assigned_staff_id": None},
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/activities/sessions/{sess_id}", headers=self.act_headers).status_code,
+            200,
+        )
+        bulk_del = self.client.post(
+            "/api/activities/staff/bulk-delete",
+            headers=self.act_headers,
+            json={"ids": [ins1_id, ins2_id]},
+        )
+        self.assertEqual(bulk_del.status_code, 200)
+        self.assertEqual(bulk_del.json()["deleted"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

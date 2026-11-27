@@ -8,10 +8,13 @@ import {
   FileText,
   IndianRupee,
   Search,
+  Trash2,
   Wallet,
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
@@ -86,6 +89,14 @@ export default function ActivityInvoices() {
 
   // Detail Modal
   const [detailInvoice, setDetailInvoice] = useState(null);
+
+  // Selection & Clear/Delete Modals
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -210,6 +221,71 @@ export default function ActivityInvoices() {
     }
   };
 
+  const handleSelectRow = (id) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (ids) => {
+    setBulkFailures([]);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await activitiesApi.deleteInvoice(deleteTarget.id);
+      showSuccess(res.data?.message || `Invoice ${deleteTarget.invoice_number} cleared.`);
+      if (detailInvoice?.id === deleteTarget.id) setDetailInvoice(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.id);
+        return next;
+      });
+      setDeleteTarget(null);
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    try {
+      const res = await activitiesApi.bulkDeleteInvoices(ids);
+      const { deleted = 0, failed = [], message } = res.data || {};
+      setBulkFailures(failed);
+      setSelectedIds(new Set(failed.map((f) => f.id)));
+      setBulkDeleteOpen(false);
+      await loadData();
+      if (deleted > 0) showSuccess(message || `Cleared ${deleted} invoice(s).`);
+      if (failed.length > 0) showError(`${failed.length} invoice(s) could not be cleared.`);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   const totals = useMemo(
     () =>
       invoices.reduce(
@@ -318,6 +394,16 @@ export default function ActivityInvoices() {
           >
             <Download size={15} />
           </button>
+          {inv.payment_status === "Pending" && (
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(inv)}
+              title="Clear Pending Invoice"
+              className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
         </div>
       ),
     },
@@ -338,10 +424,10 @@ export default function ActivityInvoices() {
 
       {pageError && <AlertBanner variant="error" message={pageError} />}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-4xl">
-        <StatCard compact title="Invoiced Total (Page)" value={loading ? "—" : actMoney(totals.total)} icon={FileText} color="amber" />
-        <StatCard compact title="Collected (Page)" value={loading ? "—" : actMoney(totals.paid)} icon={IndianRupee} color="emerald" />
-        <StatCard compact title="Balance Due (Page)" value={loading ? "—" : actMoney(totals.balance)} icon={Wallet} color={totals.balance > 0 ? "rose" : "emerald"} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 w-fit max-w-full">
+        <StatCard compact className="!p-2.5" title="Invoiced Total (Page)" value={loading ? "—" : actMoney(totals.total)} icon={FileText} color="amber" />
+        <StatCard compact className="!p-2.5" title="Collected (Page)" value={loading ? "—" : actMoney(totals.paid)} icon={IndianRupee} color="emerald" />
+        <StatCard compact className="!p-2.5" title="Balance Due (Page)" value={loading ? "—" : actMoney(totals.balance)} icon={Wallet} color={totals.balance > 0 ? "rose" : "emerald"} />
       </div>
 
       <div className={`${CARD_STYLES.base} !p-2.5`}>
@@ -369,6 +455,22 @@ export default function ActivityInvoices() {
         </div>
       </div>
 
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={() => setBulkDeleteOpen(true)}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="warning"
+          title="Some invoices could not be cleared"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" | ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
+
       <VillaDataTable
         title="Activity Invoices"
         columns={columns}
@@ -377,6 +479,10 @@ export default function ActivityInvoices() {
         emptyTitle="No activity invoices generated yet"
         tableMinWidth="min-w-[880px]"
         onRowClick={(inv) => openDetail(inv.id)}
+        selectedIds={selectedIds}
+        onSelectRow={handleSelectRow}
+        onSelectAll={handleSelectAll}
+        isRowSelectable={(inv) => inv.payment_status === "Pending"}
         pagination={{
           currentPage: page,
           totalPages,
@@ -574,10 +680,40 @@ export default function ActivityInvoices() {
                 <Download size={14} />
                 <span>Download PDF</span>
               </button>
+              {detailInvoice.payment_status === "Pending" && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(detailInvoice)}
+                  className={BUTTON_VARIANTS.danger}
+                >
+                  <Trash2 size={14} />
+                  <span>Clear Invoice</span>
+                </button>
+              )}
             </div>
           </div>
         )}
       </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title={`Clear Invoice ${deleteTarget?.invoice_number || ""}?`}
+        message="This permanently removes the unpaid pending invoice. Paid or partially paid invoices remain protected."
+        confirmText="Clear Invoice"
+        loading={deleting}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={`Clear ${selectedIds.size} Selected Invoice(s)?`}
+        message="Unpaid pending invoices will be permanently deleted. Invoices with recorded payments remain protected."
+        confirmText="Clear Selected"
+        loading={bulkDeleting}
+      />
     </div>
   );
 }

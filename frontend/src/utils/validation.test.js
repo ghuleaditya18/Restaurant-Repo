@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { validateEmailAddress, validateMobileNumber } from "./validation.js";
+import {
+  sanitizeMobileInput,
+  validateEmailAddress,
+  validateMobileNumber,
+} from "./validation.js";
+
+test("sanitizeMobileInput strips non-digits and caps at 10 digits", () => {
+  assert.equal(sanitizeMobileInput("9876543210999"), "9876543210");
+  assert.equal(sanitizeMobileInput("98-765 4321a0"), "9876543210");
+});
 
 test("validateMobileNumber accepts valid 10-digit Indian mobiles and optional +91 prefix", () => {
   assert.deepEqual(validateMobileNumber("9876543210"), {

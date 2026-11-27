@@ -29,6 +29,10 @@ from app.models import (
     VillaInvoice,
     Package,
     PackageBooking,
+    TransportVehicle,
+    TransportDriver,
+    TransportRoute,
+    TransportBooking,
 )
 
 router = APIRouter(prefix="/api/search", tags=["Global Search"])
@@ -73,8 +77,8 @@ def global_search(
     pattern = f"%{query_text}%"
     raw_context = getattr(current_user, "business_context", None)
     biz_context = str(getattr(raw_context, "value", raw_context) or "").strip().upper()
-    biz_context = {"VILLAS": "VILLA", "NIWARAAI": "VILLA", "PACKAGES": "PACKAGE"}.get(biz_context, biz_context)
-    if biz_context not in {"RESTAURANT", "SPA", "VILLA", "PACKAGE"}:
+    biz_context = {"VILLAS": "VILLA", "NIWARAAI": "VILLA", "PACKAGES": "PACKAGE", "TRANSPORTS": "TRANSPORT"}.get(biz_context, biz_context)
+    if biz_context not in {"RESTAURANT", "SPA", "VILLA", "PACKAGE", "TRANSPORT"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: unsupported business context.",
@@ -761,6 +765,156 @@ def global_search(
                     route=f"/packages/invoices?search={inv.invoice_number}",
                 )
                 for inv in pkg_invoices
+            ]
+            groups.append(SearchGroup(category="Invoices", entity_type="invoice", items=items))
+            total_count += len(items)
+
+    elif biz_context == "TRANSPORT":
+        vehicles = (
+            db.query(TransportVehicle)
+            .filter(
+                TransportVehicle.is_deleted.is_(False),
+                or_(
+                    TransportVehicle.vehicle_name.ilike(pattern),
+                    TransportVehicle.registration_number.ilike(pattern),
+                    TransportVehicle.make.ilike(pattern),
+                    TransportVehicle.model.ilike(pattern),
+                ),
+            )
+            .order_by(TransportVehicle.vehicle_name.asc())
+            .limit(5)
+            .all()
+        )
+        if vehicles:
+            items = [
+                SearchItem(
+                    id=v.id,
+                    title=f"{v.vehicle_name} ({v.registration_number})",
+                    subtitle=f"{v.make} {v.model} · {v.seating_capacity} seats · {v.fuel_type}",
+                    entity_type="vehicle",
+                    status=v.status,
+                    route=f"/transport/vehicles?search={v.registration_number}",
+                )
+                for v in vehicles
+            ]
+            groups.append(SearchGroup(category="Vehicles", entity_type="vehicle", items=items))
+            total_count += len(items)
+
+        drivers = (
+            db.query(TransportDriver)
+            .filter(
+                TransportDriver.is_deleted.is_(False),
+                or_(
+                    TransportDriver.driver_name.ilike(pattern),
+                    TransportDriver.phone.ilike(pattern),
+                    TransportDriver.licence_number.ilike(pattern),
+                ),
+            )
+            .order_by(TransportDriver.driver_name.asc())
+            .limit(5)
+            .all()
+        )
+        if drivers:
+            items = [
+                SearchItem(
+                    id=d.id,
+                    title=d.driver_name,
+                    subtitle=f"Driver · {d.phone} · Licence {d.licence_number}",
+                    entity_type="driver",
+                    status=d.availability_status,
+                    route=f"/transport/drivers?search={d.driver_name}",
+                )
+                for d in drivers
+            ]
+            groups.append(SearchGroup(category="Drivers", entity_type="driver", items=items))
+            total_count += len(items)
+
+        routes = (
+            db.query(TransportRoute)
+            .filter(
+                TransportRoute.is_deleted.is_(False),
+                or_(
+                    TransportRoute.route_name.ilike(pattern),
+                    TransportRoute.route_code.ilike(pattern),
+                    TransportRoute.starting_location.ilike(pattern),
+                    TransportRoute.destination.ilike(pattern),
+                ),
+            )
+            .order_by(TransportRoute.route_name.asc())
+            .limit(5)
+            .all()
+        )
+        if routes:
+            items = [
+                SearchItem(
+                    id=r.id,
+                    title=f"{r.route_name} ({r.route_code})",
+                    subtitle=f"{r.starting_location} → {r.destination}",
+                    entity_type="route",
+                    status="Active" if r.is_active else "Inactive",
+                    route=f"/transport/routes?search={r.route_code}",
+                )
+                for r in routes
+            ]
+            groups.append(SearchGroup(category="Routes", entity_type="route", items=items))
+            total_count += len(items)
+
+        trn_bookings = (
+            db.query(TransportBooking)
+            .outerjoin(Customer, TransportBooking.customer_id == Customer.id)
+            .filter(
+                TransportBooking.is_deleted.is_(False),
+                or_(
+                    TransportBooking.booking_number.ilike(pattern),
+                    TransportBooking.pickup_location.ilike(pattern),
+                    TransportBooking.drop_location.ilike(pattern),
+                    Customer.full_name.ilike(pattern),
+                    Customer.phone.ilike(pattern),
+                ),
+            )
+            .order_by(desc(TransportBooking.id))
+            .limit(5)
+            .all()
+        )
+        if trn_bookings:
+            items = [
+                SearchItem(
+                    id=b.id,
+                    title=f"{b.booking_number} · {b.customer.full_name if b.customer else 'Guest'}",
+                    subtitle=f"{b.pickup_location} → {b.drop_location} · {b.pickup_date}",
+                    entity_type="booking",
+                    status=b.status,
+                    route=f"/transport/bookings?search={b.booking_number}",
+                )
+                for b in trn_bookings
+            ]
+            groups.append(SearchGroup(category="Transport Bookings", entity_type="booking", items=items))
+            total_count += len(items)
+
+        trn_invoices = (
+            db.query(Invoice)
+            .filter(
+                Invoice.source_module == "TRANSPORT",
+                or_(
+                    Invoice.invoice_number.ilike(pattern),
+                    Invoice.source_reference_number.ilike(pattern),
+                ),
+            )
+            .order_by(desc(Invoice.id))
+            .limit(5)
+            .all()
+        )
+        if trn_invoices:
+            items = [
+                SearchItem(
+                    id=inv.id,
+                    title=inv.invoice_number,
+                    subtitle=f"Booking {inv.source_reference_number or '—'} · ₹{float(inv.total_amount):.2f}",
+                    entity_type="invoice",
+                    status=getattr(inv.payment_status, "value", str(inv.payment_status)),
+                    route=f"/transport/invoices?search={inv.invoice_number}",
+                )
+                for inv in trn_invoices
             ]
             groups.append(SearchGroup(category="Invoices", entity_type="invoice", items=items))
             total_count += len(items)

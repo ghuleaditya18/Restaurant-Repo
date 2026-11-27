@@ -9,19 +9,26 @@ import {
   Layers,
   List,
   Plus,
+  Power,
+  Search,
   Sparkles,
+  Trash2,
   UserCheck,
+  UserPlus,
   Users,
   XCircle,
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
+import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { useNotification } from "../../context/NotificationContext";
 import { BUTTON_VARIANTS, CARD_STYLES, INPUT_STYLES } from "../../utils/themeTokens";
+import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
 import VillaDataTable from "../villas/VillaDataTable";
 import {
   actDate,
@@ -47,14 +54,23 @@ export default function ActivitiesSchedule() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { showSuccess, showError } = useNotification();
 
-  const [tab, setTab] = useState("sessions"); // sessions | templates
-  const [viewMode, setViewMode] = useState("agenda"); // agenda | table
+  const initialTab = ["sessions", "templates", "instructors"].includes(searchParams.get("tab"))
+    ? searchParams.get("tab")
+    : "sessions";
+  const [tab, setTab] = useState(initialTab); // sessions | templates | instructors
+  const [viewMode, setViewMode] = useState("table"); // table | agenda
   const [sessions, setSessions] = useState([]);
   const [activitiesList, setActivitiesList] = useState([]);
+  const [allActivitiesList, setAllActivitiesList] = useState([]);
   const [staffList, setStaffList] = useState([]);
+  const [allStaffList, setAllStaffList] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
+  const [tplPage, setTplPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const [staffSearch, setStaffSearch] = useState("");
+  const [staffIncludeInactive, setStaffIncludeInactive] = useState(false);
 
   // Filters
   const [activityFilter, setActivityFilter] = useState("");
@@ -111,6 +127,35 @@ export default function ActivitiesSchedule() {
   });
   const [generating, setGenerating] = useState(false);
 
+  // Selection & Delete Modals
+  const [selectedSessionIds, setSelectedSessionIds] = useState(() => new Set());
+  const [selectedScheduleIds, setSelectedScheduleIds] = useState(() => new Set());
+  const [selectedStaffIds, setSelectedStaffIds] = useState(() => new Set());
+  const [deleteSessionTarget, setDeleteSessionTarget] = useState(null);
+  const [deletingSession, setDeletingSession] = useState(false);
+  const [deleteScheduleTarget, setDeleteScheduleTarget] = useState(null);
+  const [deletingSchedule, setDeletingSchedule] = useState(false);
+  const [deleteStaffTarget, setDeleteStaffTarget] = useState(null);
+  const [deletingStaff, setDeletingStaff] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
+
+  // Instructor Create / Edit Modal
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [staffForm, setStaffForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    employee_code: "",
+    designation: "Activity Instructor",
+    activity_ids: [],
+    is_active: true,
+  });
+  const [staffFormError, setStaffFormError] = useState("");
+  const [savingStaff, setSavingStaff] = useState(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setPageError("");
@@ -126,7 +171,7 @@ export default function ActivitiesSchedule() {
           page_size: pageSize,
         }),
         activitiesApi.list({ status: "Active", page: 1, page_size: 100 }),
-        activitiesApi.staff().catch(() => ({ data: [] })),
+        activitiesApi.staff({ include_inactive: true }).catch(() => ({ data: [] })),
       ]);
 
       setSessions(sessRes.data?.items || []);
@@ -135,7 +180,10 @@ export default function ActivitiesSchedule() {
 
       const acts = actRes.data?.items || [];
       setActivitiesList(acts);
-      setStaffList(staffRes.data || []);
+      setAllActivitiesList(acts);
+      const rawStaff = staffRes.data || [];
+      setAllStaffList(rawStaff);
+      setStaffList(rawStaff.filter((s) => s.is_active));
 
       // Load schedules for session-type activities
       const sessionActs = acts.filter((a) => a.booking_type === "session");
@@ -322,6 +370,251 @@ export default function ActivitiesSchedule() {
     }
   };
 
+  const toggleInSet = (setter, id) => {
+    setBulkFailures([]);
+    setter((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllInSet = (setter, ids) => {
+    setBulkFailures([]);
+    setter((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.length > 0 && ids.every((id) => next.has(id));
+      if (allSelected) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleConfirmDeleteSession = async () => {
+    if (!deleteSessionTarget) return;
+    setDeletingSession(true);
+    try {
+      const res = await activitiesApi.deleteSession(deleteSessionTarget.id);
+      showSuccess(res.data?.message || "Session deleted.");
+      setSelectedSessionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteSessionTarget.id);
+        return next;
+      });
+      setDeleteSessionTarget(null);
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeletingSession(false);
+    }
+  };
+
+  const handleConfirmDeleteSchedule = async () => {
+    if (!deleteScheduleTarget) return;
+    setDeletingSchedule(true);
+    try {
+      const res = await activitiesApi.deleteSchedule(deleteScheduleTarget.id);
+      showSuccess(res.data?.message || "Weekly schedule template deleted.");
+      setSelectedScheduleIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteScheduleTarget.id);
+        return next;
+      });
+      setDeleteScheduleTarget(null);
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeletingSchedule(false);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    const isTemplates = tab === "templates";
+    const isInstructors = tab === "instructors";
+    const ids = Array.from(
+      isInstructors ? selectedStaffIds : isTemplates ? selectedScheduleIds : selectedSessionIds
+    );
+    if (!ids.length) return;
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    try {
+      const res = isInstructors
+        ? await activitiesApi.bulkDeleteStaff(ids)
+        : isTemplates
+          ? await activitiesApi.bulkDeleteSchedules(ids)
+          : await activitiesApi.bulkDeleteSessions(ids);
+      const { deleted = 0, failed = [], message } = res.data || {};
+      setBulkFailures(failed);
+      if (isInstructors) {
+        setSelectedStaffIds(new Set(failed.map((f) => f.id)));
+      } else if (isTemplates) {
+        setSelectedScheduleIds(new Set(failed.map((f) => f.id)));
+      } else {
+        setSelectedSessionIds(new Set(failed.map((f) => f.id)));
+      }
+      setBulkDeleteOpen(false);
+      await loadData();
+      if (deleted > 0) showSuccess(message || `Deleted ${deleted} record(s).`);
+      if (failed.length > 0) showError(`${failed.length} record(s) could not be deleted.`);
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const openCreateInstructor = (presetActivityId = "") => {
+    setEditingStaff(null);
+    setStaffForm({
+      full_name: "",
+      email: "",
+      phone: "",
+      employee_code: "",
+      designation: "Activity Instructor",
+      activity_ids: presetActivityId ? [Number(presetActivityId)] : [],
+      is_active: true,
+    });
+    setStaffFormError("");
+    setStaffModalOpen(true);
+  };
+
+  const openEditInstructor = (u) => {
+    setEditingStaff(u);
+    setStaffForm({
+      full_name: u.full_name || "",
+      email: u.email || "",
+      phone: u.phone || "",
+      employee_code: u.employee_code || "",
+      designation: u.designation || "Activity Instructor",
+      activity_ids: Array.isArray(u.assigned_activity_ids) ? u.assigned_activity_ids : [],
+      is_active: Boolean(u.is_active),
+    });
+    setStaffFormError("");
+    setStaffModalOpen(true);
+  };
+
+  const handleSaveInstructor = async (e) => {
+    e.preventDefault();
+    setStaffFormError("");
+    if (staffForm.full_name.trim().length < 2) {
+      setStaffFormError("Instructor name must be at least 2 characters.");
+      return;
+    }
+    const emailCheck = validateEmailAddress(staffForm.email, { required: true });
+    if (!emailCheck.valid) {
+      setStaffFormError(emailCheck.error);
+      return;
+    }
+    const phoneCheck = validateMobileNumber(staffForm.phone, { required: true });
+    if (!phoneCheck.valid) {
+      setStaffFormError(phoneCheck.error);
+      return;
+    }
+    setSavingStaff(true);
+    try {
+      const payload = {
+        full_name: staffForm.full_name.trim(),
+        email: emailCheck.normalized,
+        phone: phoneCheck.normalized,
+        employee_code: staffForm.employee_code.trim().toUpperCase() || null,
+        designation: staffForm.designation.trim() || "Activity Instructor",
+        activity_ids: (staffForm.activity_ids || []).map(Number),
+        is_active: Boolean(staffForm.is_active),
+      };
+      if (editingStaff) {
+        await activitiesApi.updateStaff(editingStaff.id, payload);
+        showSuccess(`Instructor "${payload.full_name}" updated.`);
+      } else {
+        const res = await activitiesApi.createStaff(payload);
+        showSuccess(`Instructor "${payload.full_name}" created.`);
+        if (sessModalOpen && res.data?.id) {
+          setSessForm((prev) => ({ ...prev, assigned_staff_id: String(res.data.id) }));
+        }
+        if (tplOpen && res.data?.id) {
+          setTplForm((prev) => ({ ...prev, default_staff_id: String(res.data.id) }));
+        }
+      }
+      setStaffModalOpen(false);
+      await loadData();
+    } catch (err) {
+      setStaffFormError(actError(err));
+    } finally {
+      setSavingStaff(false);
+    }
+  };
+
+  const handleToggleStaffStatus = async (u) => {
+    try {
+      await activitiesApi.updateStaff(u.id, { is_active: !u.is_active });
+      showSuccess(`${u.full_name} marked ${!u.is_active ? "Active" : "Inactive"}.`);
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    }
+  };
+
+  const handleConfirmDeleteStaff = async () => {
+    if (!deleteStaffTarget) return;
+    setDeletingStaff(true);
+    try {
+      const res = await activitiesApi.deleteStaff(deleteStaffTarget.id);
+      showSuccess(res.data?.message || `Instructor "${deleteStaffTarget.full_name}" removed.`);
+      setSelectedStaffIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteStaffTarget.id);
+        return next;
+      });
+      setDeleteStaffTarget(null);
+      await loadData();
+    } catch (err) {
+      showError(actError(err));
+    } finally {
+      setDeletingStaff(false);
+    }
+  };
+
+  const renderActivityInstructorOptions = (activityIdValue) => {
+    const targetId = Number(activityIdValue || 0);
+    const qualified = targetId
+      ? staffList.filter((u) => (u.assigned_activity_ids || []).includes(targetId))
+      : [];
+    const others = targetId
+      ? staffList.filter((u) => !(u.assigned_activity_ids || []).includes(targetId))
+      : staffList;
+    if (!qualified.length) {
+      return staffList.map((u) => (
+        <option key={u.id} value={u.id}>
+          {u.full_name} ({u.designation || u.email})
+        </option>
+      ));
+    }
+    return (
+      <>
+        <optgroup label="Assigned to This Activity">
+          {qualified.map((u) => (
+            <option key={u.id} value={u.id}>
+              ★ {u.full_name} ({u.designation || "Instructor"})
+            </option>
+          ))}
+        </optgroup>
+        {others.length > 0 && (
+          <optgroup label="Other Active Staff">
+            {others.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name} ({u.designation || "Staff"})
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </>
+    );
+  };
+
   // Group sessions by date for Agenda view
   const groupedByDate = sessions.reduce((acc, s) => {
     const key = String(s.session_date).slice(0, 10);
@@ -431,11 +724,19 @@ export default function ActivitiesSchedule() {
                 setCancelReason("");
               }}
               title="Cancel Session"
-              className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+              className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
             >
               <XCircle size={15} />
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setDeleteSessionTarget(s)}
+            title="Delete / Clear Session"
+            className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+          >
+            <Trash2 size={15} />
+          </button>
         </div>
       ),
     },
@@ -445,9 +746,17 @@ export default function ActivitiesSchedule() {
     <div className="space-y-4">
       <PageHeader
         title="Schedule & Sessions"
-        description="Manage individual group sessions, weekly recurring templates, instructor assignments, and calculated seat availability."
+        description="Manage group sessions, weekly recurring templates, activity instructors, and calculated seat availability."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openCreateInstructor(activityFilter || "")}
+              className={BUTTON_VARIANTS.secondary}
+            >
+              <UserPlus size={15} />
+              <span>Add Instructor</span>
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -477,11 +786,11 @@ export default function ActivitiesSchedule() {
         <AlertBanner variant="error" message={pageError} onDismiss={() => setPageError("")} />
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard compact title="Matching Sessions" value={loading ? "—" : totalRecords} icon={CalendarDays} color="amber" />
-        <StatCard compact title="Unassigned Staff" value={loading ? "—" : unassignedCount} icon={Users} color={unassignedCount > 0 ? "rose" : "emerald"} />
-        <StatCard compact title="Below Min Advisory" value={loading ? "—" : belowMinCount} icon={AlertTriangle} color={belowMinCount > 0 ? "amber" : "emerald"} />
-        <StatCard compact title="Fully Booked" value={loading ? "—" : fullCount} icon={Sparkles} color="indigo" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-fit max-w-full">
+        <StatCard compact className="!p-2.5" title="Matching Sessions" value={loading ? "—" : totalRecords} icon={CalendarDays} color="amber" />
+        <StatCard compact className="!p-2.5" title="Unassigned Staff" value={loading ? "—" : unassignedCount} icon={Users} color={unassignedCount > 0 ? "rose" : "emerald"} />
+        <StatCard compact className="!p-2.5" title="Below Min Advisory" value={loading ? "—" : belowMinCount} icon={AlertTriangle} color={belowMinCount > 0 ? "amber" : "emerald"} />
+        <StatCard compact className="!p-2.5" title="Fully Booked" value={loading ? "—" : fullCount} icon={Sparkles} color="indigo" />
       </div>
 
       {/* MODE TABS + FILTERS */}
@@ -490,7 +799,10 @@ export default function ActivitiesSchedule() {
           <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] p-0.5">
             <button
               type="button"
-              onClick={() => setTab("sessions")}
+              onClick={() => {
+                setTab("sessions");
+                setBulkFailures([]);
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer ${
                 tab === "sessions" ? "bg-amber-500 text-[#0D1420] font-bold" : "text-stone-600 dark:text-[#8A9AB2]"
               }`}
@@ -499,27 +811,32 @@ export default function ActivitiesSchedule() {
             </button>
             <button
               type="button"
-              onClick={() => setTab("templates")}
+              onClick={() => {
+                setTab("templates");
+                setBulkFailures([]);
+              }}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer ${
                 tab === "templates" ? "bg-amber-500 text-[#0D1420] font-bold" : "text-stone-600 dark:text-[#8A9AB2]"
               }`}
             >
               Weekly Templates ({schedules.length})
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTab("instructors");
+                setBulkFailures([]);
+              }}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer ${
+                tab === "instructors" ? "bg-amber-500 text-[#0D1420] font-bold" : "text-stone-600 dark:text-[#8A9AB2]"
+              }`}
+            >
+              Instructors &amp; Staff ({allStaffList.length})
+            </button>
           </div>
 
           {tab === "sessions" && (
             <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode("agenda")}
-                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer ${
-                  viewMode === "agenda" ? "bg-white dark:bg-[#101722] shadow-2xs" : "text-stone-500"
-                }`}
-              >
-                <CalendarDays size={13} />
-                <span>Agenda</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
@@ -529,6 +846,16 @@ export default function ActivitiesSchedule() {
               >
                 <List size={13} />
                 <span>Table</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("agenda")}
+                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+                  viewMode === "agenda" ? "bg-white dark:bg-[#101722] shadow-2xs" : "text-stone-500"
+                }`}
+              >
+                <CalendarDays size={13} />
+                <span>Agenda</span>
               </button>
             </div>
           )}
@@ -580,7 +907,75 @@ export default function ActivitiesSchedule() {
             </select>
           </div>
         )}
+
+        {tab === "instructors" && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  value={staffSearch}
+                  onChange={(e) => {
+                    setStaffSearch(e.target.value);
+                    setStaffPage(1);
+                  }}
+                  placeholder="Search instructor, code, email, activity..."
+                  className={`${INPUT_STYLES.base} w-full pl-9 !py-1.5 text-xs`}
+                />
+              </div>
+              <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={staffIncludeInactive}
+                  onChange={(e) => {
+                    setStaffIncludeInactive(e.target.checked);
+                    setStaffPage(1);
+                  }}
+                  className="h-4 w-4 accent-amber-500"
+                />
+                <span>Show Inactive</span>
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => openCreateInstructor("")}
+              className={BUTTON_VARIANTS.primary}
+            >
+              <UserPlus size={15} />
+              <span>Add Instructor / Staff</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      <BulkSelectionBar
+        count={
+          tab === "instructors"
+            ? selectedStaffIds.size
+            : tab === "templates"
+              ? selectedScheduleIds.size
+              : selectedSessionIds.size
+        }
+        onClear={() =>
+          tab === "instructors"
+            ? setSelectedStaffIds(new Set())
+            : tab === "templates"
+              ? setSelectedScheduleIds(new Set())
+              : setSelectedSessionIds(new Set())
+        }
+        onDelete={() => setBulkDeleteOpen(true)}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="warning"
+          title="Some items could not be deleted"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" | ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
 
       {/* SESSIONS CONTENT */}
       {tab === "sessions" ? (
@@ -592,6 +987,9 @@ export default function ActivitiesSchedule() {
             loading={loading}
             emptyTitle="No sessions in this date range"
             tableMinWidth="min-w-[880px]"
+            selectedIds={selectedSessionIds}
+            onSelectRow={(id) => toggleInSet(setSelectedSessionIds, id)}
+            onSelectAll={(ids) => toggleAllInSet(setSelectedSessionIds, ids)}
             pagination={{
               currentPage: page,
               totalPages,
@@ -623,24 +1021,33 @@ export default function ActivitiesSchedule() {
                   </h3>
                   <span className="text-xs text-stone-500">({daySessions.length} session(s))</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
                   {daySessions.map((s) => (
                     <div
                       key={s.id}
-                      className={`${CARD_STYLES.base} flex flex-col justify-between gap-3`}
+                      className={`${CARD_STYLES.base} !p-3 flex flex-col justify-between gap-2`}
                     >
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC]">
-                              {s.activity_name}
-                            </h4>
-                            <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5 tabular-nums">
-                              <Clock size={12} className="text-amber-500" />
-                              {actTime(s.start_time)} – {actTime(s.end_time)}
-                            </p>
+                          <div className="flex items-start gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={selectedSessionIds.has(s.id)}
+                              onChange={() => toggleInSet(setSelectedSessionIds, s.id)}
+                              aria-label={`Select session ${s.activity_name}`}
+                              className="mt-0.5 h-4 w-4 accent-amber-500 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC] truncate">
+                                {s.activity_name}
+                              </h4>
+                              <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5 tabular-nums">
+                                <Clock size={12} className="text-amber-500 shrink-0" />
+                                {actTime(s.start_time)} – {actTime(s.end_time)}
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex flex-col items-end gap-1 shrink-0">
                             <StatusBadge status={s.status} size="sm" />
                             {s.is_full && s.status !== "Cancelled" && (
                               <StatusBadge status="Full" size="sm" />
@@ -733,6 +1140,14 @@ export default function ActivitiesSchedule() {
                               Complete
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteSessionTarget(s)}
+                            title="Delete Session"
+                            className="rounded-lg p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -742,64 +1157,244 @@ export default function ActivitiesSchedule() {
             ))}
           </div>
         )
-      ) : (
+      ) : tab === "templates" ? (
         /* WEEKLY TEMPLATES TAB */
-        <VillaDataTable
-          title="Weekly Schedule Templates"
-          subtitle="Generate upcoming scheduled sessions in bulk from recurring weekly templates"
-          columns={[
-            { key: "activity_name", label: "Activity", cellClassName: "font-semibold" },
+        (() => {
+          const tplPageSize = 10;
+          const tplTotalPages = Math.max(1, Math.ceil(schedules.length / tplPageSize));
+          const pagedSchedules = schedules.slice((tplPage - 1) * tplPageSize, tplPage * tplPageSize);
+          return (
+            <VillaDataTable
+              title="Weekly Schedule Templates"
+              subtitle="Generate upcoming scheduled sessions in bulk from recurring weekly templates"
+              columns={[
+                { key: "activity_name", label: "Activity", cellClassName: "font-semibold" },
+                {
+                  key: "operating_weekdays",
+                  label: "Weekdays",
+                  render: (sc) => {
+                    const days = String(sc.operating_weekdays || "")
+                      .split(",")
+                      .filter(Boolean)
+                      .map((d) => WEEKDAYS.find((w) => w.id === Number(d))?.label || d);
+                    return days.join(", ") || "—";
+                  },
+                },
+                {
+                  key: "time",
+                  label: "Time Window",
+                  cellClassName: "whitespace-nowrap tabular-nums",
+                  render: (sc) => `${actTime(sc.start_time)} – ${actTime(sc.end_time)}`,
+                },
+                {
+                  key: "validity",
+                  label: "Valid Dates",
+                  cellClassName: "whitespace-nowrap",
+                  render: (sc) => `${actDate(sc.valid_from)} – ${actDate(sc.valid_to)}`,
+                },
+                { key: "default_capacity", label: "Capacity", align: "right" },
+                {
+                  key: "actions",
+                  label: "Actions",
+                  align: "right",
+                  cellClassName: "whitespace-nowrap",
+                  render: (sc) => (
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGenTarget(sc);
+                          setGenDates({
+                            from_date: String(sc.valid_from).slice(0, 10),
+                            to_date: String(sc.valid_to).slice(0, 10),
+                          });
+                        }}
+                        className={BUTTON_VARIANTS.outline}
+                      >
+                        <CalendarPlus size={13} />
+                        <span>Generate Sessions</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteScheduleTarget(sc)}
+                        title="Delete Weekly Template"
+                        className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+              rows={pagedSchedules}
+              loading={loading}
+              emptyTitle="No weekly templates configured"
+              emptyDescription="Create a weekly template to batch-generate recurring sessions."
+              selectedIds={selectedScheduleIds}
+              onSelectRow={(id) => toggleInSet(setSelectedScheduleIds, id)}
+              onSelectAll={(ids) => toggleAllInSet(setSelectedScheduleIds, ids)}
+              pagination={{
+                currentPage: tplPage,
+                totalPages: tplTotalPages,
+                totalRecords: schedules.length,
+                pageSize: tplPageSize,
+                onPageChange: setTplPage,
+              }}
+            />
+          );
+        })()
+      ) : (
+        /* INSTRUCTORS & STAFF TAB */
+        (() => {
+          const term = staffSearch.trim().toLowerCase();
+          const filteredStaff = allStaffList.filter((u) => {
+            if (!staffIncludeInactive && !u.is_active) return false;
+            if (!term) return true;
+            const actNames = (u.assigned_activities || []).map((a) => a.name.toLowerCase()).join(" ");
+            return (
+              (u.full_name || "").toLowerCase().includes(term) ||
+              (u.email || "").toLowerCase().includes(term) ||
+              (u.employee_code || "").toLowerCase().includes(term) ||
+              (u.designation || "").toLowerCase().includes(term) ||
+              actNames.includes(term)
+            );
+          });
+          const staffPageSize = 10;
+          const staffTotalPages = Math.max(1, Math.ceil(filteredStaff.length / staffPageSize));
+          const pagedStaff = filteredStaff.slice(
+            (staffPage - 1) * staffPageSize,
+            staffPage * staffPageSize
+          );
+          const staffColumns = [
             {
-              key: "operating_weekdays",
-              label: "Weekdays",
-              render: (sc) => {
-                const days = String(sc.operating_weekdays || "")
-                  .split(",")
-                  .filter(Boolean)
-                  .map((d) => WEEKDAYS.find((w) => w.id === Number(d))?.label || d);
-                return days.join(", ") || "—";
-              },
-            },
-            {
-              key: "time",
-              label: "Time Window",
-              cellClassName: "whitespace-nowrap tabular-nums",
-              render: (sc) => `${actTime(sc.start_time)} – ${actTime(sc.end_time)}`,
-            },
-            {
-              key: "validity",
-              label: "Valid Dates",
-              cellClassName: "whitespace-nowrap",
-              render: (sc) => `${actDate(sc.valid_from)} – ${actDate(sc.valid_to)}`,
-            },
-            { key: "default_capacity", label: "Capacity", align: "right" },
-            {
-              key: "actions",
-              label: "Generate",
-              align: "right",
-              render: (sc) => (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGenTarget(sc);
-                    setGenDates({
-                      from_date: String(sc.valid_from).slice(0, 10),
-                      to_date: String(sc.valid_to).slice(0, 10),
-                    });
-                  }}
-                  className={BUTTON_VARIANTS.outline}
-                >
-                  <CalendarPlus size={13} />
-                  <span>Generate Sessions</span>
-                </button>
+              key: "full_name",
+              label: "Instructor / Staff",
+              render: (u) => (
+                <div>
+                  <div className="font-semibold text-[#172033] dark:text-[#F8FAFC]">
+                    {u.full_name}
+                  </div>
+                  <div className="text-xs text-stone-500 font-mono">
+                    {u.employee_code || (u.role === "manager" ? "MANAGER" : "—")}
+                  </div>
+                </div>
               ),
             },
-          ]}
-          rows={schedules}
-          loading={loading}
-          emptyTitle="No weekly templates configured"
-          emptyDescription="Create a weekly template to batch-generate recurring sessions."
-        />
+            {
+              key: "contact",
+              label: "Contact",
+              render: (u) => (
+                <div className="text-xs space-y-0.5">
+                  <div>{u.email}</div>
+                  {u.phone && <div className="text-stone-500">{u.phone}</div>}
+                </div>
+              ),
+            },
+            {
+              key: "designation",
+              label: "Designation",
+              render: (u) => (
+                <span className="text-xs font-medium">{u.designation || "Activity Instructor"}</span>
+              ),
+            },
+            {
+              key: "assigned_activities",
+              label: "Assigned Activities",
+              render: (u) =>
+                (u.assigned_activities || []).length === 0 ? (
+                  <span className="text-xs text-stone-400">Any / General</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1 max-w-[260px]">
+                    {u.assigned_activities.map((a) => (
+                      <span
+                        key={a.id}
+                        className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-300"
+                      >
+                        {a.name}
+                      </span>
+                    ))}
+                  </div>
+                ),
+            },
+            {
+              key: "upcoming_session_count",
+              label: "Upcoming",
+              align: "right",
+              cellClassName: "tabular-nums font-semibold",
+              render: (u) => u.upcoming_session_count ?? 0,
+            },
+            {
+              key: "is_active",
+              label: "Status",
+              align: "center",
+              render: (u) => (
+                <StatusBadge status={u.is_active ? "Active" : "Inactive"} size="sm" />
+              ),
+            },
+            {
+              key: "actions",
+              label: "Actions",
+              align: "right",
+              cellClassName: "whitespace-nowrap",
+              render: (u) => (
+                <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => openEditInstructor(u)}
+                    title="Edit Instructor & Activities"
+                    className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
+                  >
+                    <Edit3 size={15} />
+                  </button>
+                  {u.role !== "manager" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStaffStatus(u)}
+                        title={u.is_active ? "Deactivate" : "Activate"}
+                        className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                      >
+                        <Power size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteStaffTarget(u)}
+                        title="Delete Instructor"
+                        className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ),
+            },
+          ];
+
+          return (
+            <VillaDataTable
+              title="Activity Instructors & Staff"
+              subtitle="Create instructors and assign the specific activities they are qualified to lead"
+              columns={staffColumns}
+              rows={pagedStaff}
+              loading={loading}
+              emptyTitle="No instructors or staff found"
+              emptyDescription="Click 'Add Instructor / Staff' to register activity instructors and assign them to specific activities."
+              tableMinWidth="min-w-[880px]"
+              selectedIds={selectedStaffIds}
+              onSelectRow={(id) => toggleInSet(setSelectedStaffIds, id)}
+              onSelectAll={(ids) => toggleAllInSet(setSelectedStaffIds, ids)}
+              isRowSelectable={(u) => u.role !== "manager"}
+              pagination={{
+                currentPage: staffPage,
+                totalPages: staffTotalPages,
+                totalRecords: filteredStaff.length,
+                pageSize: staffPageSize,
+                onPageChange: setStaffPage,
+              }}
+            />
+          );
+        })()
       )}
 
       {/* ADD / EDIT SESSION MODAL */}
@@ -887,18 +1482,25 @@ export default function ActivitiesSchedule() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
-                Assigned Instructor (conflict-protected)
-              </label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                  Assigned Instructor (conflict-protected)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => openCreateInstructor(sessForm.activity_id)}
+                  className="text-[11px] font-semibold text-amber-600 hover:underline cursor-pointer"
+                >
+                  + Create Instructor
+                </button>
+              </div>
               <select
                 value={sessForm.assigned_staff_id}
                 onChange={(e) => setSessForm({ ...sessForm, assigned_staff_id: e.target.value })}
                 className={INPUT_STYLES.select}
               >
                 <option value="">Unassigned</option>
-                {staffList.map((u) => (
-                  <option key={u.id} value={u.id}>{u.full_name} ({u.email})</option>
-                ))}
+                {renderActivityInstructorOptions(sessForm.activity_id)}
               </select>
             </div>
             <div className="sm:col-span-2">
@@ -1064,16 +1666,23 @@ export default function ActivitiesSchedule() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">Default Instructor</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">Default Instructor</label>
+                <button
+                  type="button"
+                  onClick={() => openCreateInstructor(tplForm.activity_id)}
+                  className="text-[11px] font-semibold text-amber-600 hover:underline cursor-pointer"
+                >
+                  + Create
+                </button>
+              </div>
               <select
                 value={tplForm.default_staff_id}
                 onChange={(e) => setTplForm({ ...tplForm, default_staff_id: e.target.value })}
                 className={INPUT_STYLES.select}
               >
                 <option value="">Unassigned</option>
-                {staffList.map((u) => (
-                  <option key={u.id} value={u.id}>{u.full_name}</option>
-                ))}
+                {renderActivityInstructorOptions(tplForm.activity_id)}
               </select>
             </div>
           </div>
@@ -1120,6 +1729,183 @@ export default function ActivitiesSchedule() {
             <button type="button" onClick={() => setGenTarget(null)} className={BUTTON_VARIANTS.secondary}>Cancel</button>
             <button type="submit" disabled={generating} className={BUTTON_VARIANTS.primary}>
               {generating ? "Generating..." : "Generate Sessions"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteSessionTarget)}
+        onClose={() => setDeleteSessionTarget(null)}
+        onConfirm={handleConfirmDeleteSession}
+        title="Delete Scheduled Session?"
+        message={`Delete "${deleteSessionTarget?.activity_name || "Session"}" on ${actDate(deleteSessionTarget?.session_date)}? Sessions with existing bookings must have their bookings cleared first.`}
+        confirmText="Delete Session"
+        loading={deletingSession}
+      />
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteScheduleTarget)}
+        onClose={() => setDeleteScheduleTarget(null)}
+        onConfirm={handleConfirmDeleteSchedule}
+        title="Delete Weekly Template?"
+        message={`Remove the recurring schedule template for "${deleteScheduleTarget?.activity_name || "Activity"}"? Already-generated sessions will remain intact.`}
+        confirmText="Delete Template"
+        loading={deletingSchedule}
+      />
+
+      <DeleteConfirm
+        isOpen={Boolean(deleteStaffTarget)}
+        onClose={() => setDeleteStaffTarget(null)}
+        onConfirm={handleConfirmDeleteStaff}
+        title="Delete Instructor?"
+        message={`Remove "${deleteStaffTarget?.full_name || "Instructor"}"? Instructors assigned to upcoming sessions must be unassigned first.`}
+        confirmText="Delete Instructor"
+        loading={deletingStaff}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkDeleteOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        title={
+          tab === "instructors"
+            ? `Delete ${selectedStaffIds.size} Selected Instructor(s)?`
+            : tab === "templates"
+              ? `Delete ${selectedScheduleIds.size} Weekly Template(s)?`
+              : `Delete ${selectedSessionIds.size} Selected Session(s)?`
+        }
+        message={
+          tab === "instructors"
+            ? "Selected instructors with no active upcoming sessions will be removed."
+            : tab === "templates"
+              ? "Selected weekly schedule templates will be removed permanently."
+              : "Selected sessions without linked bookings will be deleted permanently."
+        }
+        confirmText="Delete Selected"
+        loading={bulkDeleting}
+      />
+
+      {/* CREATE / EDIT INSTRUCTOR MODAL */}
+      <Modal
+        isOpen={staffModalOpen}
+        onClose={() => setStaffModalOpen(false)}
+        title={editingStaff ? `Edit Instructor — ${editingStaff.full_name}` : "Add Activity Instructor / Staff"}
+        size="md"
+      >
+        <form onSubmit={handleSaveInstructor} className="space-y-3.5">
+          {staffFormError && <AlertBanner variant="error" message={staffFormError} />}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
+                Full Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={staffForm.full_name}
+                onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
+                placeholder="e.g. Ananya Rao"
+                className={INPUT_STYLES.base}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
+                Employee Code
+              </label>
+              <input
+                type="text"
+                value={staffForm.employee_code}
+                onChange={(e) => setStaffForm({ ...staffForm, employee_code: e.target.value })}
+                placeholder="Auto-generated if blank"
+                className={`${INPUT_STYLES.base} font-mono uppercase`}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
+                Email *
+              </label>
+              <input
+                type="email"
+                required
+                value={staffForm.email}
+                onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                placeholder="instructor@newaraai.dev"
+                className={INPUT_STYLES.base}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
+                Phone *
+              </label>
+              <input
+                type="tel"
+                required
+                value={staffForm.phone}
+                onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                placeholder="10-digit mobile number"
+                className={INPUT_STYLES.base}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
+                Designation / Role Title
+              </label>
+              <input
+                type="text"
+                value={staffForm.designation}
+                onChange={(e) => setStaffForm({ ...staffForm, designation: e.target.value })}
+                placeholder="e.g. Yoga Instructor, Trekking Guide, Water Sports Coach"
+                className={INPUT_STYLES.base}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] p-3 space-y-2">
+            <label className="block text-xs font-bold text-stone-700 dark:text-stone-300">
+              Assigned Activities (Select activities this instructor leads)
+            </label>
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+              {allActivitiesList.map((a) => {
+                const selected = (staffForm.activity_ids || []).includes(a.id);
+                return (
+                  <label
+                    key={a.id}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold cursor-pointer ${
+                      selected
+                        ? "border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                        : "border-[#E5E9F0] dark:border-[#1E293B] text-stone-600 dark:text-stone-300"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() =>
+                        setStaffForm((prev) => {
+                          const cur = prev.activity_ids || [];
+                          return {
+                            ...prev,
+                            activity_ids: cur.includes(a.id)
+                              ? cur.filter((id) => id !== a.id)
+                              : [...cur, a.id],
+                          };
+                        })
+                      }
+                      className="h-3.5 w-3.5 accent-amber-500"
+                    />
+                    <span>{a.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-[#E5E9F0] dark:border-[#1E293B]">
+            <button type="button" onClick={() => setStaffModalOpen(false)} className={BUTTON_VARIANTS.secondary}>
+              Cancel
+            </button>
+            <button type="submit" disabled={savingStaff} className={BUTTON_VARIANTS.primary}>
+              {savingStaff ? "Saving..." : editingStaff ? "Update Instructor" : "Create Instructor"}
             </button>
           </div>
         </form>

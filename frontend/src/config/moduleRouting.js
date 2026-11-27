@@ -15,6 +15,8 @@ const CONTEXT_ALIASES = Object.freeze({
   PACKAGES: "PACKAGE",
   ACTIVITY: "ACTIVITY",
   ACTIVITIES: "ACTIVITY",
+  TRANSPORT: "TRANSPORT",
+  TRANSPORTS: "TRANSPORT",
 });
 
 export function normalizeModuleContext(context) {
@@ -35,7 +37,7 @@ export function getModuleApiBaseUrl(
   if (normalized === "VILLA") return villasBaseUrl;
   if (normalized === "PACKAGE") return packagesBaseUrl;
   if (normalized === "ACTIVITY") return activitiesBaseUrl;
-  if (normalized === "RESTAURANT" || normalized === "SPA") return mainBaseUrl;
+  if (normalized === "RESTAURANT" || normalized === "SPA" || normalized === "TRANSPORT") return mainBaseUrl;
   throw new Error("Please select a valid business module before signing in.");
 }
 
@@ -45,6 +47,7 @@ export function getModuleHomeRoute(context) {
   if (normalized === "VILLA") return "/villas/dashboard";
   if (normalized === "PACKAGE") return "/packages/dashboard";
   if (normalized === "ACTIVITY") return "/activities/dashboard";
+  if (normalized === "TRANSPORT") return "/transport/dashboard";
   if (normalized === "RESTAURANT") return "/";
   return "/login";
 }

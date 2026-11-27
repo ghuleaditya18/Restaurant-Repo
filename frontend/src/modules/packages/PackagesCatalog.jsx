@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Archive,
   CalendarOff,
   CalendarPlus,
   CheckCircle2,
@@ -13,7 +12,6 @@ import {
   List,
   Package,
   Plus,
-  Power,
   Search,
   Sparkles,
   Tag,
@@ -22,12 +20,15 @@ import {
 } from "lucide-react";
 
 import AlertBanner from "../../components/AlertBanner";
+import BulkSelectionBar from "../../components/BulkSelectionBar";
 import DeleteConfirm from "../../components/DeleteConfirm";
 import Modal from "../../components/Modal";
 import PageHeader from "../../components/PageHeader";
+import Pagination from "../../components/Pagination";
 import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { useNotification } from "../../context/NotificationContext";
+import useBulkSelection from "../../hooks/useBulkSelection";
 import { BUTTON_VARIANTS, CARD_STYLES, INPUT_STYLES } from "../../utils/themeTokens";
 import VillaCardCarousel from "../villas/VillaCardCarousel";
 import VillaDataTable from "../villas/VillaDataTable";
@@ -35,6 +36,7 @@ import PackageCoverImage from "./PackageCoverImage";
 import {
   getDefaultPackageCover,
   kolkataTodayIso,
+  notifyPackagesRefresh,
   packagesApi,
   pkgDate,
   pkgDateRange,
@@ -43,7 +45,7 @@ import {
 } from "./packagesApi";
 
 const CATEGORIES = ["Couple", "Family", "Weekend", "Wellness", "Adventure", "Event", "Seasonal"];
-const STATUSES = ["Draft", "Active", "Inactive", "Expired", "Archived"];
+const STATUSES = ["Draft", "Published", "Upcoming", "Available", "Paused", "Expired", "Archived"];
 const PRICING_TYPES = ["Per Package", "Per Person", "Per Night"];
 const INCLUSION_TYPES = [
   "Unit Stay",
@@ -98,6 +100,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showSuccess, showError } = useNotification();
+  const { selectedIds, toggle, toggleMany, clear } = useBulkSelection();
 
   const [packages, setPackages] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -108,11 +111,15 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "");
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category") || "");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "");
-  const [viewMode, setViewMode] = useState("cards");
+  const [viewMode, setViewMode] = useState("table");
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 12;
+  const pageSize = 10;
+
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFailures, setBulkFailures] = useState([]);
 
   // Create / Edit Package Modal
   const [formOpen, setFormOpen] = useState(Boolean(searchParams.get("new")));
@@ -203,6 +210,41 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   }, [searchQuery, categoryFilter, statusFilter, seasonalOnly]);
 
   useEffect(() => {
+    clear();
+    setBulkFailures([]);
+  }, [searchQuery, categoryFilter, statusFilter, seasonalOnly, page, clear]);
+
+  const handleBulkDeletePackages = async () => {
+    setBulkDeleting(true);
+    setBulkFailures([]);
+    const deleted = [];
+    const failed = [];
+    for (const id of selectedIds) {
+      const target = packages.find((p) => p.id === id);
+      try {
+        await packagesApi.remove(id);
+        deleted.push(id);
+      } catch (err) {
+        failed.push({ id, name: target ? `${target.name} (${target.package_code})` : `#${id}`, reason: pkgError(err) });
+      }
+    }
+    await loadPackages();
+    notifyPackagesRefresh();
+    clear();
+    failed.forEach((f) => toggle(f.id));
+    setBulkFailures(failed);
+    setBulkDeleting(false);
+    setBulkConfirmOpen(false);
+    if (deleted.length > 0 && failed.length === 0) {
+      showSuccess(`Deleted ${deleted.length} package${deleted.length === 1 ? "" : "s"}.`);
+    } else if (deleted.length > 0 && failed.length > 0) {
+      showSuccess(`Deleted ${deleted.length} package(s). ${failed.length} could not be deleted.`);
+    } else if (failed.length > 0) {
+      showError("Selected packages with active bookings cannot be deleted.");
+    }
+  };
+
+  useEffect(() => {
     if (searchParams.get("new")) {
       setEditingPkg(null);
       setForm({
@@ -285,13 +327,8 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
     setFormError("");
 
     const trimmedName = form.name.trim();
-    const trimmedCode = form.package_code.trim().toUpperCase().replace(/\s+/g, "-");
     if (trimmedName.length < 2) {
       setFormError("Package name must contain at least 2 characters.");
-      return;
-    }
-    if (!/^[A-Z0-9][A-Z0-9_-]{1,49}$/.test(trimmedCode)) {
-      setFormError("Package code must be 2–50 alphanumeric characters, hyphens, or underscores.");
       return;
     }
     const priceNum = Number(form.price);
@@ -315,18 +352,27 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
     setSaving(true);
     try {
       const payload = {
-        ...form,
         name: trimmedName,
-        package_code: trimmedCode,
+        category: form.category,
+        description: form.description,
         duration_nights: Number(form.duration_nights),
         min_guests: Number(form.min_guests),
         max_guests: Number(form.max_guests),
+        pricing_type: form.pricing_type,
         price: Number(priceNum.toFixed(2)),
+        valid_from: form.valid_from,
+        valid_to: form.valid_to,
+        applicable_accommodation_types: form.applicable_accommodation_types,
+        is_customizable: Boolean(form.is_customizable),
         is_seasonal_offer: Boolean(form.is_seasonal_offer || form.category === "Seasonal"),
+        offer_badge: form.offer_badge,
+        terms_and_conditions: form.terms_and_conditions,
+        exclusions: form.exclusions,
       };
       if (editingPkg) {
         await packagesApi.update(editingPkg.id, payload);
         showSuccess(`Package "${trimmedName}" updated.`);
+        notifyPackagesRefresh();
         setFormOpen(false);
         await loadPackages();
         if (detailPkg?.id === editingPkg.id) {
@@ -334,7 +380,8 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
         }
       } else {
         const res = await packagesApi.create(payload);
-        showSuccess(`Package "${trimmedName}" created as Draft. Add inclusions & media to activate.`);
+        showSuccess(`Package "${trimmedName}" (${res.data?.package_code || ""}) created as Draft. Add inclusions & media to publish.`);
+        notifyPackagesRefresh();
         setFormOpen(false);
         if (searchParams.get("new")) {
           const next = new URLSearchParams(searchParams);
@@ -354,9 +401,11 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   };
 
   const handleStatusChange = async (pkg, targetStatus) => {
+    if (!targetStatus || targetStatus === pkg.status) return;
     try {
       await packagesApi.updateStatus(pkg.id, targetStatus);
       showSuccess(`"${pkg.name}" status changed to ${targetStatus}.`);
+      notifyPackagesRefresh();
       await loadPackages();
       if (detailPkg?.id === pkg.id) {
         await openDetail(pkg.id, detailTab);
@@ -536,7 +585,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   const summaryCounts = useMemo(() => {
     return {
       total: totalRecords,
-      active: packages.filter((p) => p.status === "Active").length,
+      available: packages.filter((p) => p.status === "Available").length,
       draft: packages.filter((p) => p.status === "Draft").length,
       seasonal: packages.filter((p) => p.is_seasonal_offer || p.category === "Seasonal").length,
     };
@@ -629,7 +678,11 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
       key: "status",
       label: "Status",
       align: "center",
-      render: (p) => <StatusBadge status={p.status} label={p.status} size="sm" />,
+      render: (p) => (
+        <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <StatusBadge status={p.status} label={p.status} size="sm" />
+        </div>
+      ),
     },
     {
       key: "actions",
@@ -637,7 +690,19 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
       align: "right",
       cellClassName: "whitespace-nowrap",
       render: (p) => (
-        <div className="inline-flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="inline-flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <select
+            value={p.status}
+            onChange={(e) => handleStatusChange(p, e.target.value)}
+            aria-label={`Change status for ${p.name}`}
+            className={`${INPUT_STYLES.select} !w-auto min-w-[116px] !py-1 text-xs`}
+          >
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => openDetail(p.id, "overview")}
@@ -654,36 +719,6 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
           >
             <Edit3 size={15} />
           </button>
-          <button
-            type="button"
-            onClick={() =>
-              handleStatusChange(p, p.status === "Active" ? "Inactive" : "Active")
-            }
-            disabled={p.status === "Archived" || p.status === "Expired"}
-            title={p.status === "Active" ? "Deactivate Package" : "Activate Package"}
-            className="rounded-lg p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-35 disabled:pointer-events-none cursor-pointer"
-          >
-            <Power size={15} />
-          </button>
-          {p.status !== "Archived" && (
-            <button
-              type="button"
-              onClick={() =>
-                setConfirmAction({
-                  kind: "archive",
-                  target: p,
-                  title: "Archive Package",
-                  recordName: `${p.name} (${p.package_code})`,
-                  message:
-                    "Archiving removes this package from active sales while preserving all historical bookings and snapshots.",
-                })
-              }
-              title="Archive Package"
-              className="rounded-lg p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
-            >
-              <Archive size={15} />
-            </button>
-          )}
           <button
             type="button"
             onClick={() =>
@@ -712,11 +747,6 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
     <div className="space-y-4">
       <PageHeader
         title={seasonalOnly ? "Seasonal Offers" : "Packages"}
-        description={
-          seasonalOnly
-            ? "Manage seasonal campaigns, festive offers, validity countdowns, and promotional package bundles."
-            : "Create, configure, and manage hospitality packages, inclusions, media, pricing, and blackout dates."
-        }
         actions={
           <button type="button" onClick={openCreateModal} className={BUTTON_VARIANTS.primary}>
             <Plus size={16} />
@@ -735,7 +765,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
       )}
 
       {/* COMPACT KPI SUMMARY */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard
           compact
           title={seasonalOnly ? "Seasonal Offers" : "Matching Packages"}
@@ -745,8 +775,8 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
         />
         <StatCard
           compact
-          title="Active (Bookable)"
-          value={loading ? "—" : summaryCounts.active}
+          title="Available"
+          value={loading ? "—" : summaryCounts.available}
           icon={CheckCircle2}
           color="emerald"
         />
@@ -832,18 +862,6 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
           <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50 dark:bg-[#0D1420] p-1 gap-1 shrink-0">
             <button
               type="button"
-              onClick={() => setViewMode("cards")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                viewMode === "cards"
-                  ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
-                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
-              }`}
-            >
-              <LayoutGrid size={13} />
-              <span>Cards</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode("table")}
               className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                 viewMode === "table"
@@ -854,9 +872,41 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
               <List size={13} />
               <span>Table</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                viewMode === "cards"
+                  ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+              }`}
+            >
+              <LayoutGrid size={13} />
+              <span>Cards</span>
+            </button>
           </div>
         </div>
       </div>
+
+      {/* BULK SELECTION TOOLBAR & PARTIAL FAILURES */}
+      <BulkSelectionBar
+        count={selectedIds.size}
+        onDelete={() => setBulkConfirmOpen(true)}
+        onClear={() => {
+          clear();
+          setBulkFailures([]);
+        }}
+        deleting={bulkDeleting}
+      />
+
+      {bulkFailures.length > 0 && (
+        <AlertBanner
+          variant="error"
+          title="Some packages could not be deleted"
+          message={bulkFailures.map((f) => `${f.name}: ${f.reason}`).join(" · ")}
+          onDismiss={() => setBulkFailures([])}
+        />
+      )}
 
       {/* CARDS CAROUSEL OR DATA TABLE */}
       {viewMode === "cards" ? (
@@ -874,47 +924,78 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
             </p>
           </div>
         ) : (
-          <VillaCardCarousel
-            itemCount={packages.length}
-            title={`${seasonalOnly ? "Seasonal Offers" : "Packages"} (${totalRecords})`}
-            subtitle="Slide horizontally or use Previous/Next controls to browse packages."
-          >
-            {packages.map((p) => (
-              <div
-                key={p.id}
-                className="snap-start shrink-0 w-[290px] sm:w-[310px] rounded-2xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] overflow-hidden shadow-xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="relative h-40 w-full overflow-hidden bg-stone-100 dark:bg-[#151D29]">
-                    <PackageCoverImage
-                      src={p.cover_image_url}
-                      fallbackSrc={getDefaultPackageCover({ category: p.category, name: p.name })}
-                      alt={p.name}
-                    />
-                    <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                      <span className="rounded-full bg-[#0D1420]/80 backdrop-blur-xs px-2.5 py-0.5 text-[10px] font-bold text-white">
-                        {p.category}
-                      </span>
-                      {p.offer_badge && (
-                        <span className="rounded-full bg-[#F59E0B] px-2 py-0.5 text-[10px] font-bold text-[#0D1420]">
-                          {p.offer_badge}
+          <div className="space-y-3">
+            <VillaCardCarousel
+              itemCount={packages.length}
+              title={`${seasonalOnly ? "Seasonal Offers" : "Packages"} (${totalRecords})`}
+              subtitle="Slide horizontally or use Previous/Next controls to browse packages."
+              rightSlot={
+                <label className="inline-flex items-center gap-1.5 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] px-2.5 py-1.5 text-xs font-semibold text-stone-700 dark:text-stone-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={packages.length > 0 && packages.every((p) => selectedIds.has(p.id))}
+                    onChange={() => {
+                      setBulkFailures([]);
+                      toggleMany(packages.map((p) => p.id));
+                    }}
+                    className="h-3.5 w-3.5 rounded border-stone-300 dark:border-stone-600 accent-amber-500 cursor-pointer"
+                  />
+                  <span>Select All</span>
+                </label>
+              }
+            >
+              {packages.map((p) => (
+                <div
+                  key={p.id}
+                  className={`w-[290px] sm:w-[320px] xl:w-[335px] shrink-0 snap-start rounded-2xl border overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between ${
+                    selectedIds.has(p.id)
+                      ? "border-amber-400 bg-amber-50/30 dark:bg-[#171E2C]"
+                      : "border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722]"
+                  }`}
+                >
+                  <div>
+                    <div className="relative h-40 w-full overflow-hidden bg-stone-100 dark:bg-[#151D29]">
+                      <PackageCoverImage
+                        src={p.cover_image_url}
+                        fallbackSrc={getDefaultPackageCover({ category: p.category, name: p.name })}
+                        alt={p.name}
+                      />
+                      <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                        <span className="rounded-full bg-[#0D1420]/80 backdrop-blur-xs px-2.5 py-0.5 text-[10px] font-bold text-white">
+                          {p.category}
                         </span>
-                      )}
+                        {p.offer_badge && (
+                          <span className="rounded-full bg-[#F59E0B] px-2 py-0.5 text-[10px] font-bold text-[#0D1420]">
+                            {p.offer_badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className="absolute top-2.5 right-2.5">
+                        <StatusBadge status={p.status} label={p.status} size="sm" />
+                      </div>
                     </div>
-                    <div className="absolute top-2.5 right-2.5">
-                      <StatusBadge status={p.status} label={p.status} size="sm" />
-                    </div>
-                  </div>
 
-                  <div className="p-3.5 space-y-2">
-                    <div>
-                      <p className="text-[11px] font-mono text-stone-500 dark:text-[#8A9AB2]">
-                        {p.package_code}
-                      </p>
-                      <h3 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC] truncate">
-                        {p.name}
-                      </h3>
-                    </div>
+                    <div className="p-3.5 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-mono text-stone-500 dark:text-[#8A9AB2]">
+                            {p.package_code}
+                          </p>
+                          <h3 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC] truncate">
+                            {p.name}
+                          </h3>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.id)}
+                          onChange={() => {
+                            setBulkFailures([]);
+                            toggle(p.id);
+                          }}
+                          aria-label={`Select ${p.name}`}
+                          className="mt-1 h-4 w-4 shrink-0 rounded border-stone-300 dark:border-stone-600 accent-amber-500 cursor-pointer"
+                        />
+                      </div>
 
                     <div className="flex items-baseline justify-between gap-2">
                       <div>
@@ -947,7 +1028,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-1.5 border-t border-[#E5E9F0] dark:border-[#1E293B] px-3.5 py-2.5 bg-[#F8FAFC] dark:bg-[#151D29]">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-[#E5E9F0] dark:border-[#1E293B] px-3.5 py-2.5 bg-[#F8FAFC] dark:bg-[#151D29]">
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -963,20 +1044,22 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                     >
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleStatusChange(p, p.status === "Active" ? "Inactive" : "Active")
-                      }
-                      disabled={p.status === "Archived" || p.status === "Expired"}
-                      className="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-35 cursor-pointer"
+                    <select
+                      value={p.status}
+                      onChange={(e) => handleStatusChange(p, e.target.value)}
+                      aria-label={`Status for ${p.name}`}
+                      className={`${INPUT_STYLES.select} !w-auto min-w-[104px] !py-1 text-[11px] font-semibold`}
                     >
-                      {p.status === "Active" ? "Deactivate" : "Activate"}
-                    </button>
+                      {STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <button
                     type="button"
-                    disabled={p.status !== "Active"}
+                    disabled={p.status !== "Available"}
                     onClick={() => navigate(`/packages/bookings?new=1&packageId=${p.id}`)}
                     className="inline-flex items-center gap-1 rounded-lg bg-[#F59E0B] px-2.5 py-1 text-xs font-bold text-[#0D1420] hover:brightness-105 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
                   >
@@ -987,6 +1070,14 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
               </div>
             ))}
           </VillaCardCarousel>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalRecords={totalRecords}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
+        </div>
         )
       ) : (
         <VillaDataTable
@@ -998,6 +1089,15 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
           emptyDescription="Create a package to start managing inclusions, media, and bookings."
           tableMinWidth="min-w-[960px]"
           onRowClick={(p) => openDetail(p.id, "overview")}
+          selectedIds={selectedIds}
+          onSelectRow={(id) => {
+            setBulkFailures([]);
+            toggle(id);
+          }}
+          onSelectAll={(ids) => {
+            setBulkFailures([]);
+            toggleMany(ids);
+          }}
           pagination={{
             currentPage: page,
             totalPages,
@@ -1045,15 +1145,14 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-1">
-                Unique Package Code *
+                Unique Package Code (Auto-Generated)
               </label>
               <input
                 type="text"
-                required
-                value={form.package_code}
-                onChange={(e) => setForm((f) => ({ ...f, package_code: e.target.value.toUpperCase() }))}
-                placeholder="e.g. PKG-COUPLE-01"
-                className={`${INPUT_STYLES.base} font-mono`}
+                readOnly
+                disabled
+                value={editingPkg ? form.package_code : "Auto-generated unique code on save"}
+                className={`${INPUT_STYLES.base} font-mono bg-stone-100 dark:bg-stone-800/80 text-stone-500 dark:text-stone-400 cursor-not-allowed`}
               />
             </div>
 
@@ -1314,15 +1413,18 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
 
               <div className="flex items-center gap-2">
                 <StatusBadge status={detailPkg.status} label={detailPkg.status} size="sm" />
-                {detailPkg.status !== "Active" && detailPkg.status !== "Archived" && detailPkg.status !== "Expired" && (
-                  <button
-                    type="button"
-                    onClick={() => handleStatusChange(detailPkg, "Active")}
-                    className={`${BUTTON_VARIANTS.primary} !py-1 !px-2.5 text-xs`}
-                  >
-                    Activate Package
-                  </button>
-                )}
+                <select
+                  value={detailPkg.status}
+                  onChange={(e) => handleStatusChange(detailPkg, e.target.value)}
+                  aria-label="Update package status"
+                  className={`${INPUT_STYLES.select} !w-auto min-w-[130px] !py-1 text-xs`}
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -1914,6 +2016,16 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
         message={confirmAction?.message}
         loading={actionBusy}
         errorMessage={actionError}
+      />
+
+      <DeleteConfirm
+        isOpen={bulkConfirmOpen}
+        onClose={() => setBulkConfirmOpen(false)}
+        onConfirm={handleBulkDeletePackages}
+        title={`Delete ${selectedIds.size} Selected Package${selectedIds.size === 1 ? "" : "s"}`}
+        recordName={`${selectedIds.size} selected package(s)`}
+        message="Packages without active bookings will be deleted. Packages with active bookings remain protected."
+        loading={bulkDeleting}
       />
     </div>
   );

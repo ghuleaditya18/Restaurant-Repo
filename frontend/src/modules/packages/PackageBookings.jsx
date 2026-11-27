@@ -11,6 +11,7 @@ import {
   PlayCircle,
   Search,
   UserPlus,
+  X,
   XCircle,
 } from "lucide-react";
 
@@ -21,10 +22,15 @@ import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { useNotification } from "../../context/NotificationContext";
 import { BUTTON_VARIANTS, CARD_STYLES, INPUT_STYLES } from "../../utils/themeTokens";
-import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
+import {
+  sanitizeMobileInput,
+  validateEmailAddress,
+  validateMobileNumber,
+} from "../../utils/validation";
 import VillaDataTable from "../villas/VillaDataTable";
 import {
   kolkataTodayIso,
+  notifyPackagesRefresh,
   packagesApi,
   pkgDate,
   pkgDateRange,
@@ -63,7 +69,7 @@ export default function PackageBookings() {
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const pageSize = 15;
+  const pageSize = 10;
 
   // New Booking Modal State
   const [createOpen, setCreateOpen] = useState(
@@ -116,7 +122,7 @@ export default function PackageBookings() {
           page,
           page_size: pageSize,
         }),
-        packagesApi.list({ status: "Active", page: 1, page_size: 100 }),
+        packagesApi.list({ status: "Available", page: 1, page_size: 100 }),
         packagesApi.customers({ page: 1, page_size: 100 }),
       ]);
       setBookings(bRes.data?.items || []);
@@ -182,6 +188,7 @@ export default function PackageBookings() {
         const res = await packagesApi.availability(pkgId, {
           start_date: bookingForm.start_date,
           guest_count: Number(bookingForm.guest_count) || 1,
+          customer_id: bookingForm.customer_id || undefined,
         });
         if (!cancelled) setAvailability(res.data);
       } catch (err) {
@@ -197,18 +204,35 @@ export default function PackageBookings() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [createOpen, bookingForm.package_id, bookingForm.start_date, bookingForm.guest_count]);
+  }, [
+    createOpen,
+    bookingForm.package_id,
+    bookingForm.start_date,
+    bookingForm.guest_count,
+    bookingForm.customer_id,
+  ]);
+
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => String(c.id) === String(bookingForm.customer_id)) || null,
+    [customers, bookingForm.customer_id]
+  );
+
+  const selectedCustomerLabel = selectedCustomer
+    ? `${selectedCustomer.full_name} (${selectedCustomer.phone})`
+    : "";
 
   const filteredCustomers = useMemo(() => {
     const q = customerSearch.trim().toLowerCase();
-    if (!q) return customers;
+    if (!q || (selectedCustomerLabel && q === selectedCustomerLabel.toLowerCase())) {
+      return customers;
+    }
     return customers.filter(
       (c) =>
         c.full_name.toLowerCase().includes(q) ||
         c.phone.includes(q) ||
         (c.email || "").toLowerCase().includes(q)
     );
-  }, [customers, customerSearch]);
+  }, [customers, customerSearch, selectedCustomerLabel]);
 
   const handleSaveInlineCustomer = async (e) => {
     e.preventDefault();
@@ -238,6 +262,7 @@ export default function PackageBookings() {
       const newCust = res.data;
       setCustomers((prev) => [newCust, ...prev]);
       setBookingForm((f) => ({ ...f, customer_id: String(newCust.id) }));
+      setCustomerSearch(`${newCust.full_name} (${newCust.phone})`);
       setInlineCustForm(INITIAL_CUSTOMER_FORM);
       setInlineCustOpen(false);
       showSuccess(`Customer "${newCust.full_name}" registered.`);
@@ -278,6 +303,9 @@ export default function PackageBookings() {
       });
       showSuccess(`Booking ${res.data.booking_number} created successfully.`);
       setCreateOpen(false);
+      setCustomerSearch("");
+      setBookingForm((f) => ({ ...f, customer_id: "", notes: "" }));
+      notifyPackagesRefresh();
       if (searchParams.get("new") || searchParams.get("packageId")) {
         const next = new URLSearchParams(searchParams);
         next.delete("new");
@@ -302,6 +330,7 @@ export default function PackageBookings() {
     try {
       await packagesApi.bookingStatus(booking.id, nextStatus);
       showSuccess(`Booking ${booking.booking_number} updated to ${nextStatus}.`);
+      notifyPackagesRefresh();
       await loadData();
       if (detailBooking?.id === booking.id) {
         const res = await packagesApi.bookingDetail(booking.id);
@@ -324,6 +353,7 @@ export default function PackageBookings() {
       await packagesApi.bookingStatus(cancelTarget.id, "Cancelled", cancelReason.trim());
       showSuccess(`Booking ${cancelTarget.booking_number} cancelled.`);
       setCancelTarget(null);
+      notifyPackagesRefresh();
       await loadData();
       if (detailBooking?.id === cancelTarget.id) {
         const res = await packagesApi.bookingDetail(cancelTarget.id);
@@ -429,72 +459,85 @@ export default function PackageBookings() {
       label: "Actions",
       align: "right",
       cellClassName: "whitespace-nowrap",
-      render: (b) => (
-        <div className="inline-flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            onClick={() => openDetailModal(b.id)}
-            title="View Booking Details & History"
-            className="rounded-lg p-1.5 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
-          >
-            <Eye size={15} />
-          </button>
-          {b.status === "Pending" && (
+      render: (b) => {
+        const canCancel = ["Pending", "Confirmed", "In Progress"].includes(b.status);
+        const canInvoice = Boolean(b.invoice_number) || b.status !== "Cancelled";
+        const nextAction =
+          b.status === "Pending"
+            ? { label: "Confirm", target: "Confirmed", title: "Confirm Booking", tone: "amber" }
+            : b.status === "Confirmed"
+              ? { label: "Start", target: "In Progress", title: "Start Package Stay", tone: "sky" }
+              : b.status === "In Progress"
+                ? { label: "Complete", target: "Completed", title: "Mark Completed", tone: "emerald" }
+                : { label: b.status, target: null, title: `Booking is ${b.status}`, tone: "muted" };
+
+        const primaryCls =
+          nextAction.tone === "amber"
+            ? "bg-amber-500 hover:bg-amber-600 text-[#0D1420]"
+            : nextAction.tone === "sky"
+              ? "bg-sky-600 hover:bg-sky-700 text-white"
+              : nextAction.tone === "emerald"
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : "bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border border-stone-200 dark:border-stone-700";
+
+        return (
+          <div className="inline-flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
-              onClick={() => handleTransitionStatus(b, "Confirmed")}
-              title="Confirm Booking"
-              className="rounded-lg p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+              disabled={!nextAction.target}
+              onClick={() => nextAction.target && handleTransitionStatus(b, nextAction.target)}
+              title={nextAction.title}
+              className={`inline-flex items-center justify-center min-w-[82px] rounded-lg px-2.5 py-1 text-xs font-bold transition shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${primaryCls}`}
             >
-              <CheckCircle2 size={15} />
+              <span>{nextAction.label}</span>
             </button>
-          )}
-          {b.status === "Confirmed" && (
+
             <button
               type="button"
-              onClick={() => handleTransitionStatus(b, "In Progress")}
-              title="Start / Mark In Progress"
-              className="rounded-lg p-1.5 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30 cursor-pointer"
+              disabled={!canInvoice}
+              onClick={() =>
+                canInvoice &&
+                navigate(
+                  b.invoice_number
+                    ? `/packages/invoices?search=${b.invoice_number}`
+                    : `/packages/invoices?bookingId=${b.id}`
+                )
+              }
+              title={
+                !canInvoice
+                  ? "Cannot generate invoice for a cancelled booking"
+                  : b.invoice_number
+                    ? "View Invoice"
+                    : "Generate Invoice"
+              }
+              className="inline-flex items-center gap-1 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-[#30251C] px-2 py-1 text-xs font-semibold text-amber-800 dark:text-[#FFB02E] hover:bg-amber-100 dark:hover:bg-amber-950/60 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer transition"
             >
-              <PlayCircle size={15} />
+              <FileText size={13} />
+              <span>{b.invoice_number ? "Invoice" : "Bill"}</span>
             </button>
-          )}
-          {b.status === "In Progress" && (
+
             <button
               type="button"
-              onClick={() => handleTransitionStatus(b, "Completed")}
-              title="Mark Completed"
-              className="rounded-lg p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer"
+              disabled={!canCancel}
+              onClick={() => canCancel && handleTransitionStatus(b, "Cancelled")}
+              title={canCancel ? "Cancel Booking" : `Cannot cancel a ${b.status} booking`}
+              className="inline-flex items-center justify-center rounded-lg border border-rose-200 dark:border-rose-900/60 p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer transition"
             >
-              <CheckCircle2 size={15} />
+              <XCircle size={14} />
             </button>
-          )}
-          {["Pending", "Confirmed", "In Progress"].includes(b.status) && (
+
             <button
               type="button"
-              onClick={() => handleTransitionStatus(b, "Cancelled")}
-              title="Cancel Booking"
-              className="rounded-lg p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer"
+              onClick={() => openDetailModal(b.id)}
+              title="View Booking Details & History"
+              className="inline-flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-700 px-2 py-1 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer transition"
             >
-              <XCircle size={15} />
+              <Eye size={13} />
+              <span>Details</span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              navigate(
-                b.invoice_number
-                  ? `/packages/invoices?search=${b.invoice_number}`
-                  : `/packages/invoices?bookingId=${b.id}`
-              )
-            }
-            title="View / Generate Invoice"
-            className="rounded-lg p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
-          >
-            <FileText size={15} />
-          </button>
-        </div>
-      ),
+          </div>
+        );
+      },
     },
   ];
 
@@ -502,7 +545,7 @@ export default function PackageBookings() {
     <div className="space-y-4">
       <PageHeader
         title="Package Bookings"
-        description="Book active packages with validity & blackout checks, immutable price snapshots, and lifecycle history."
+        description="Book available packages with validity & blackout checks, immutable price snapshots, and lifecycle history."
         actions={
           <button
             type="button"
@@ -538,7 +581,7 @@ export default function PackageBookings() {
       {/* FILTER BAR */}
       <div className={`${CARD_STYLES.base} !p-2.5`}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-60">
+          <div className="relative w-full sm:w-72">
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
@@ -552,7 +595,8 @@ export default function PackageBookings() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className={`${INPUT_STYLES.select} !w-auto min-w-[130px] !py-1.5 text-xs`}
+            aria-label="Filter by booking status"
+            className={`${INPUT_STYLES.select} w-full sm:!w-auto min-w-[130px] !py-1.5 text-xs`}
           >
             <option value="">All Statuses</option>
             {BOOKING_STATUSES.map((s) => (
@@ -565,7 +609,8 @@ export default function PackageBookings() {
           <select
             value={packageFilter}
             onChange={(e) => setPackageFilter(e.target.value)}
-            className={`${INPUT_STYLES.select} !w-auto min-w-[160px] !py-1.5 text-xs`}
+            aria-label="Filter by package"
+            className={`${INPUT_STYLES.select} w-full sm:!w-auto sm:max-w-[210px] !py-1.5 text-xs`}
           >
             <option value="">All Packages</option>
             {packagesList.map((p) => (
@@ -580,14 +625,14 @@ export default function PackageBookings() {
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
             aria-label="Start date from"
-            className={`${INPUT_STYLES.base} !w-auto !py-1.5 text-xs`}
+            className={`${INPUT_STYLES.base} w-full sm:!w-auto !py-1.5 text-xs`}
           />
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
             aria-label="Start date to"
-            className={`${INPUT_STYLES.base} !w-auto !py-1.5 text-xs`}
+            className={`${INPUT_STYLES.base} w-full sm:!w-auto !py-1.5 text-xs`}
           />
 
           {(searchQuery || statusFilter || packageFilter || dateFrom || dateTo) && (
@@ -665,17 +710,41 @@ export default function PackageBookings() {
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <input
-                type="text"
-                value={customerSearch}
-                onChange={(e) => setCustomerSearch(e.target.value)}
-                placeholder="Filter customer by name, phone, email..."
-                className={INPUT_STYLES.base}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setCustomerSearch(nextVal);
+                    if (!nextVal.trim() && bookingForm.customer_id) {
+                      setBookingForm((f) => ({ ...f, customer_id: "" }));
+                    }
+                  }}
+                  placeholder="Filter customer by name, phone, email..."
+                  className={`${INPUT_STYLES.base} pr-8`}
+                />
+                {customerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomerSearch("")}
+                    title="Clear customer search filter"
+                    aria-label="Clear customer filter"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
               <select
                 required
                 value={bookingForm.customer_id}
-                onChange={(e) => setBookingForm((f) => ({ ...f, customer_id: e.target.value }))}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setBookingForm((f) => ({ ...f, customer_id: nextId }));
+                  const picked = customers.find((c) => String(c.id) === String(nextId));
+                  setCustomerSearch(picked ? `${picked.full_name} (${picked.phone})` : "");
+                }}
                 className={INPUT_STYLES.select}
               >
                 <option value="">— Select Customer —</option>
@@ -689,10 +758,10 @@ export default function PackageBookings() {
           </div>
 
           {/* PACKAGE, START DATE & GUESTS */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-1">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="sm:col-span-6">
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-1">
-                2. Active Package *
+                2. Available Package *
               </label>
               <select
                 required
@@ -700,7 +769,7 @@ export default function PackageBookings() {
                 onChange={(e) => setBookingForm((f) => ({ ...f, package_id: e.target.value }))}
                 className={INPUT_STYLES.select}
               >
-                <option value="">— Choose Active Package —</option>
+                <option value="">— Choose Available Package —</option>
                 {packagesList.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.package_code}) · {pkgMoney(p.price)}
@@ -709,7 +778,7 @@ export default function PackageBookings() {
               </select>
             </div>
 
-            <div>
+            <div className="sm:col-span-3">
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-1">
                 3. Start Date *
               </label>
@@ -722,7 +791,7 @@ export default function PackageBookings() {
               />
             </div>
 
-            <div>
+            <div className="sm:col-span-3">
               <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-1">
                 4. Guest Count *
               </label>
@@ -898,9 +967,13 @@ export default function PackageBookings() {
             <label className="block text-xs font-bold uppercase mb-1">Mobile Number *</label>
             <input
               type="tel"
+              inputMode="numeric"
+              maxLength={10}
               required
               value={inlineCustForm.phone}
-              onChange={(e) => setInlineCustForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) =>
+                setInlineCustForm((f) => ({ ...f, phone: sanitizeMobileInput(e.target.value) }))
+              }
               placeholder="10-digit mobile (6-9...)"
               className={INPUT_STYLES.base}
             />
@@ -1066,6 +1139,65 @@ export default function PackageBookings() {
                   </div>
                 ))}
               </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-[#E5E9F0] dark:border-[#1E293B]">
+              {(() => {
+                const canConfirm = detailBooking.status === "Pending";
+                const canStart = detailBooking.status === "Confirmed";
+                const canComplete = detailBooking.status === "In Progress";
+                const canCancel = ["Pending", "Confirmed", "In Progress"].includes(detailBooking.status);
+                const canInvoice = Boolean(detailBooking.invoice_number) || detailBooking.status !== "Cancelled";
+                return (
+                  <>
+                    <button
+                      type="button"
+                      disabled={!canConfirm}
+                      onClick={() => handleTransitionStatus(detailBooking, "Confirmed")}
+                      className={`${BUTTON_VARIANTS.secondary} !py-1.5 !px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      Confirm Booking
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canStart}
+                      onClick={() => handleTransitionStatus(detailBooking, "In Progress")}
+                      className={`${BUTTON_VARIANTS.secondary} !py-1.5 !px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      Start Stay
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canComplete}
+                      onClick={() => handleTransitionStatus(detailBooking, "Completed")}
+                      className={`${BUTTON_VARIANTS.primary} !py-1.5 !px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      Mark Completed
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canInvoice}
+                      onClick={() =>
+                        navigate(
+                          detailBooking.invoice_number
+                            ? `/packages/invoices?search=${detailBooking.invoice_number}`
+                            : `/packages/invoices?bookingId=${detailBooking.id}`
+                        )
+                      }
+                      className={`${BUTTON_VARIANTS.secondary} !py-1.5 !px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      {detailBooking.invoice_number ? "View Invoice" : "Generate Invoice"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canCancel}
+                      onClick={() => handleTransitionStatus(detailBooking, "Cancelled")}
+                      className={`${BUTTON_VARIANTS.danger} !py-1.5 !px-3 text-xs disabled:opacity-40 disabled:cursor-not-allowed`}
+                    >
+                      Cancel Booking
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}

@@ -36,6 +36,9 @@ export default function ActivitiesDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sessPage, setSessPage] = useState(1);
+  const [bkPage, setBkPage] = useState(1);
+  const tablePageSize = 8;
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -43,6 +46,8 @@ export default function ActivitiesDashboard() {
     try {
       const res = await activitiesApi.dashboard();
       setData(res.data);
+      setSessPage(1);
+      setBkPage(1);
     } catch (err) {
       setError(actError(err));
     } finally {
@@ -55,7 +60,18 @@ export default function ActivitiesDashboard() {
   }, [loadDashboard]);
 
   const stats = data?.statistics || {};
-  const alerts = data?.alerts || [];
+  const todaysSessionsAll = data?.todays_sessions || [];
+  const upcomingBookingsAll = data?.upcoming_bookings || [];
+  const sessTotalPages = Math.max(1, Math.ceil(todaysSessionsAll.length / tablePageSize));
+  const bkTotalPages = Math.max(1, Math.ceil(upcomingBookingsAll.length / tablePageSize));
+  const pagedTodaysSessions = todaysSessionsAll.slice(
+    (sessPage - 1) * tablePageSize,
+    sessPage * tablePageSize
+  );
+  const pagedUpcomingBookings = upcomingBookingsAll.slice(
+    (bkPage - 1) * tablePageSize,
+    bkPage * tablePageSize
+  );
 
   const todaysSessionColumns = [
     {
@@ -218,7 +234,7 @@ export default function ActivitiesDashboard() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Activities Dashboard"
+        title="Dashboard"
         description="Real-time activities catalogue, today's sessions, operational alerts, bookings, and daily revenue."
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -252,9 +268,10 @@ export default function ActivitiesDashboard() {
       )}
 
       {/* 8 COMPACT KPI CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+      <div className="flex flex-wrap items-stretch gap-2.5 w-full">
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Total Activities"
           value={loading ? "—" : stats.total_activities ?? 0}
           description="Configured activity catalog"
@@ -264,6 +281,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Active Activities"
           value={loading ? "—" : stats.active_activities ?? 0}
           description="Open for guests"
@@ -273,6 +291,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Sessions Today"
           value={loading ? "—" : stats.sessions_today ?? 0}
           description="Scheduled for today"
@@ -282,6 +301,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Bookings Today"
           value={loading ? "—" : stats.bookings_today ?? 0}
           description="Active reservations today"
@@ -291,6 +311,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Upcoming Bookings"
           value={loading ? "—" : stats.upcoming_bookings ?? 0}
           description="Pending & confirmed ahead"
@@ -300,6 +321,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Cancelled Today"
           value={loading ? "—" : stats.cancelled_today ?? 0}
           description="Cancelled reservations today"
@@ -309,6 +331,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Participants Today"
           value={loading ? "—" : stats.total_participants_today ?? 0}
           description="Booked & walk-in guests"
@@ -318,6 +341,7 @@ export default function ActivitiesDashboard() {
         />
         <StatCard
           compact
+          className="!p-2.5 !w-auto flex-1 min-w-[180px] max-w-[245px]"
           title="Revenue Received Today"
           value={loading ? "—" : actMoney(stats.revenue_today)}
           description="Payments & walk-in fees"
@@ -327,39 +351,14 @@ export default function ActivitiesDashboard() {
         />
       </div>
 
-      {/* OPERATIONAL ALERTS */}
-      {!loading && alerts.length > 0 && (
-        <div className="space-y-2">
-          {alerts.map((al) => (
-            <AlertBanner
-              key={al.id}
-              variant={al.severity || "warning"}
-              title={al.title}
-              message={al.message}
-              action={
-                al.route ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(al.route)}
-                    className={BUTTON_VARIANTS.secondary}
-                  >
-                    Review
-                  </button>
-                ) : null
-              }
-            />
-          ))}
-        </div>
-      )}
-
       {/* QUICK ACTIONS */}
-      <div className={CARD_STYLES.base}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC]">
+      <div className={`${CARD_STYLES.base} !p-3 w-fit max-w-full`}>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#64748B] dark:text-[#8A9AB2]">
             Quick Actions
           </h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="flex flex-wrap gap-2">
           {[
             { label: "Create Activity", path: "/activities/catalog?new=1", icon: ActivityIcon },
             { label: "Add Session", path: "/activities/schedule?new=1", icon: Plus },
@@ -371,13 +370,11 @@ export default function ActivitiesDashboard() {
               key={label}
               type="button"
               onClick={() => navigate(path)}
-              className="flex items-center justify-between rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] px-3 py-2.5 text-xs font-semibold text-[#172033] dark:text-[#F8FAFC] hover:border-amber-400 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] px-3 py-2 text-xs font-semibold text-[#172033] dark:text-[#F8FAFC] hover:border-amber-400 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition cursor-pointer"
             >
-              <span className="inline-flex items-center gap-2 truncate">
-                <Icon size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                <span className="truncate">{label}</span>
-              </span>
-              <ArrowRight size={13} className="text-stone-400 shrink-0" />
+              <Icon size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>{label}</span>
+              <ArrowRight size={12} className="text-stone-400 shrink-0" />
             </button>
           ))}
         </div>
@@ -397,13 +394,20 @@ export default function ActivitiesDashboard() {
           </button>
         }
         columns={todaysSessionColumns}
-        rows={data?.todays_sessions || []}
+        rows={pagedTodaysSessions}
         loading={loading}
         loadingMessage="Loading today's sessions..."
         emptyTitle="No sessions scheduled for today"
         emptyDescription="Create a session or generate sessions from a weekly schedule template."
         tableMinWidth="min-w-[860px]"
         onRowClick={(s) => navigate(`/activities/roster?sessionId=${s.id}`)}
+        pagination={{
+          currentPage: sessPage,
+          totalPages: sessTotalPages,
+          totalRecords: todaysSessionsAll.length,
+          pageSize: tablePageSize,
+          onPageChange: setSessPage,
+        }}
       />
 
       {/* UPCOMING BOOKINGS */}
@@ -420,13 +424,20 @@ export default function ActivitiesDashboard() {
           </button>
         }
         columns={upcomingBookingColumns}
-        rows={data?.upcoming_bookings || []}
+        rows={pagedUpcomingBookings}
         loading={loading}
         loadingMessage="Loading upcoming bookings..."
         emptyTitle="No upcoming bookings"
         emptyDescription="Create a booking for a Time Slot resource or Scheduled Session."
         tableMinWidth="min-w-[840px]"
         onRowClick={(b) => navigate(`/activities/bookings?search=${b.booking_number}`)}
+        pagination={{
+          currentPage: bkPage,
+          totalPages: bkTotalPages,
+          totalRecords: upcomingBookingsAll.length,
+          pageSize: tablePageSize,
+          onPageChange: setBkPage,
+        }}
       />
     </div>
   );

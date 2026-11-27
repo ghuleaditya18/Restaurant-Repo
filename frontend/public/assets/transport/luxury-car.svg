@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" fill="none">
+  <rect width="320" height="180" fill="#090D16"/>
+  <circle cx="160" cy="90" r="85" fill="#F59E0B" fill-opacity="0.1"/>
+  <rect x="20" y="138" width="280" height="6" rx="3" fill="#1E293B"/>
+  <path d="M40 116L68 78C74 70 83 66 93 66H198C210 66 221 72 228 82L242 96L276 103C282 105 286 110 286 116V126C286 130 282 133 277 133H46C40 133 36 129 36 123C36 120 37 118 40 116Z" fill="#1E293B" stroke="#F59E0B" stroke-width="2.5"/>
+  <path d="M84 74H194L218 96H74L84 74Z" fill="#0D1420"/>
+  <rect x="138" y="74" width="6" height="22" fill="#F59E0B"/>
+  <circle cx="94" cy="133" r="20" fill="#0D1420" stroke="#F59E0B" stroke-width="4"/>
+  <circle cx="94" cy="133" r="6" fill="#FDE68A"/>
+  <circle cx="234" cy="133" r="20" fill="#0D1420" stroke="#F59E0B" stroke-width="4"/>
+  <circle cx="234" cy="133" r="6" fill="#FDE68A"/>
+  <text x="20" y="34" fill="#FBBF24" font-family="Inter, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2">LUXURY CHAUFFEUR</text>
+</svg>

@@ -49,17 +49,17 @@ const INITIAL_FORM = {
 
 function validateGuestForm(form) {
   if (!form.full_name.trim() || form.full_name.trim().length < 2) {
-    return "Guest full name must contain at least 2 characters.";
+    return { full_name: "Guest full name must contain at least 2 characters." };
   }
   const phoneCheck = validateMobileNumber(form.phone, { required: true });
   if (!phoneCheck.valid) {
-    return phoneCheck.error;
+    return { phone: phoneCheck.error };
   }
   const emailCheck = validateEmailAddress(form.email, { required: false });
   if (!emailCheck.valid) {
-    return emailCheck.error;
+    return { email: emailCheck.error };
   }
-  return "";
+  return {};
 }
 
 export default function VillaGuests() {
@@ -88,6 +88,7 @@ export default function VillaGuests() {
   const [editingGuest, setEditingGuest] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -146,6 +147,7 @@ export default function VillaGuests() {
     setEditingGuest(null);
     setForm(INITIAL_FORM);
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -164,14 +166,15 @@ export default function VillaGuests() {
       is_active: guest.is_active ?? true,
     });
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
   const handleSaveGuest = async (e) => {
     e.preventDefault();
-    const validationErr = validateGuestForm(form);
-    if (validationErr) {
-      setFormError(validationErr);
+    const validationErrors = validateGuestForm(form);
+    setFieldErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
@@ -491,7 +494,6 @@ export default function VillaGuests() {
     <div className="space-y-4">
       <PageHeader
         title="Guest"
-        description="Manage resort guest profiles, stay history, billing balances, and preferences for Villas & Units."
         actions={
           <button
             type="button"
@@ -697,10 +699,15 @@ export default function VillaGuests() {
                   type="text"
                   required
                   value={form.full_name}
-                  onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, full_name: e.target.value });
+                    setFieldErrors((previous) => ({ ...previous, full_name: "" }));
+                  }}
                   placeholder="e.g. Rohan Deshmukh"
-                  className={INPUT_STYLES.base}
+                  aria-invalid={Boolean(fieldErrors.full_name)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.full_name ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.full_name && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.full_name}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
@@ -711,10 +718,15 @@ export default function VillaGuests() {
                   required
                   maxLength={15}
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, phone: e.target.value });
+                    setFieldErrors((previous) => ({ ...previous, phone: "" }));
+                  }}
                   placeholder="e.g. 9820123456"
-                  className={INPUT_STYLES.base}
+                  aria-invalid={Boolean(fieldErrors.phone)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.phone ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.phone && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.phone}</p>}
                 <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                   10-digit mobile starting with 6, 7, 8, or 9.
                 </p>
@@ -726,10 +738,15 @@ export default function VillaGuests() {
                 <input
                   type="email"
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => {
+                    setForm({ ...form, email: e.target.value });
+                    setFieldErrors((previous) => ({ ...previous, email: "" }));
+                  }}
                   placeholder="guest@example.com"
-                  className={INPUT_STYLES.base}
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.email ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.email}</p>}
               </div>
               <div className="flex items-end pb-2">
                 <label className="inline-flex items-center gap-2.5 text-sm font-medium text-stone-700 dark:text-stone-300 cursor-pointer">

@@ -317,6 +317,7 @@ export default function Orders() {
   const [selectedMenuItem, setSelectedMenuItem] = useState("");
   const [itemQuantity, setItemQuantity] = useState(1);
   const [formError, setFormError] = useState("");
+  const [formFieldErrors, setFormFieldErrors] = useState({});
 
   // Order details modal
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -729,6 +730,7 @@ export default function Orders() {
     setSelectedMenuItem("");
     setItemQuantity(1);
     setFormError("");
+    setFormFieldErrors({});
     setShowCreateModal(true);
   };
 
@@ -739,11 +741,13 @@ export default function Orders() {
     setSelectedMenuItem("");
     setItemQuantity(1);
     setFormError("");
+    setFormFieldErrors({});
   };
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setFormFieldErrors((previous) => ({ ...previous, [name]: "" }));
   };
 
   const handleAddItemToCart = () => {
@@ -779,10 +783,15 @@ export default function Orders() {
 
     setSelectedMenuItem("");
     setItemQuantity(1);
+    setFormFieldErrors((previous) => ({ ...previous, items: "" }));
   };
 
   const handleRemoveFromCart = (menuItemId) => {
-    setCart((prev) => prev.filter((item) => item.menu_item_id !== menuItemId));
+    setCart((prev) => {
+      const next = prev.filter((item) => item.menu_item_id !== menuItemId);
+      if (next.length > 0) setFormFieldErrors((previous) => ({ ...previous, items: "" }));
+      return next;
+    });
   };
 
   const cartTotal = useMemo(() => {
@@ -792,19 +801,12 @@ export default function Orders() {
   const handleCreateOrder = async (e) => {
     e.preventDefault();
     setFormError("");
-
-    if (!form.customer_id) {
-      setFormError("Please select a customer.");
-      return;
-    }
-
-    if (!form.table_id) {
-      setFormError("Please select a dining table.");
-      return;
-    }
-
-    if (cart.length === 0) {
-      setFormError("Please add at least one menu item to the order.");
+    const nextFieldErrors = {};
+    if (!form.customer_id) nextFieldErrors.customer_id = "Please select a customer.";
+    if (!form.table_id) nextFieldErrors.table_id = "Please select a dining table.";
+    if (cart.length === 0) nextFieldErrors.items = "Please add at least one menu item to the order.";
+    setFormFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -1051,7 +1053,7 @@ export default function Orders() {
     selectedOrder && ["Pending", "Confirmed", "Ordered"].includes(selectedOrder.status);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Orders"
@@ -1060,7 +1062,7 @@ export default function Orders() {
             <button
               type="button"
               onClick={openCreateModal}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2.5 text-sm font-bold text-stone-900 shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#F59E0B] px-4 py-2 text-sm font-bold text-stone-900 shadow-xs transition hover:bg-[#E5A910] cursor-pointer"
             >
               <Plus size={17} />
               <span>Create New Order</span>
@@ -1070,13 +1072,13 @@ export default function Orders() {
       />
 
       {/* VIEW TABS: LIVE ACTIVE vs RECENT TODAY vs ORDER HISTORY vs ARCHIVED */}
-      <div className="flex flex-col gap-4 border-b border-stone-200 dark:border-stone-800 pb-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-stone-200 dark:border-stone-800 pb-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           {/* Active Orders Tab */}
           <button
             type="button"
             onClick={() => handleTabSwitch("active")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               activeTab === "active"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] shadow-xs font-bold"
                 : "bg-white dark:bg-[#101722] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
@@ -1099,13 +1101,13 @@ export default function Orders() {
           <button
             type="button"
             onClick={() => handleTabSwitch("today")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               activeTab === "today"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] shadow-xs font-bold"
                 : "bg-white dark:bg-[#101722] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
             }`}
           >
-            <Clock size={17} />
+            <Clock size={16} />
             <span>Recent Orders – Today</span>
             <span
               className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
@@ -1122,13 +1124,13 @@ export default function Orders() {
           <button
             type="button"
             onClick={() => handleTabSwitch("history")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               activeTab === "history"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] shadow-xs font-bold"
                 : "bg-white dark:bg-[#101722] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
             }`}
           >
-            <History size={17} />
+            <History size={16} />
             <span>Order History</span>
             <span
               className={`ml-1 rounded-full px-2 py-0.5 text-xs font-bold ${
@@ -1145,7 +1147,7 @@ export default function Orders() {
           <button
             type="button"
             onClick={() => handleTabSwitch("archived")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-bold transition cursor-pointer ${
               activeTab === "archived"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] shadow-xs font-bold"
                 : "bg-white dark:bg-[#101722] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
@@ -1181,26 +1183,30 @@ export default function Orders() {
 
       {/* 5 LIFECYCLE SUMMARY KPI CARDS (ACTIVE TAB) */}
       {activeTab === "active" && (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
           {/* 1. All Active */}
           <div
             onClick={() => {
               setStatusFilter("ALL");
               setCurrentPage(1);
             }}
-            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+            className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-all shadow-xs flex flex-col justify-between ${
               statusFilter === "ALL"
                 ? "border-[#F59E0B] bg-[#FFF7E8]/50 dark:bg-amber-950/20 ring-1 ring-[#F59E0B]"
                 : "border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] hover:border-stone-300 dark:hover:border-stone-700"
             }`}
           >
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-semibold uppercase tracking-wider">
-              All Active
+            <div>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 font-semibold uppercase tracking-wider truncate">
+                All Active
+              </p>
+              <p className="mt-0.5 text-base sm:text-lg leading-6 font-semibold text-stone-900 dark:text-white tabular-nums">
+                {summaryCounts.active ?? 0}
+              </p>
+            </div>
+            <p className="mt-1 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-1 text-[11px] text-stone-500 dark:text-[#8A9AB2] font-medium truncate">
+              Live dining orders
             </p>
-            <p className="mt-1 text-2xl font-bold text-stone-900 dark:text-white tabular-nums">
-              {summaryCounts.active ?? 0}
-            </p>
-            <p className="mt-1 text-[11px] text-stone-400 dark:text-stone-500">Live dining orders</p>
           </div>
 
           {/* 2. Ordered */}
@@ -1209,22 +1215,26 @@ export default function Orders() {
               setStatusFilter(statusFilter === "Pending" ? "ALL" : "Pending");
               setCurrentPage(1);
             }}
-            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+            className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-all shadow-xs flex flex-col justify-between ${
               statusFilter === "Pending"
                 ? "border-amber-400 bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-400"
                 : "border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] hover:border-stone-300 dark:hover:border-stone-700"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-amber-800 dark:text-amber-400 font-semibold uppercase tracking-wider">
-                1. Ordered
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-amber-800 dark:text-amber-400 font-semibold uppercase tracking-wider truncate">
+                  1. Ordered
+                </p>
+                <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+              </div>
+              <p className="mt-0.5 text-base sm:text-lg leading-6 font-semibold text-amber-950 dark:text-amber-200 tabular-nums">
+                {summaryCounts.ordered ?? 0}
               </p>
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
             </div>
-            <p className="mt-1 text-2xl font-bold text-amber-950 dark:text-amber-200 tabular-nums">
-              {summaryCounts.ordered ?? 0}
+            <p className="mt-1 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-1 text-[11px] text-stone-500 dark:text-[#8A9AB2] font-medium truncate">
+              Awaiting confirmation
             </p>
-            <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">Awaiting confirmation</p>
           </div>
 
           {/* 3. Confirmed */}
@@ -1233,22 +1243,26 @@ export default function Orders() {
               setStatusFilter(statusFilter === "Confirmed" ? "ALL" : "Confirmed");
               setCurrentPage(1);
             }}
-            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+            className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-all shadow-xs flex flex-col justify-between ${
               statusFilter === "Confirmed"
                 ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 ring-1 ring-blue-400"
                 : "border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] hover:border-stone-300 dark:hover:border-stone-700"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-blue-800 dark:text-blue-400 font-semibold uppercase tracking-wider">
-                2. Confirmed
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-blue-800 dark:text-blue-400 font-semibold uppercase tracking-wider truncate">
+                  2. Confirmed
+                </p>
+                <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+              </div>
+              <p className="mt-0.5 text-base sm:text-lg leading-6 font-semibold text-blue-950 dark:text-blue-200 tabular-nums">
+                {summaryCounts.confirmed ?? 0}
               </p>
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
             </div>
-            <p className="mt-1 text-2xl font-bold text-blue-950 dark:text-blue-200 tabular-nums">
-              {summaryCounts.confirmed ?? 0}
+            <p className="mt-1 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-1 text-[11px] text-stone-500 dark:text-[#8A9AB2] font-medium truncate">
+              Accepted by staff
             </p>
-            <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">Accepted by staff</p>
           </div>
 
           {/* 4. Ready */}
@@ -1257,22 +1271,26 @@ export default function Orders() {
               setStatusFilter(statusFilter === "Ready" ? "ALL" : "Ready");
               setCurrentPage(1);
             }}
-            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+            className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-all shadow-xs flex flex-col justify-between ${
               statusFilter === "Ready"
                 ? "border-purple-400 bg-purple-50 dark:bg-purple-950/30 ring-1 ring-purple-400"
                 : "border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] hover:border-stone-300 dark:hover:border-stone-700"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-purple-800 dark:text-purple-400 font-semibold uppercase tracking-wider">
-                3. Ready
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-purple-800 dark:text-purple-400 font-semibold uppercase tracking-wider truncate">
+                  3. Ready
+                </p>
+                <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse shrink-0" />
+              </div>
+              <p className="mt-0.5 text-base sm:text-lg leading-6 font-semibold text-purple-950 dark:text-purple-200 tabular-nums">
+                {summaryCounts.ready ?? 0}
               </p>
-              <span className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
             </div>
-            <p className="mt-1 text-2xl font-bold text-purple-950 dark:text-purple-200 tabular-nums">
-              {summaryCounts.ready ?? 0}
+            <p className="mt-1 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-1 text-[11px] text-stone-500 dark:text-[#8A9AB2] font-medium truncate">
+              Prepared in kitchen
             </p>
-            <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">Prepared in kitchen</p>
           </div>
 
           {/* 5. Served */}
@@ -1281,22 +1299,26 @@ export default function Orders() {
               setStatusFilter(statusFilter === "Served" ? "ALL" : "Served");
               setCurrentPage(1);
             }}
-            className={`cursor-pointer rounded-xl border p-3.5 transition-all shadow-xs ${
+            className={`cursor-pointer rounded-xl border px-3 py-2.5 transition-all shadow-xs flex flex-col justify-between ${
               statusFilter === "Served"
                 ? "border-teal-400 bg-teal-50 dark:bg-teal-950/30 ring-1 ring-teal-400"
                 : "border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] hover:border-stone-300 dark:hover:border-stone-700"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-teal-800 dark:text-teal-400 font-semibold uppercase tracking-wider">
-                4. Served
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-teal-800 dark:text-teal-400 font-semibold uppercase tracking-wider truncate">
+                  4. Served
+                </p>
+                <span className="h-2 w-2 rounded-full bg-teal-600 shrink-0" />
+              </div>
+              <p className="mt-0.5 text-base sm:text-lg leading-6 font-semibold text-teal-950 dark:text-teal-200 tabular-nums">
+                {summaryCounts.served ?? 0}
               </p>
-              <span className="h-2 w-2 rounded-full bg-teal-600" />
             </div>
-            <p className="mt-1 text-2xl font-bold text-teal-950 dark:text-teal-200 tabular-nums">
-              {summaryCounts.served ?? 0}
+            <p className="mt-1 border-t border-[#E5E9F0] dark:border-[#1E293B] pt-1 text-[11px] text-stone-500 dark:text-[#8A9AB2] font-medium truncate">
+              Delivered / Dining
             </p>
-            <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">Delivered / Dining</p>
           </div>
         </div>
       )}
@@ -1357,8 +1379,8 @@ export default function Orders() {
       {/* ORDERS TABLE CONTAINER */}
       <div className="overflow-hidden rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#101722] shadow-xs">
         {/* TABLE FILTER & SEARCH TOOLBAR */}
-        <div className="flex flex-col gap-3 border-b border-stone-200/80 dark:border-stone-800 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-2.5 border-b border-stone-200/80 dark:border-stone-800 px-4 py-3">
+          <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="font-bold text-stone-900 dark:text-white">
                 {activeTab === "active"
@@ -1366,7 +1388,7 @@ export default function Orders() {
                   : activeTab === "today"
                   ? "Recent Orders – Today"
                   : activeTab === "history"
-                  ? "Order History (Previous Dates)"
+                  ? "Order History"
                   : "Archived Orders"}
               </h2>
               <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
@@ -1379,8 +1401,8 @@ export default function Orders() {
               {/* Search Input */}
               <div className="relative">
                 <Search
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                  size={14}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
                 />
                 <input
                   value={search}
@@ -1389,7 +1411,7 @@ export default function Orders() {
                     setCurrentPage(1);
                   }}
                   placeholder="Search orders"
-                  className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-64"
+                  className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] py-1.5 pl-8 pr-3 text-xs text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-44"
                 />
               </div>
 
@@ -1400,7 +1422,7 @@ export default function Orders() {
                   setStatusFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               >
                 {activeTab === "active" ? (
                   <>
@@ -1442,7 +1464,7 @@ export default function Orders() {
                   setPaymentStatusFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               >
                 <option value="ALL">All Payments</option>
                 <option value="PAID">Paid</option>
@@ -1457,7 +1479,7 @@ export default function Orders() {
                   setTableFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               >
                 <option value="ALL">All Tables</option>
                 {tables.map((t) => (
@@ -1474,7 +1496,7 @@ export default function Orders() {
                   setSortBy(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-200 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               >
                 <option value="newest">Newest First</option>
                 <option value="oldest">Oldest First</option>
@@ -1488,9 +1510,9 @@ export default function Orders() {
                   type="button"
                   onClick={handleResetFilters}
                   title="Reset all filters"
-                  className="flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-2.5 py-2 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 transition cursor-pointer"
+                  className="flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 transition cursor-pointer"
                 >
-                  <X size={14} />
+                  <X size={13} />
                   <span>Clear</span>
                 </button>
               )}
@@ -1501,9 +1523,9 @@ export default function Orders() {
                 onClick={loadOrders}
                 disabled={loading}
                 title="Refresh orders"
-                className="flex items-center justify-center rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+                className="flex items-center justify-center rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
               >
-                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
               </button>
             </div>
           </div>
@@ -1514,7 +1536,7 @@ export default function Orders() {
           <table className="w-full min-w-[840px] text-left">
             <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
-                <th className="w-10 px-4 py-3 text-center">
+                <th className="w-10 px-3 py-2.5 text-center">
                   <input
                     type="checkbox"
                     aria-label="Select all orders"
@@ -1523,14 +1545,14 @@ export default function Orders() {
                     className="h-4 w-4 rounded border-stone-300 text-[#F59E0B] focus:ring-[#F59E0B] cursor-pointer"
                   />
                 </th>
-                <th className="px-4 py-3">Order Number</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Table</th>
-                <th className="px-4 py-3">Summary</th>
-                <th className="px-4 py-3">Financials</th>
-                <th className="px-4 py-3">Payment</th>
-                <th className="px-4 py-3">Workflow Status</th>
-                <th className="px-4 py-3 text-center">Quick Action</th>
+                <th className="px-3 py-2.5">Order Number</th>
+                <th className="px-3 py-2.5">Customer</th>
+                <th className="px-3 py-2.5">Table</th>
+                <th className="px-3 py-2.5">Summary</th>
+                <th className="px-3 py-2.5">Financials</th>
+                <th className="px-3 py-2.5">Payment</th>
+                <th className="px-3 py-2.5">Workflow Status</th>
+                <th className="px-3 py-2.5 text-center">Quick Action</th>
               </tr>
             </thead>
 
@@ -1579,7 +1601,7 @@ export default function Orders() {
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="px-4 py-3 text-center">
+                      <td className="w-10 px-3 py-2.5 text-center">
                         <input
                           type="checkbox"
                           aria-label={`Select order ${order.order_number}`}
@@ -1590,7 +1612,7 @@ export default function Orders() {
                       </td>
 
                       {/* Order Number */}
-                      <td className="px-4 py-3 font-semibold text-stone-900 dark:text-stone-100">
+                      <td className="px-3 py-2.5 font-semibold text-stone-900 dark:text-stone-100">
                         <div className="flex items-center gap-1.5">
                           <span>{order.order_number}</span>
                         </div>
@@ -1602,7 +1624,7 @@ export default function Orders() {
                       </td>
 
                       {/* Customer */}
-                      <td className="px-4 py-3 text-stone-800 dark:text-stone-200">
+                      <td className="px-3 py-2.5 text-stone-800 dark:text-stone-200">
                         <p className="font-medium">{order.customer_name || "Guest Customer"}</p>
                         <p className="text-xs text-stone-500 dark:text-stone-400">
                           {order.customer_phone || "—"}
@@ -1610,14 +1632,14 @@ export default function Orders() {
                       </td>
 
                       {/* Table */}
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <span className="inline-flex items-center rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:text-stone-300">
                           {order.table_number ? `Table ${order.table_number}` : "Takeaway"}
                         </span>
                       </td>
 
                       {/* Summary */}
-                      <td className="px-4 py-3 max-w-[200px]">
+                      <td className="px-3 py-2.5 max-w-[200px]">
                         <p
                           className="truncate text-xs text-stone-600 dark:text-stone-300"
                           title={itemsSummary}
@@ -1635,7 +1657,7 @@ export default function Orders() {
                       </td>
 
                       {/* Financials */}
-                      <td className="px-4 py-3 font-semibold text-stone-900 dark:text-stone-100">
+                      <td className="px-3 py-2.5 font-semibold text-stone-900 dark:text-stone-100">
                         <div>{formatCurrency(totalVal)}</div>
                         {outstandingVal > 0 && order.status === "Served" && (
                           <span className="text-[11px] text-amber-700 dark:text-amber-300 block font-normal">
@@ -1645,12 +1667,12 @@ export default function Orders() {
                       </td>
 
                       {/* Payment Status */}
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {getPaymentBadge(order.payment_status, order.outstanding_balance)}
                       </td>
 
                       {/* Workflow Status Badge (Clean, No Duplicate Labels) */}
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs ${badgeInfo.badge}`}
                         >
@@ -1660,7 +1682,7 @@ export default function Orders() {
                       </td>
 
                       {/* Quick Actions & Details */}
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-3 py-2.5 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           {/* Direct Contextual Primary Action Button */}
                           {activeTab === "archived" ? (
@@ -1734,25 +1756,24 @@ export default function Orders() {
         </div>
 
         {/* PAGINATION (10 RECORDS / PAGE) */}
-        <div className="p-4 border-t border-stone-200/80 dark:border-stone-800">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalRecords={totalRecords}
-            pageSize={pageSize}
-            onPageChange={(p) => setCurrentPage(p)}
-          />
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRecords={totalRecords}
+          pageSize={pageSize}
+          onPageChange={(p) => setCurrentPage(p)}
+          className="px-4 pb-3"
+        />
       </div>
 
       {/* RECENT ORDERS – TODAY SECTION (SHOWN ON ACTIVE TAB DIRECTLY BELOW LIVE ACTIVE ORDERS) */}
       {activeTab === "active" && (
         <div className="overflow-hidden rounded-xl border border-stone-200/90 dark:border-stone-800 bg-white dark:bg-[#101722] shadow-xs">
           {/* HEADER TOOLBAR */}
-          <div className="flex flex-col gap-3 border-b border-stone-200/80 dark:border-stone-800 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 dark:bg-amber-500/20">
-                <Clock size={20} />
+          <div className="flex flex-col gap-2.5 border-b border-stone-200/80 dark:border-stone-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 dark:bg-amber-500/20">
+                <Clock size={17} />
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -1786,15 +1807,15 @@ export default function Orders() {
             <table className="w-full text-left text-sm text-stone-600 dark:text-stone-300">
               <thead className="border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-[#151D29] text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                 <tr>
-                  <th className="px-4 py-3">Order Number</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Dining Table</th>
-                  <th className="px-4 py-3">Summary</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Payment</th>
-                  <th className="px-4 py-3">Workflow Status</th>
-                  <th className="px-4 py-3">Order Time</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
+                  <th className="px-3 py-2.5">Order Number</th>
+                  <th className="px-3 py-2.5">Customer</th>
+                  <th className="px-3 py-2.5">Dining Table</th>
+                  <th className="px-3 py-2.5">Summary</th>
+                  <th className="px-3 py-2.5">Amount</th>
+                  <th className="px-3 py-2.5">Payment</th>
+                  <th className="px-3 py-2.5">Workflow Status</th>
+                  <th className="px-3 py-2.5">Order Time</th>
+                  <th className="px-3 py-2.5 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-200/80 dark:divide-stone-800/80">
@@ -1827,7 +1848,7 @@ export default function Orders() {
                         key={order.id}
                         className="transition hover:bg-stone-50/60 dark:hover:bg-[#151D29]/50"
                       >
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <button
                             type="button"
                             onClick={() => openOrderDetails(order)}
@@ -1836,7 +1857,7 @@ export default function Orders() {
                             {order.order_number}
                           </button>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <div className="font-semibold text-stone-900 dark:text-white">
                             {order.customer_name || order.customer?.full_name || "Guest Customer"}
                           </div>
@@ -1846,14 +1867,14 @@ export default function Orders() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <span className="inline-flex items-center rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:text-stone-300">
                             {order.table_number || order.table?.table_number
                               ? `Table ${order.table_number || order.table?.table_number}`
                               : "Takeaway"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 max-w-xs">
+                        <td className="px-3 py-2.5 max-w-xs">
                           <div className="truncate text-xs text-stone-700 dark:text-stone-300" title={itemsSummary}>
                             {itemsSummary || "No dishes"}
                           </div>
@@ -1861,13 +1882,13 @@ export default function Orders() {
                             {order.items?.length || 0} {order.items?.length === 1 ? "item" : "items"}
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-semibold text-stone-900 dark:text-white tabular-nums">
+                        <td className="px-3 py-2.5 font-semibold text-stone-900 dark:text-white tabular-nums">
                           {formatCurrency(totalVal)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           {getPaymentBadge(order.payment_status, order.outstanding_balance)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${getOrderStatusBadgeStyle(
                               order.status
@@ -1876,10 +1897,10 @@ export default function Orders() {
                             {getWorkflowStageLabel(order.status)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-xs text-stone-500 tabular-nums">
+                        <td className="px-3 py-2.5 text-xs text-stone-500 tabular-nums">
                           {formatOrderTime(order.created_at)}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-3 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             {contextualAction && (
                               <button
@@ -2130,7 +2151,7 @@ export default function Orders() {
           onClose={closeCreateModal}
           size="max-w-3xl"
         >
-          <form onSubmit={handleCreateOrder} className="space-y-5">
+          <form onSubmit={handleCreateOrder} className="space-y-4">
             {formError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
                 {formError}
@@ -2138,9 +2159,9 @@ export default function Orders() {
             )}
 
             {/* CUSTOMER AND TABLE */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                   Customer <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -2148,7 +2169,8 @@ export default function Orders() {
                   value={form.customer_id}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                  aria-invalid={Boolean(formFieldErrors.customer_id)}
+                  className={`w-full rounded-lg border bg-white dark:bg-[#151D29] px-3 py-1.5 text-sm text-stone-900 dark:text-white outline-none transition focus:ring-2 focus:ring-[#F59E0B]/30 ${formFieldErrors.customer_id ? "border-red-500 focus:border-red-500" : "border-stone-300 dark:border-stone-700 focus:border-[#F59E0B]"}`}
                 >
                   <option value="">Select customer</option>
                   {customers.map((c) => (
@@ -2157,10 +2179,11 @@ export default function Orders() {
                     </option>
                   ))}
                 </select>
+                {formFieldErrors.customer_id && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{formFieldErrors.customer_id}</p>}
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                   Dining Table <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -2168,7 +2191,8 @@ export default function Orders() {
                   value={form.table_id}
                   onChange={handleFormChange}
                   required
-                  className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                  aria-invalid={Boolean(formFieldErrors.table_id)}
+                  className={`w-full rounded-lg border bg-white dark:bg-[#151D29] px-3 py-1.5 text-sm text-stone-900 dark:text-white outline-none transition focus:ring-2 focus:ring-[#F59E0B]/30 ${formFieldErrors.table_id ? "border-red-500 focus:border-red-500" : "border-stone-300 dark:border-stone-700 focus:border-[#F59E0B]"}`}
                 >
                   <option value="">Select dining table</option>
                   {tables.map((t) => (
@@ -2177,12 +2201,13 @@ export default function Orders() {
                     </option>
                   ))}
                 </select>
+                {formFieldErrors.table_id && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{formFieldErrors.table_id}</p>}
               </div>
             </div>
 
             {/* SPECIAL INSTRUCTIONS */}
             <div>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
+              <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                 Kitchen Instructions (Optional)
               </label>
               <input
@@ -2191,12 +2216,12 @@ export default function Orders() {
                 value={form.special_instructions}
                 onChange={handleFormChange}
                 placeholder="e.g., Less spicy, Jain preparation, allergic to peanuts..."
-                className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="w-full rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-1.5 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               />
             </div>
 
             {/* ADD ITEM ROW */}
-            <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/70 dark:bg-[#101722] p-4">
+            <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50/70 dark:bg-[#101722] p-3">
               <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
                 Add Menu Items
               </label>
@@ -2204,7 +2229,7 @@ export default function Orders() {
                 <select
                   value={selectedMenuItem}
                   onChange={(e) => setSelectedMenuItem(e.target.value)}
-                  className="flex-1 min-w-[200px] rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B]"
+                  className="flex-1 min-w-[200px] rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-3 py-1.5 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B]"
                 >
                   <option value="">Select dish from menu</option>
                   {menuItems.map((item) => (
@@ -2223,7 +2248,7 @@ export default function Orders() {
                     onChange={(e) =>
                       setItemQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))
                     }
-                    className="w-16 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2 py-2 text-center text-sm outline-none focus:border-[#F59E0B]"
+                    className="w-16 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] px-2 py-1.5 text-center text-sm outline-none focus:border-[#F59E0B]"
                   />
                 </div>
 
@@ -2236,6 +2261,7 @@ export default function Orders() {
                   Add to Order
                 </button>
               </div>
+              {formFieldErrors.items && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{formFieldErrors.items}</p>}
             </div>
 
             {/* CART PREVIEW */}
@@ -2744,7 +2770,7 @@ export default function Orders() {
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#F59E0B] hover:underline cursor-pointer"
                   >
                     <Receipt size={14} />
-                    <span>View / Share Invoice in Invoices</span>
+                    <span>Invoices</span>
                   </button>
                 )}
                 <div className="ml-auto">

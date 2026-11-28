@@ -3,6 +3,7 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
 from app.db.session import get_db
@@ -66,6 +67,30 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Staff accounts are not permitted to access protected resources"
         )
+
+    # Universal managers are provisioned with business_context=ALL. Their JWT
+    # carries the selected module, which keeps existing module guards working
+    # without persisting a context change onto the shared user row.
+    stored_context = str(getattr(user.business_context, "value", user.business_context) or "").upper()
+    context_aliases = {
+        "VILLAS": "VILLA",
+        "NIWARAAI": "VILLA",
+        "PACKAGES": "PACKAGE",
+        "ACTIVITIES": "ACTIVITY",
+        "TRANSPORTS": "TRANSPORT",
+    }
+    stored_context = context_aliases.get(stored_context, stored_context)
+    if stored_context == "ALL":
+        token_context = str(payload.get("business_context") or "").strip().upper()
+        token_context = context_aliases.get(token_context, token_context)
+        if token_context not in {"RESTAURANT", "SPA", "VILLA", "PACKAGE", "ACTIVITY", "TRANSPORT"}:
+            raise credentials_exception
+        set_committed_value(user, "business_context", token_context)
+    elif payload.get("business_context"):
+        token_context = str(payload["business_context"]).strip().upper()
+        token_context = context_aliases.get(token_context, token_context)
+        if token_context != stored_context:
+            raise credentials_exception
 
     return user
 

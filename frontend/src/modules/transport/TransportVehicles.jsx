@@ -73,6 +73,7 @@ export default function TransportVehicles() {
   const [pendingFile, setPendingFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   // Detail modal
@@ -88,6 +89,7 @@ export default function TransportVehicles() {
   const [editingCat, setEditingCat] = useState(null);
   const [catForm, setCatForm] = useState(INITIAL_CAT_FORM);
   const [catError, setCatError] = useState("");
+  const [catFieldError, setCatFieldError] = useState("");
   const [savingCat, setSavingCat] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -147,6 +149,7 @@ export default function TransportVehicles() {
     setPendingFile(null);
     setPreviewUrl("");
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -163,14 +166,20 @@ export default function TransportVehicles() {
     setPendingFile(null);
     setPreviewUrl(v.image_url || "");
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
   const handleSaveVehicle = async (e) => {
     e.preventDefault();
     setFormError("");
-    if (!form.vehicle_name.trim() || !form.registration_number.trim() || !form.category_id || !form.seating_capacity || !form.status) {
-      setFormError("Vehicle name, registration number, category, seating capacity, and operational status are required.");
+    const nextFieldErrors = {};
+    if (!form.vehicle_name.trim()) nextFieldErrors.vehicle_name = "Vehicle name is required.";
+    if (!form.registration_number.trim()) nextFieldErrors.registration_number = "Registration number is required.";
+    if (!form.category_id) nextFieldErrors.category_id = "Select a vehicle category.";
+    if (!Number(form.seating_capacity) || Number(form.seating_capacity) < 1) nextFieldErrors.seating_capacity = "Seating capacity must be at least 1.";
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
     setSaving(true);
@@ -270,9 +279,10 @@ export default function TransportVehicles() {
     e.preventDefault();
     setCatError("");
     if (!catForm.name.trim()) {
-      setCatError("Category name is required.");
+      setCatFieldError("Category name is required.");
       return;
     }
+    setCatFieldError("");
     setSavingCat(true);
     try {
       const payload = {
@@ -663,11 +673,13 @@ export default function TransportVehicles() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">Vehicle Name *</label>
-              <input type="text" required value={form.vehicle_name} onChange={(e) => setForm({ ...form, vehicle_name: e.target.value })} className={INPUT_STYLES.base} placeholder="e.g. Toyota Fortuner" />
+              <input type="text" required value={form.vehicle_name} onChange={(e) => { setForm({ ...form, vehicle_name: e.target.value }); setFieldErrors((p) => ({ ...p, vehicle_name: "" })); }} className={INPUT_STYLES.base} placeholder="e.g. Toyota Fortuner" />
+              {fieldErrors.vehicle_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.vehicle_name}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Registration Number *</label>
-              <input type="text" required value={form.registration_number} onChange={(e) => setForm({ ...form, registration_number: e.target.value })} className={INPUT_STYLES.base} placeholder="e.g. MH 12 AB 4589" />
+              <input type="text" required value={form.registration_number} onChange={(e) => { setForm({ ...form, registration_number: e.target.value }); setFieldErrors((p) => ({ ...p, registration_number: "" })); }} className={INPUT_STYLES.base} placeholder="e.g. MH 12 AB 4589" />
+              {fieldErrors.registration_number && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.registration_number}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Vehicle Category *</label>
@@ -681,6 +693,7 @@ export default function TransportVehicles() {
                     category_id: e.target.value,
                     seating_capacity: editingVehicle ? form.seating_capacity : (cat?.default_capacity || form.seating_capacity),
                   });
+                  setFieldErrors((p) => ({ ...p, category_id: "" }));
                 }}
                 className={INPUT_STYLES.select}
               >
@@ -689,10 +702,12 @@ export default function TransportVehicles() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+              {fieldErrors.category_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.category_id}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Seating Capacity *</label>
-              <input type="number" min={1} max={100} required value={form.seating_capacity} onChange={(e) => setForm({ ...form, seating_capacity: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="number" min={1} max={100} required value={form.seating_capacity} onChange={(e) => { setForm({ ...form, seating_capacity: e.target.value }); setFieldErrors((p) => ({ ...p, seating_capacity: "" })); }} className={INPUT_STYLES.base} />
+              {fieldErrors.seating_capacity && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.seating_capacity}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Operational Status *</label>
@@ -788,7 +803,8 @@ export default function TransportVehicles() {
           {catError && <AlertBanner variant="error" title="Error" message={catError} />}
           <div>
             <label className="block text-xs font-semibold mb-1">Category Name *</label>
-            <input type="text" required value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} className={INPUT_STYLES.base} />
+            <input type="text" required value={catForm.name} onChange={(e) => { setCatForm({ ...catForm, name: e.target.value }); setCatFieldError(""); }} aria-invalid={Boolean(catFieldError)} className={`${INPUT_STYLES.base} ${catFieldError ? "border-red-500 focus:border-red-500" : ""}`} />
+            {catFieldError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{catFieldError}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1">Default Seating Capacity</label>

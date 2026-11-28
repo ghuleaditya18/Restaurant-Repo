@@ -62,6 +62,8 @@ export default function BusinessProfileEditor({
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [imageError, setImageError] = useState("");
   const fileInputRef = useRef(null);
 
   const isSpa = profile?.business_context === "SPA";
@@ -70,6 +72,7 @@ export default function BusinessProfileEditor({
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((previous) => ({ ...previous, [name]: "" }));
   };
 
   const handleImageFileChange = async (e) => {
@@ -77,14 +80,14 @@ export default function BusinessProfileEditor({
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      setError("Founder photograph must be 5 MB or smaller.");
+      setImageError("Founder photograph must be 5 MB or smaller.");
       notify?.("Founder photograph must be 5 MB or smaller.", "error");
       return;
     }
 
     const validTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!validTypes.includes(file.type)) {
-      setError("Only JPG, PNG or WebP images are allowed.");
+      setImageError("Only JPG, PNG or WebP images are allowed.");
       notify?.("Only JPG, PNG or WebP images are allowed.", "error");
       return;
     }
@@ -92,6 +95,7 @@ export default function BusinessProfileEditor({
     try {
       setUploadingImage(true);
       setError("");
+      setImageError("");
       const updatedProfile = await uploadFounderImage(file);
       setFormData((prev) => ({
         ...prev,
@@ -129,9 +133,10 @@ export default function BusinessProfileEditor({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    const nextFieldErrors = {};
     if (!formData.business_name.trim() || formData.business_name.trim().length < 2) {
-      setError("Business Name must contain at least 2 characters.");
-      return;
+      nextFieldErrors.business_name = "Business name must contain at least 2 characters.";
     }
 
     const emailCheck = validateEmailAddress(formData.business_email, {
@@ -139,8 +144,7 @@ export default function BusinessProfileEditor({
       label: "Official Business Email",
     });
     if (!emailCheck.valid) {
-      setError(emailCheck.error);
-      return;
+      nextFieldErrors.business_email = emailCheck.error;
     }
 
     const phoneCheck = validateMobileNumber(formData.business_phone, {
@@ -148,7 +152,10 @@ export default function BusinessProfileEditor({
       label: "Business Contact Phone",
     });
     if (!phoneCheck.valid) {
-      setError(phoneCheck.error);
+      nextFieldErrors.business_phone = phoneCheck.error;
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -244,8 +251,10 @@ export default function BusinessProfileEditor({
                 required
                 maxLength={150}
                 placeholder={isSpa ? "e.g. Lotus Wellness Spa" : "e.g. Saffron Table Restaurant"}
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(fieldErrors.business_name)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.business_name ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.business_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.business_name}</p>}
             </div>
 
             <div>
@@ -446,6 +455,7 @@ export default function BusinessProfileEditor({
               <p className="text-[10px] text-stone-400 text-center max-w-[120px]">
                 JPG, PNG, WebP (Max 5 MB)
               </p>
+              {imageError && <p className="max-w-[150px] text-center text-xs text-red-600 dark:text-red-400">{imageError}</p>}
             </div>
 
             {/* Founder Text Fields */}
@@ -533,8 +543,10 @@ export default function BusinessProfileEditor({
                 onChange={handleChange}
                 maxLength={150}
                 placeholder="e.g. contact@example.com"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(fieldErrors.business_email)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.business_email ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.business_email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.business_email}</p>}
             </div>
 
             <div>
@@ -556,8 +568,10 @@ export default function BusinessProfileEditor({
                 }
                 maxLength={10}
                 placeholder="e.g. 9876543210"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(fieldErrors.business_phone)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.business_phone ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.business_phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.business_phone}</p>}
               <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                 
               </p>

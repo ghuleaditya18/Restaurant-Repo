@@ -393,9 +393,9 @@ export default function InventoryPurchases() {
   const paginatedGrns = goodsReceipts.slice((grnPage - 1) * pageSize, grnPage * pageSize);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Tab Switcher & Action Button */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-xl max-w-sm">
           <button
             type="button"
@@ -453,7 +453,7 @@ export default function InventoryPurchases() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
-                  <th className={TABLE_STYLES.th}><input type="checkbox" aria-label="Select deletable draft purchase orders on this page" checked={paginatedPos.filter((po) => po.status === "Draft").length > 0 && paginatedPos.filter((po) => po.status === "Draft").every((po) => selectedIds.has(po.id))} onChange={() => toggleMany(paginatedPos.filter((po) => po.status === "Draft").map((po) => po.id))} className="h-4 w-4 accent-amber-500" /></th>
+                  <th className={`${TABLE_STYLES.th} w-10 text-center`}><input type="checkbox" aria-label="Select deletable draft purchase orders on this page" checked={paginatedPos.filter((po) => po.status === "Draft").length > 0 && paginatedPos.filter((po) => po.status === "Draft").every((po) => selectedIds.has(po.id))} onChange={() => toggleMany(paginatedPos.filter((po) => po.status === "Draft").map((po) => po.id))} className="h-4 w-4 accent-amber-500" /></th>
                   <th className={TABLE_STYLES.th}>PO Number</th>
                   <th className={TABLE_STYLES.th}>Supplier</th>
                   <th className={TABLE_STYLES.th}>Order Date</th>
@@ -473,7 +473,7 @@ export default function InventoryPurchases() {
                 ) : (
                   paginatedPos.map((po) => (
                     <tr key={po.id} className={TABLE_STYLES.tr}>
-                      <td className={TABLE_STYLES.td}><input type="checkbox" aria-label={`Select draft purchase order ${po.po_number}`} checked={selectedIds.has(po.id)} disabled={po.status !== "Draft"} onChange={() => toggle(po.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
+                      <td className={`${TABLE_STYLES.td} w-10 text-center`}><input type="checkbox" aria-label={`Select draft purchase order ${po.po_number}`} checked={selectedIds.has(po.id)} disabled={po.status !== "Draft"} onChange={() => toggle(po.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                       <td className={TABLE_STYLES.td}>
                         <div className="font-bold text-stone-900 dark:text-stone-100 font-mono">
                           {po.po_number}

@@ -74,6 +74,7 @@ export default function ActivityInvoices() {
     notes: "",
   });
   const [genError, setGenError] = useState("");
+  const [genFieldError, setGenFieldError] = useState("");
   const [generating, setGenerating] = useState(false);
 
   // Collect Payment Modal
@@ -85,6 +86,7 @@ export default function ActivityInvoices() {
     reference_number: "",
   });
   const [payError, setPayError] = useState("");
+  const [payFieldError, setPayFieldError] = useState("");
   const [paying, setPaying] = useState(false);
 
   // Detail Modal
@@ -135,8 +137,9 @@ export default function ActivityInvoices() {
   const handleGenerateInvoice = async (e) => {
     e.preventDefault();
     setGenError("");
+    setGenFieldError("");
     if (!genForm.booking_id) {
-      setGenError("Please select a booking.");
+      setGenFieldError("Select a booking to generate its invoice.");
       return;
     }
     setGenerating(true);
@@ -172,13 +175,14 @@ export default function ActivityInvoices() {
     e.preventDefault();
     if (!payTarget) return;
     setPayError("");
+    setPayFieldError("");
     const amt = Number(payForm.amount);
     if (!Number.isFinite(amt) || amt <= 0) {
-      setPayError("Payment amount must be greater than zero.");
+      setPayFieldError("Enter a payment amount greater than zero.");
       return;
     }
     if (amt > Number(payTarget.balance_due)) {
-      setPayError(`Amount cannot exceed balance due (${actMoney(payTarget.balance_due)}).`);
+      setPayFieldError(`Amount cannot exceed the balance due (${actMoney(payTarget.balance_due)}).`);
       return;
     }
     setPaying(true);
@@ -506,8 +510,9 @@ export default function ActivityInvoices() {
             <select
               required
               value={genForm.booking_id}
-              onChange={(e) => setGenForm({ ...genForm, booking_id: e.target.value })}
-              className={INPUT_STYLES.select}
+              onChange={(e) => { setGenForm({ ...genForm, booking_id: e.target.value }); setGenFieldError(""); }}
+              aria-invalid={Boolean(genFieldError)}
+              className={`${INPUT_STYLES.select} ${genFieldError ? "border-red-500" : ""}`}
             >
               <option value="">Choose booking...</option>
               {unbilledBookings.map((b) => (
@@ -516,6 +521,7 @@ export default function ActivityInvoices() {
                 </option>
               ))}
             </select>
+            {genFieldError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{genFieldError}</p>}
           </div>
           <div>
             <label className="mb-1 block text-xs font-bold">GST Rate (%) *</label>
@@ -568,9 +574,11 @@ export default function ActivityInvoices() {
               step="0.01"
               required
               value={payForm.amount}
-              onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
-              className={INPUT_STYLES.base}
+              onChange={(e) => { setPayForm({ ...payForm, amount: e.target.value }); setPayFieldError(""); }}
+              aria-invalid={Boolean(payFieldError)}
+              className={`${INPUT_STYLES.base} ${payFieldError ? "border-red-500" : ""}`}
             />
+            {payFieldError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{payFieldError}</p>}
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             <div>

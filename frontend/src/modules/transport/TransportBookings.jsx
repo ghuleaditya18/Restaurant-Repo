@@ -111,12 +111,14 @@ export default function TransportBookings() {
   const [availData, setAvailData] = useState(null);
   const [checkingAvail, setCheckingAvail] = useState(false);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   // Quick Inline Customer Modal
   const [custOpen, setCustOpen] = useState(false);
   const [custForm, setCustForm] = useState(INITIAL_CUSTOMER);
   const [custError, setCustError] = useState("");
+  const [custFieldErrors, setCustFieldErrors] = useState({});
   const [savingCust, setSavingCust] = useState(false);
 
   // Detail & Trip Status / Assignment Modal
@@ -350,12 +352,15 @@ export default function TransportBookings() {
       if ((!editingBooking || timeChangedInEdit) && isPastSelection(form.pickup_date, form.pickup_time)) {
         setAvailData(null);
         if (!silent) {
-          setFormError("Pickup date and time cannot be in the past. Please choose the current time or an upcoming time.");
+          setFieldErrors((previous) => ({ ...previous, pickup_time: "Choose the current time or a future pickup time." }));
         }
         return;
       }
       setCheckingAvail(true);
-      if (!silent) setFormError("");
+      if (!silent) {
+        setFormError("");
+        setFieldErrors((previous) => ({ ...previous, pickup_time: "" }));
+      }
       try {
         const res = await transportApi.availability({
           pickup_date: form.pickup_date,
@@ -393,11 +398,14 @@ export default function TransportBookings() {
   const handleSaveCustomer = async (e) => {
     e.preventDefault();
     setCustError("");
+    const errors = {};
     const phoneRes = validateMobileNumber(custForm.phone, { required: true });
-    if (!phoneRes.valid) return setCustError(phoneRes.error);
+    if (!phoneRes.valid) errors.phone = phoneRes.error;
     const emailRes = validateEmailAddress(custForm.email, { required: true });
-    if (!emailRes.valid) return setCustError(emailRes.error);
-    if (!custForm.full_name.trim()) return setCustError("Full name is required.");
+    if (!emailRes.valid) errors.email = emailRes.error;
+    if (custForm.full_name.trim().length < 2) errors.full_name = "Full name must contain at least 2 characters.";
+    setCustFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSavingCust(true);
     try {
@@ -423,20 +431,25 @@ export default function TransportBookings() {
   const handleSaveBooking = async (e) => {
     e.preventDefault();
     setFormError("");
+    const nextFieldErrors = {};
     if (!form.customer_id && !form.stay_booking_id) {
-      return setFormError("Please select a customer or link a stay guest.");
+      nextFieldErrors.customer_id = "Select a customer or link a stay guest.";
     }
-    if (!form.pickup_location.trim() || !form.drop_location.trim()) {
-      return setFormError("Pickup and drop locations are required.");
-    }
+    if (!form.pickup_location.trim()) nextFieldErrors.pickup_location = "Pickup location is required.";
+    if (!form.drop_location.trim()) nextFieldErrors.drop_location = "Drop location is required.";
     const timeChangedInEdit =
       editingBooking &&
       (form.pickup_date !== editingBooking.pickup_date || form.pickup_time !== editingBooking.pickup_time);
     if ((!editingBooking || timeChangedInEdit) && isPastSelection(form.pickup_date, form.pickup_time)) {
-      return setFormError("Pickup date and time cannot be in the past. Please choose the current time or an upcoming time.");
+      nextFieldErrors.pickup_time = "Choose the current time or a future pickup time.";
     }
     if ((form.vehicle_id && !form.driver_id) || (form.driver_id && !form.vehicle_id)) {
-      return setFormError("Select both a vehicle and a driver together, or leave both unassigned.");
+      nextFieldErrors.vehicle_id = "Assign a vehicle and driver together, or leave both unassigned.";
+      nextFieldErrors.driver_id = "Assign a vehicle and driver together, or leave both unassigned.";
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
+      return;
     }
 
     setSaving(true);
@@ -734,6 +747,7 @@ export default function TransportBookings() {
                 onChange={(e) => {
                   const nextCustId = e.target.value;
                   const cust = customers.find((c) => String(c.id) === nextCustId);
+                  setFieldErrors((p) => ({ ...p, customer_id: "" }));
                   setForm((prev) => {
                     const next = { ...prev, customer_id: nextCustId };
                     if (nextCustId) {
@@ -763,6 +777,7 @@ export default function TransportBookings() {
                 </option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.full_name} ({c.phone})</option>)}
               </select>
+              {fieldErrors.customer_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.customer_id}</p>}
             </div>
           </div>
 
@@ -915,11 +930,13 @@ export default function TransportBookings() {
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Pickup Location *</label>
-              <input type="text" required value={form.pickup_location} onChange={(e) => setForm({ ...form, pickup_location: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="text" required value={form.pickup_location} onChange={(e) => { setForm({ ...form, pickup_location: e.target.value }); setFieldErrors((p) => ({ ...p, pickup_location: "" })); }} aria-invalid={Boolean(fieldErrors.pickup_location)} className={`${INPUT_STYLES.base} ${fieldErrors.pickup_location ? "border-red-500 focus:border-red-500" : ""}`} />
+              {fieldErrors.pickup_location && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.pickup_location}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Drop Location *</label>
-              <input type="text" required value={form.drop_location} onChange={(e) => setForm({ ...form, drop_location: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="text" required value={form.drop_location} onChange={(e) => { setForm({ ...form, drop_location: e.target.value }); setFieldErrors((p) => ({ ...p, drop_location: "" })); }} aria-invalid={Boolean(fieldErrors.drop_location)} className={`${INPUT_STYLES.base} ${fieldErrors.drop_location ? "border-red-500 focus:border-red-500" : ""}`} />
+              {fieldErrors.drop_location && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.drop_location}</p>}
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -929,7 +946,7 @@ export default function TransportBookings() {
                   required
                   min={editingBooking ? undefined : kolkataTodayIso(0)}
                   value={form.pickup_date}
-                  onChange={(e) => setForm({ ...form, pickup_date: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, pickup_date: e.target.value }); setFieldErrors((p) => ({ ...p, pickup_time: "" })); }}
                   className={INPUT_STYLES.base}
                 />
               </div>
@@ -940,9 +957,11 @@ export default function TransportBookings() {
                   required
                   min={!editingBooking && form.pickup_date === kolkataTodayIso(0) ? kolkataCurrentTimeHHMM() : undefined}
                   value={form.pickup_time}
-                  onChange={(e) => setForm({ ...form, pickup_time: e.target.value })}
-                  className={INPUT_STYLES.base}
+                  onChange={(e) => { setForm({ ...form, pickup_time: e.target.value }); setFieldErrors((p) => ({ ...p, pickup_time: "" })); }}
+                  aria-invalid={Boolean(fieldErrors.pickup_time)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.pickup_time ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.pickup_time && <p className="mt-1 text-xs text-red-600 dark:text-red-400 col-span-2">{fieldErrors.pickup_time}</p>}
               </div>
             </div>
             <div>
@@ -991,7 +1010,7 @@ export default function TransportBookings() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold mb-1">Assign Vehicle (≥ {form.passenger_count} seats)</label>
-                  <select value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })} className={INPUT_STYLES.select}>
+                  <select value={form.vehicle_id} onChange={(e) => { setForm({ ...form, vehicle_id: e.target.value }); setFieldErrors((p) => ({ ...p, vehicle_id: "", driver_id: "" })); }} aria-invalid={Boolean(fieldErrors.vehicle_id)} className={`${INPUT_STYLES.select} ${fieldErrors.vehicle_id ? "border-red-500 focus:border-red-500" : ""}`}>
                     <option value="">
                       {availData.available_vehicles.length === 0 ? `No vehicles with ≥ ${form.passenger_count} seats available` : "Leave Unassigned"}
                     </option>
@@ -999,15 +1018,17 @@ export default function TransportBookings() {
                       <option key={v.id} value={v.id}>{v.vehicle_name} ({v.registration_number} · {v.seating_capacity} seats)</option>
                     ))}
                   </select>
+                  {fieldErrors.vehicle_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.vehicle_id}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold mb-1">Assign Driver</label>
-                  <select value={form.driver_id} onChange={(e) => setForm({ ...form, driver_id: e.target.value })} className={INPUT_STYLES.select}>
+                  <select value={form.driver_id} onChange={(e) => { setForm({ ...form, driver_id: e.target.value }); setFieldErrors((p) => ({ ...p, vehicle_id: "", driver_id: "" })); }} aria-invalid={Boolean(fieldErrors.driver_id)} className={`${INPUT_STYLES.select} ${fieldErrors.driver_id ? "border-red-500 focus:border-red-500" : ""}`}>
                     <option value="">Leave Unassigned</option>
                     {availData.available_drivers.map((d) => (
                       <option key={d.id} value={d.id}>{d.driver_name} ({d.phone})</option>
                     ))}
                   </select>
+                  {fieldErrors.driver_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.driver_id}</p>}
                 </div>
               </div>
             </div>
@@ -1105,15 +1126,18 @@ export default function TransportBookings() {
           {custError && <AlertBanner variant="error" title="Error" message={custError} />}
           <div>
             <label className="block text-xs font-semibold mb-1">Full Name *</label>
-            <input type="text" required value={custForm.full_name} onChange={(e) => setCustForm({ ...custForm, full_name: e.target.value })} className={INPUT_STYLES.base} />
+            <input type="text" required value={custForm.full_name} onChange={(e) => { setCustForm({ ...custForm, full_name: e.target.value }); setCustFieldErrors((p) => ({ ...p, full_name: "" })); }} aria-invalid={Boolean(custFieldErrors.full_name)} className={`${INPUT_STYLES.base} ${custFieldErrors.full_name ? "border-red-500" : ""}`} />
+            {custFieldErrors.full_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{custFieldErrors.full_name}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1">Mobile Number *</label>
-            <input type="text" required value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} className={INPUT_STYLES.base} />
+            <input type="text" required value={custForm.phone} onChange={(e) => { setCustForm({ ...custForm, phone: e.target.value }); setCustFieldErrors((p) => ({ ...p, phone: "" })); }} aria-invalid={Boolean(custFieldErrors.phone)} className={`${INPUT_STYLES.base} ${custFieldErrors.phone ? "border-red-500" : ""}`} />
+            {custFieldErrors.phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{custFieldErrors.phone}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1">Email *</label>
-            <input type="email" required value={custForm.email} onChange={(e) => setCustForm({ ...custForm, email: e.target.value })} className={INPUT_STYLES.base} />
+            <input type="email" required value={custForm.email} onChange={(e) => { setCustForm({ ...custForm, email: e.target.value }); setCustFieldErrors((p) => ({ ...p, email: "" })); }} aria-invalid={Boolean(custFieldErrors.email)} className={`${INPUT_STYLES.base} ${custFieldErrors.email ? "border-red-500" : ""}`} />
+            {custFieldErrors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{custFieldErrors.email}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1">Address</label>

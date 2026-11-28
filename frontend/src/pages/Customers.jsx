@@ -20,6 +20,7 @@ import StatCard from "../components/StatCard";
 import Pagination from "../components/Pagination";
 import BulkSelectionBar from "../components/BulkSelectionBar";
 import useBulkSelection from "../hooks/useBulkSelection";
+import { validateEmailAddress, validateMobileNumber } from "../utils/validation";
 
 const EMPTY_FORM = {
   full_name: "",
@@ -63,6 +64,7 @@ export default function Customers() {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [isImageRemoved, setIsImageRemoved] = useState(false);
 
@@ -131,6 +133,7 @@ export default function Customers() {
     setEditingCustomer(null);
     setForm(EMPTY_FORM);
     setFormError("");
+    setFieldErrors({});
     setSelectedImageFile(null);
     setIsImageRemoved(false);
     setShowModal(true);
@@ -151,6 +154,7 @@ export default function Customers() {
     });
 
     setFormError("");
+    setFieldErrors({});
     setSelectedImageFile(null);
     setIsImageRemoved(false);
     setShowModal(true);
@@ -167,6 +171,7 @@ export default function Customers() {
       ...previous,
       [name]: value,
     }));
+    setFieldErrors((previous) => ({ ...previous, [name]: "" }));
   };
 
   // ==========================================
@@ -176,27 +181,26 @@ export default function Customers() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    setSaving(true);
     setFormError("");
+    const nextFieldErrors = {};
+    if (form.full_name.trim().length < 2) {
+      nextFieldErrors.full_name = "Full name must contain at least 2 characters.";
+    }
+    const phoneCheck = validateMobileNumber(form.phone, { required: true });
+    if (!phoneCheck.valid) nextFieldErrors.phone = phoneCheck.error;
 
-    const trimmedEmail = form.email.trim().toLowerCase();
-    if (!trimmedEmail) {
-      setFormError("Email address is mandatory for all customer records.");
-      setSaving(false);
+    const emailCheck = validateEmailAddress(form.email, { required: true });
+    if (!emailCheck.valid) nextFieldErrors.email = emailCheck.error;
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setFormError("Please enter a valid email address (e.g. name@domain.com).");
-      setSaving(false);
-      return;
-    }
+    setSaving(true);
 
     const customerData = {
       full_name: form.full_name.trim(),
-      phone: form.phone.trim(),
-      email: trimmedEmail,
+      phone: phoneCheck.normalized,
+      email: emailCheck.normalized,
       address: form.address.trim() || null,
     };
 
@@ -310,7 +314,7 @@ export default function Customers() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Customers"
@@ -318,16 +322,16 @@ export default function Customers() {
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
           >
-            <Plus size={18} />
+            <Plus size={17} />
             <span>Add Customer</span>
           </button>
         }
       />
 
       {/* METRIC OVERVIEW */}
-      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard
           compact
           title="Registered Guests"
@@ -356,19 +360,19 @@ export default function Customers() {
       <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelected} onClear={clear} />
       <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND REFRESH */}
-        <div className="flex flex-col gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-stone-900 dark:text-white">Registered Customers</h2>
+            <h2 className="text-sm sm:text-base font-bold text-stone-900 dark:text-white">Registered Customers</h2>
             <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredCustomers.length} {filteredCustomers.length === 1 ? "record" : "records"} found
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="relative">
               <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
               <input
                 type="text"
@@ -378,7 +382,7 @@ export default function Customers() {
                   setSearch(event.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-72"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-1.5 pl-8 pr-3 text-xs text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-56"
               />
             </div>
 
@@ -387,24 +391,27 @@ export default function Customers() {
               onClick={loadCustomers}
               disabled={loading}
               title="Refresh customers"
-              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-2 text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#101722] transition cursor-pointer"
+              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-1.5 text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#101722] transition cursor-pointer"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
         {/* TABLE */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+          <table className="w-full min-w-[700px] text-left">
+            <colgroup>
+              <col className="w-10" />
+            </colgroup>
+            <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
-                <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all customers on this page" checked={paginatedCustomers.length > 0 && paginatedCustomers.every((customer) => selectedIds.has(customer.id))} onChange={() => toggleMany(paginatedCustomers.map((customer) => customer.id))} className="h-4 w-4 accent-amber-500" /></th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Phone Number</th>
-                <th className="px-4 py-3">Email Address</th>
-                <th className="px-4 py-3">Address</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label="Select all customers on this page" checked={paginatedCustomers.length > 0 && paginatedCustomers.every((customer) => selectedIds.has(customer.id))} onChange={() => toggleMany(paginatedCustomers.map((customer) => customer.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className="px-3.5 py-2.5">Customer</th>
+                <th className="px-3.5 py-2.5">Phone Number</th>
+                <th className="px-3.5 py-2.5">Email Address</th>
+                <th className="px-3.5 py-2.5">Address</th>
+                <th className="px-3.5 py-2.5 text-center">Actions</th>
               </tr>
             </thead>
 
@@ -413,7 +420,7 @@ export default function Customers() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
+                    className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     Loading customer records...
                   </td>
@@ -422,7 +429,7 @@ export default function Customers() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
+                    className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     No customers found.
                   </td>
@@ -433,11 +440,11 @@ export default function Customers() {
                     key={customer.id}
                     className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40"
                   >
-                    <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select customer ${customer.full_name}`} checked={selectedIds.has(customer.id)} onChange={() => toggle(customer.id)} className="h-4 w-4 accent-amber-500" /></td>
+                    <td className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label={`Select customer ${customer.full_name}`} checked={selectedIds.has(customer.id)} onChange={() => toggle(customer.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* CUSTOMER */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 shadow-2xs">
+                    <td className="px-3.5 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] text-xs font-bold border border-[#F59E0B]/50 shadow-2xs">
                           <AuthenticatedImage
                             src={customer.image_url}
                             alt={customer.full_name}
@@ -446,10 +453,10 @@ export default function Customers() {
                         </div>
 
                         <div className="min-w-0">
-                          <p className="font-semibold text-stone-900 dark:text-white">
+                          <p className="font-semibold text-stone-900 dark:text-white leading-tight">
                             {customer.full_name}
                           </p>
-                          <p className="text-xs text-stone-400">
+                          <p className="text-[11px] text-stone-400">
                             ID: #{customer.id}
                           </p>
                         </div>
@@ -457,48 +464,48 @@ export default function Customers() {
                     </td>
 
                     {/* PHONE */}
-                    <td className="px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-300">
+                    <td className="px-3.5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-300 whitespace-nowrap">
                       {customer.phone}
                     </td>
 
                     {/* EMAIL */}
-                    <td className="max-w-[200px] truncate px-4 py-3 text-sm text-stone-600 dark:text-stone-400">
+                    <td className="max-w-[200px] truncate px-3.5 py-2.5 text-sm text-stone-600 dark:text-stone-400">
                       {customer.email || "—"}
                     </td>
 
                     {/* ADDRESS */}
-                    <td className="max-w-[220px] truncate px-4 py-3 text-sm text-stone-600 dark:text-stone-400">
+                    <td className="max-w-[220px] truncate px-3.5 py-2.5 text-sm text-stone-600 dark:text-stone-400">
                       {customer.address || "—"}
                     </td>
 
                     {/* ACTIONS */}
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={() => openViewModal(customer)}
                           title="View customer"
-                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
+                          className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
-                          <Eye size={16} />
+                          <Eye size={15} />
                         </button>
 
                         <button
                           type="button"
                           onClick={() => openEditModal(customer)}
                           title="Edit customer"
-                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
+                          className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
-                          <Pencil size={16} />
+                          <Pencil size={15} />
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleDelete(customer)}
                           title="Delete customer"
-                          className="rounded-lg p-2 text-stone-400 dark:text-stone-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-400 transition cursor-pointer"
+                          className="rounded-lg p-1.5 text-stone-400 dark:text-stone-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-700 dark:hover:text-red-400 transition cursor-pointer"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -510,15 +517,14 @@ export default function Customers() {
         </div>
 
         {/* PAGINATION (10 per page) */}
-        <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalRecords={filteredCustomers.length}
-            pageSize={pageSize}
-            onPageChange={(p) => setCurrentPage(p)}
-          />
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRecords={filteredCustomers.length}
+          pageSize={pageSize}
+          onPageChange={(p) => setCurrentPage(p)}
+          className="px-4 pb-3"
+        />
       </div>
 
       {/* ADD / EDIT CUSTOMER MODAL */}
@@ -559,6 +565,7 @@ export default function Customers() {
               required
               minLength={2}
               maxLength={100}
+              error={fieldErrors.full_name}
             />
 
             <FormField
@@ -570,6 +577,7 @@ export default function Customers() {
               placeholder="e.g. 9876543210"
               required
               maxLength={16}
+              error={fieldErrors.phone}
             />
 
             <FormField
@@ -581,6 +589,7 @@ export default function Customers() {
               placeholder="e.g. rahul@example.com"
               required
               maxLength={150}
+              error={fieldErrors.email}
             />
 
             <div>
@@ -723,6 +732,7 @@ function FormField({
   required,
   minLength,
   maxLength,
+  error,
 }) {
   return (
     <div>
@@ -739,8 +749,11 @@ function FormField({
         required={required}
         minLength={minLength}
         maxLength={maxLength}
-        className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-[#F8FAFC] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${name}-error` : undefined}
+        className={`w-full rounded-lg border bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-[#F8FAFC] outline-none transition focus:ring-2 focus:ring-[#F59E0B]/30 ${error ? "border-red-500 focus:border-red-500" : "border-stone-300 dark:border-[#1E293B] focus:border-[#F59E0B]"}`}
       />
+      {error && <p id={`${name}-error`} className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }

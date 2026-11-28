@@ -108,6 +108,7 @@ export default function ActivitiesCatalog() {
   const [editingAct, setEditingAct] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   // Detail Modal (Overview | Resources | Media)
@@ -182,6 +183,7 @@ export default function ActivitiesCatalog() {
     setEditingAct(null);
     setForm(INITIAL_FORM);
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -210,6 +212,7 @@ export default function ActivitiesCatalog() {
       status: act.status || "Active",
     });
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -233,27 +236,29 @@ export default function ActivitiesCatalog() {
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError("");
+    const nextFieldErrors = {};
     const minP = Number(form.min_participants);
     const maxP = Number(form.max_participants);
     const dur = Number(form.duration_minutes);
-    if (!form.name.trim() || !form.activity_code.trim()) {
-      setFormError("Activity name and code are required.");
-      return;
-    }
+    if (!form.name.trim()) nextFieldErrors.name = "Activity name is required.";
+    if (!form.activity_code.trim()) nextFieldErrors.activity_code = "Activity code is required.";
     if (!Number.isFinite(dur) || dur < 1) {
-      setFormError("Duration must be greater than 0 minutes.");
-      return;
+      nextFieldErrors.duration_minutes = "Duration must be greater than 0 minutes.";
     }
-    if (minP < 1 || maxP < minP) {
-      setFormError("Max participants must be greater than or equal to Min participants (>= 1).");
-      return;
+    if (minP < 1) {
+      nextFieldErrors.min_participants = "Minimum participants must be at least 1.";
+    } else if (maxP < minP) {
+      nextFieldErrors.max_participants = "Maximum participants must be at least the minimum.";
     }
     if (
       !form.is_complimentary &&
       String(form.price_per_person).trim() === "" &&
       String(form.price_per_group).trim() === ""
     ) {
-      setFormError("Configure Price Per Person, Price Per Group, or mark as Complimentary.");
+      nextFieldErrors.pricing = "Enter a per-person or per-group price, or mark the activity as complimentary.";
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -627,11 +632,11 @@ export default function ActivitiesCatalog() {
         <StatCard compact className="!p-2.5" title="Walk-In Activities" value={loading ? "—" : walkInCount} icon={Users} color="sky" />
       </div>
 
-      {/* BALANCED TOOLBAR */}
-      <div className={`${CARD_STYLES.base} !p-2.5`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 flex-1">
-            <div className="relative w-full sm:w-56">
+      {/* SEPARATED TOOLBAR: SEARCH/FILTERS LEFT, TABLE/CARDS TOGGLE RIGHT */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className={`${CARD_STYLES.base} w-fit max-w-full !p-2`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-56 max-w-full">
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
@@ -672,33 +677,33 @@ export default function ActivitiesCatalog() {
               ))}
             </select>
           </div>
+        </div>
 
-          <div className="inline-flex items-center rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] p-0.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                viewMode === "table"
-                  ? "bg-white dark:bg-[#101722] text-[#172033] dark:text-white shadow-2xs"
-                  : "text-stone-500"
-              }`}
-            >
-              <List size={13} />
-              <span>Table</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("cards")}
-              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                viewMode === "cards"
-                  ? "bg-white dark:bg-[#101722] text-[#172033] dark:text-white shadow-2xs"
-                  : "text-stone-500"
-              }`}
-            >
-              <LayoutGrid size={13} />
-              <span>Cards</span>
-            </button>
-          </div>
+        <div className="inline-flex items-center rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1 gap-1 shrink-0 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+              viewMode === "table"
+                ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+            }`}
+          >
+            <List size={13} />
+            <span>Table</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("cards")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+              viewMode === "cards"
+                ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+            }`}
+          >
+            <LayoutGrid size={13} />
+            <span>Cards</span>
+          </button>
         </div>
       </div>
 
@@ -910,10 +915,12 @@ export default function ActivitiesCatalog() {
                 type="text"
                 required
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => { setForm({ ...form, name: e.target.value }); setFieldErrors((p) => ({ ...p, name: "" })); }}
                 placeholder="e.g. Morning Yoga, Tennis Court"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(fieldErrors.name)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.name ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.name}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -923,10 +930,12 @@ export default function ActivitiesCatalog() {
                 type="text"
                 required
                 value={form.activity_code}
-                onChange={(e) => setForm({ ...form, activity_code: e.target.value })}
+                onChange={(e) => { setForm({ ...form, activity_code: e.target.value }); setFieldErrors((p) => ({ ...p, activity_code: "" })); }}
                 placeholder="e.g. ACT-YOGA"
-                className={`${INPUT_STYLES.base} font-mono uppercase`}
+                aria-invalid={Boolean(fieldErrors.activity_code)}
+                className={`${INPUT_STYLES.base} font-mono uppercase ${fieldErrors.activity_code ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.activity_code && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.activity_code}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -994,9 +1003,11 @@ export default function ActivitiesCatalog() {
                 min={1}
                 required
                 value={form.duration_minutes}
-                onChange={(e) => setForm({ ...form, duration_minutes: e.target.value })}
-                className={INPUT_STYLES.base}
+                onChange={(e) => { setForm({ ...form, duration_minutes: e.target.value }); setFieldErrors((p) => ({ ...p, duration_minutes: "" })); }}
+                aria-invalid={Boolean(fieldErrors.duration_minutes)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.duration_minutes ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.duration_minutes && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.duration_minutes}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1007,9 +1018,11 @@ export default function ActivitiesCatalog() {
                 min={1}
                 required
                 value={form.min_participants}
-                onChange={(e) => setForm({ ...form, min_participants: e.target.value })}
-                className={INPUT_STYLES.base}
+                onChange={(e) => { setForm({ ...form, min_participants: e.target.value }); setFieldErrors((p) => ({ ...p, min_participants: "", max_participants: "" })); }}
+                aria-invalid={Boolean(fieldErrors.min_participants)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.min_participants ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.min_participants && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.min_participants}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1020,9 +1033,11 @@ export default function ActivitiesCatalog() {
                 min={1}
                 required
                 value={form.max_participants}
-                onChange={(e) => setForm({ ...form, max_participants: e.target.value })}
-                className={INPUT_STYLES.base}
+                onChange={(e) => { setForm({ ...form, max_participants: e.target.value }); setFieldErrors((p) => ({ ...p, max_participants: "" })); }}
+                aria-invalid={Boolean(fieldErrors.max_participants)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.max_participants ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.max_participants && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.max_participants}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1177,6 +1192,7 @@ export default function ActivitiesCatalog() {
                   className={INPUT_STYLES.base}
                 />
               </div>
+              {fieldErrors.pricing && <p className="mt-1 text-xs text-red-600 dark:text-red-400 sm:col-span-2">{fieldErrors.pricing}</p>}
             </div>
           )}
 

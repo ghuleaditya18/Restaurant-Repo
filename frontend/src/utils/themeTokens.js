@@ -70,9 +70,9 @@ export const BUTTON_VARIANTS = {
 };
 
 export const INPUT_STYLES = {
-  base: "w-full rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3.5 py-2 text-sm text-[#172033] dark:text-[#F8FAFC] placeholder-[#8A9AB2] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20",
+  base: "w-full rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-1.5 text-sm text-[#172033] dark:text-[#F8FAFC] placeholder-[#8A9AB2] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20",
   select:
-    "w-full rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3.5 py-2 text-sm text-[#172033] dark:text-[#F8FAFC] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20",
+    "w-full rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-1.5 text-sm text-[#172033] dark:text-[#F8FAFC] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/20",
 };
 
 export const CARD_STYLES = {

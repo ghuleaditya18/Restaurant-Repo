@@ -216,6 +216,7 @@ export default function Invoices() {
   // Errors
   const [error, setError] = useState("");
   const [generateError, setGenerateError] = useState("");
+  const [generateFieldErrors, setGenerateFieldErrors] = useState({});
 
   // ==========================================
   // LOAD ALL DATA
@@ -459,15 +460,14 @@ export default function Invoices() {
   const handleGenerateInvoice = async (event) => {
     event.preventDefault();
 
-    if (!selectedOrder) {
-      setGenerateError("Please select an order.");
-      return;
-    }
-
+    const nextFieldErrors = {};
+    if (!selectedOrder) nextFieldErrors.order = "Select a served order.";
     const rate = Number(gstRate);
-
     if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
-      setGenerateError("GST rate must be between 0 and 100.");
+      nextFieldErrors.gstRate = "Enter a GST rate between 0 and 100.";
+    }
+    setGenerateFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -792,25 +792,24 @@ export default function Invoices() {
   // ==========================================
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Invoices"
-        description="Generate invoices and manage customer payments."
         actions={
           <button
             type="button"
             onClick={openGenerateInvoiceModal}
-            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer transition"
+            className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer transition"
           >
-            <Plus size={18} />
+            <Plus size={17} />
             <span>Generate Invoice</span>
           </button>
         }
       />
 
       {/* DATE FILTER */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <DateFilter
           selectedPreset={dateFilter.preset}
           startDate={dateFilter.startDate}
@@ -825,7 +824,7 @@ export default function Invoices() {
 
       {/* SUMMARY CARDS */}
 
-      <div className="mb-5 grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard
           compact
           title="Total Invoices"
@@ -868,11 +867,11 @@ export default function Invoices() {
       </div>
 
       {/* TABS */}
-      <div className="mb-4 flex border-b border-[#E5E9F0] dark:border-[#1E293B]">
+      <div className="flex border-b border-[#E5E9F0] dark:border-[#1E293B]">
         <button
           type="button"
           onClick={() => setActiveTab("invoices")}
-          className={`border-b-2 px-5 py-3 text-sm font-semibold transition cursor-pointer ${
+          className={`border-b-2 px-4 py-2.5 text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeTab === "invoices"
               ? "border-[#F59E0B] text-stone-900 dark:text-white font-bold"
               : "border-transparent text-stone-500 hover:text-stone-900 dark:hover:text-stone-300"
@@ -883,7 +882,7 @@ export default function Invoices() {
         <button
           type="button"
           onClick={() => setActiveTab("transactions")}
-          className={`border-b-2 px-5 py-3 text-sm font-semibold transition cursor-pointer ${
+          className={`border-b-2 px-4 py-2.5 text-xs sm:text-sm font-semibold transition cursor-pointer ${
             activeTab === "transactions"
               ? "border-[#F59E0B] text-stone-900 dark:text-white font-bold"
               : "border-transparent text-stone-500 hover:text-stone-900 dark:hover:text-stone-300"
@@ -897,22 +896,22 @@ export default function Invoices() {
 
       {activeTab === "invoices" && (
       <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722]">
-        <div className="flex flex-col justify-between gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center">
+        <div className="flex flex-col justify-between gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-3 md:flex-row md:items-center">
           <div>
-            <h2 className="font-semibold text-stone-900 dark:text-white">
+            <h2 className="text-sm sm:text-base font-semibold text-stone-900 dark:text-white">
               Restaurant Invoices
             </h2>
 
-            <p className="mt-1 text-xs text-stone-500 dark:text-[#8A9AB2]">
+            <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredInvoices.length} invoices found
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
 
               <input
@@ -922,7 +921,7 @@ export default function Invoices() {
                   setInvoicePage(1);
                 }}
                 placeholder="Search invoice..."
-                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-64"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-48"
               />
             </div>
 
@@ -932,7 +931,7 @@ export default function Invoices() {
                 setPaymentStatusFilter(e.target.value);
                 setInvoicePage(1);
               }}
-              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-2.5 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-2.5 py-1.5 text-xs outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Payment Statuses</option>
               <option value="PAID">Paid</option>
@@ -944,39 +943,42 @@ export default function Invoices() {
               onClick={() => loadData()}
               disabled={loading}
               title="Refresh invoices"
-              className="rounded-lg border border-[#E7E5E4] px-3 text-gray-600 hover:bg-[#FAFAF9] disabled:opacity-50"
+              className="rounded-lg border border-[#E7E5E4] dark:border-[#1E293B] p-1.5 text-gray-600 dark:text-[#8A9AB2] hover:bg-[#FAFAF9] dark:hover:bg-[#151D29] disabled:opacity-50 cursor-pointer"
             >
-              <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-2">
           <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedInvoices} onClear={clear} />
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-left">
-            <thead className="bg-[#FAF9F6] text-xs uppercase text-gray-500">
+          <table className="w-full min-w-[780px] text-left">
+            <colgroup>
+              <col className="w-10" />
+            </colgroup>
+            <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-[11px] uppercase text-gray-500 dark:text-[#8A9AB2]">
               <tr>
-                <th className="px-4 py-3"><input type="checkbox" aria-label="Select deletable invoices on this page" checked={paginatedInvoices.filter(canDeleteInvoice).length > 0 && paginatedInvoices.filter(canDeleteInvoice).every((invoice) => selectedIds.has(invoice.id))} onChange={() => toggleMany(paginatedInvoices.filter(canDeleteInvoice).map((invoice) => invoice.id))} className="h-4 w-4 accent-amber-500" /></th>
-                <th className="px-4 py-3">Invoice Number</th>
-                <th className="px-4 py-3">Order</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Subtotal</th>
-                <th className="px-4 py-3">GST</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Payment Status</th>
-                <th className="px-4 py-3">Actions</th>
+                <th className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label="Select deletable invoices on this page" checked={paginatedInvoices.filter(canDeleteInvoice).length > 0 && paginatedInvoices.filter(canDeleteInvoice).every((invoice) => selectedIds.has(invoice.id))} onChange={() => toggleMany(paginatedInvoices.filter(canDeleteInvoice).map((invoice) => invoice.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className="px-3.5 py-2.5">Invoice Number</th>
+                <th className="px-3.5 py-2.5">Order</th>
+                <th className="px-3.5 py-2.5">Customer</th>
+                <th className="px-3.5 py-2.5">Subtotal</th>
+                <th className="px-3.5 py-2.5">GST</th>
+                <th className="px-3.5 py-2.5">Total</th>
+                <th className="px-3.5 py-2.5">Payment Status</th>
+                <th className="px-3.5 py-2.5">Actions</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-[#F0ECE6]">
+            <tbody className="divide-y divide-[#F0ECE6] dark:divide-[#1E293B]">
               {loading ? (
                 <tr>
                   <td
                     colSpan="9"
-                    className="p-10 text-center text-sm text-gray-500"
+                    className="p-8 text-center text-sm text-gray-500"
                   >
                     Loading invoices...
                   </td>
@@ -985,62 +987,62 @@ export default function Invoices() {
                 <tr>
                   <td
                     colSpan="9"
-                    className="p-10 text-center text-sm text-gray-500"
+                    className="p-8 text-center text-sm text-gray-500"
                   >
                     No invoices found.
                   </td>
                 </tr>
               ) : (
                 paginatedInvoices.map((invoice) => (
-                  <tr key={invoice.id} className="hover:bg-[#FAF9F6]">
-                    <td className="px-4 py-4"><input type="checkbox" aria-label={`Select invoice ${invoice.invoice_number}`} checked={selectedIds.has(invoice.id)} disabled={!canDeleteInvoice(invoice)} onChange={() => toggle(invoice.id)} title={canDeleteInvoice(invoice) ? "Select invoice for deletion" : "Only unpaid invoices with no payment records can be deleted"} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
-                    <td className="px-4 py-4">
-                      <p className="font-semibold text-stone-900 dark:text-stone-100">
+                  <tr key={invoice.id} className="hover:bg-[#FAF9F6] dark:hover:bg-[#151D29]/60">
+                    <td className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label={`Select invoice ${invoice.invoice_number}`} checked={selectedIds.has(invoice.id)} disabled={!canDeleteInvoice(invoice)} onChange={() => toggle(invoice.id)} title={canDeleteInvoice(invoice) ? "Select invoice for deletion" : "Only unpaid invoices with no payment records can be deleted"} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
+                    <td className="px-3.5 py-2.5">
+                      <p className="font-semibold text-stone-900 dark:text-stone-100 leading-tight">
                         {invoice.invoice_number}
                       </p>
 
-                      <p className="mt-1 text-xs text-stone-500">
+                      <p className="mt-0.5 text-[11px] text-stone-500">
                         ID: {invoice.id}
                       </p>
                     </td>
 
-                    <td className="px-4 py-4 text-sm">
+                    <td className="px-3.5 py-2.5 text-sm">
                       {invoice.order_number}
                     </td>
 
-                    <td className="px-4 py-4 text-sm">
+                    <td className="px-3.5 py-2.5 text-sm">
                       {invoice.customer_name}
                     </td>
 
-                    <td className="px-4 py-4 text-sm">
+                    <td className="px-3.5 py-2.5 text-sm">
                       {formatCurrency(invoice.subtotal)}
                     </td>
 
-                    <td className="px-4 py-4 text-sm">
+                    <td className="px-3.5 py-2.5 text-sm">
                       {Number(invoice.gst_rate)}%
                     </td>
 
-                    <td className="px-4 py-4 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                    <td className="px-3.5 py-2.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                       {formatCurrency(invoice.total_amount)}
                     </td>
 
-                    <td className="px-4 py-4">
+                    <td className="px-3.5 py-2.5">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyle(invoice.payment_status)}`}
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle(invoice.payment_status)}`}
                       >
                         {invoice.payment_status}
                       </span>
                     </td>
 
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
+                    <td className="px-3.5 py-2.5">
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => handleViewInvoice(invoice)}
                           title="View invoice"
-                          className="rounded-lg p-2 hover:bg-stone-100"
+                          className="rounded-lg p-1.5 hover:bg-stone-100 dark:hover:bg-[#1E293B] cursor-pointer"
                         >
-                          <Eye size={17} />
+                          <Eye size={15} />
                         </button>
 
                         {String(invoice.payment_status).toLowerCase() ===
@@ -1049,9 +1051,9 @@ export default function Invoices() {
                             type="button"
                             onClick={() => openPaymentModal(invoice)}
                             title="Record payment"
-                            className="rounded-lg p-2 text-stone-900 hover:bg-stone-100"
+                            className="rounded-lg p-1.5 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B] cursor-pointer"
                           >
-                            <CreditCard size={17} />
+                            <CreditCard size={15} />
                           </button>
                         )}
                         <button
@@ -1060,9 +1062,9 @@ export default function Invoices() {
                           disabled={!canDeleteInvoice(invoice)}
                           title={canDeleteInvoice(invoice) ? "Delete invoice" : "Only unpaid invoices with no payment records can be deleted"}
                           aria-label={`Delete invoice ${invoice.invoice_number}`}
-                          className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-rose-950/30"
+                          className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-rose-950/30 cursor-pointer"
                         >
-                          <Trash2 size={17} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -1074,27 +1076,26 @@ export default function Invoices() {
         </div>
 
         {/* PAGINATION (10 per page) */}
-        <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
-          <Pagination
-            currentPage={invoicePage}
-            totalPages={totalInvoicePages}
-            totalRecords={filteredInvoices.length}
-            pageSize={pageSize}
-            onPageChange={(p) => setInvoicePage(p)}
-          />
-        </div>
+        <Pagination
+          currentPage={invoicePage}
+          totalPages={totalInvoicePages}
+          totalRecords={filteredInvoices.length}
+          pageSize={pageSize}
+          onPageChange={(p) => setInvoicePage(p)}
+          className="px-4 pb-3"
+        />
       </div>
       )}
 
       {/* PAYMENT TRANSACTIONS TABLE */}
       {activeTab === "transactions" && (
         <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722]">
-          <div className="flex flex-col justify-between gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center">
+          <div className="flex flex-col justify-between gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-3 md:flex-row md:items-center">
             <div>
-              <h2 className="font-semibold text-stone-900 dark:text-white">
+              <h2 className="text-sm sm:text-base font-semibold text-stone-900 dark:text-white">
                 Payment Transactions
               </h2>
-              <p className="mt-1 text-xs text-stone-500 dark:text-[#8A9AB2]">
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
                 {filteredPayments.length} transactions recorded
               </p>
             </div>
@@ -1102,8 +1103,8 @@ export default function Invoices() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
                 <Search
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
+                  size={14}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
                 />
                 <input
                   value={transactionSearch}
@@ -1112,7 +1113,7 @@ export default function Invoices() {
                     setTransactionPage(1);
                   }}
                   placeholder="Search transaction or ref..."
-                  className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
+                  className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white py-1.5 pl-8 pr-3 text-xs outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-48"
                 />
               </div>
 
@@ -1122,7 +1123,7 @@ export default function Invoices() {
                   setTransactionStatusFilter(e.target.value);
                   setTransactionPage(1);
                 }}
-                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-2.5 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-2.5 py-1.5 text-xs outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="PAID">Paid</option>
@@ -1135,36 +1136,36 @@ export default function Invoices() {
                 onClick={() => loadData()}
                 disabled={loading}
                 title="Refresh payments"
-                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2.5 text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#101722] disabled:opacity-50"
+                className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-1.5 text-stone-600 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#101722] disabled:opacity-50 cursor-pointer"
               >
-                <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
               </button>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[800px] text-left">
-              <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-xs uppercase text-stone-500 dark:text-[#8A9AB2]">
+            <table className="w-full min-w-[780px] text-left">
+              <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-[11px] uppercase text-stone-500 dark:text-[#8A9AB2]">
                 <tr>
-                  <th className="px-4 py-3">Txn ID</th>
-                  <th className="px-4 py-3">Invoice Number</th>
-                  <th className="px-4 py-3">Payment Method</th>
-                  <th className="px-4 py-3">Reference Number</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Paid Date</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-3.5 py-2.5">Txn ID</th>
+                  <th className="px-3.5 py-2.5">Invoice Number</th>
+                  <th className="px-3.5 py-2.5">Payment Method</th>
+                  <th className="px-3.5 py-2.5">Reference Number</th>
+                  <th className="px-3.5 py-2.5">Amount</th>
+                  <th className="px-3.5 py-2.5">Paid Date</th>
+                  <th className="px-3.5 py-2.5">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E5E9F0] dark:divide-[#1E293B]">
                 {loading ? (
                   <tr>
-                    <td colSpan="7" className="p-10 text-center text-sm text-stone-500">
+                    <td colSpan="7" className="p-8 text-center text-sm text-stone-500">
                       Loading payments...
                     </td>
                   </tr>
                 ) : filteredPayments.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="p-10 text-center text-sm text-stone-500">
+                    <td colSpan="7" className="p-8 text-center text-sm text-stone-500">
                       No payment transactions found.
                     </td>
                   </tr>
@@ -1173,22 +1174,22 @@ export default function Invoices() {
                     const inv = invoiceMap[payment.invoice_id];
                     return (
                       <tr key={payment.id} className="hover:bg-stone-50 dark:hover:bg-[#151D29]">
-                        <td className="px-4 py-4 text-sm font-medium text-stone-900 dark:text-stone-100">
+                        <td className="px-3.5 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-100">
                           #{payment.id}
                         </td>
-                        <td className="px-4 py-4 text-sm text-stone-900 dark:text-stone-100 font-medium">
+                        <td className="px-3.5 py-2.5 text-sm text-stone-900 dark:text-stone-100 font-medium">
                           {inv?.invoice_number || `Invoice #${payment.invoice_id}`}
                         </td>
-                        <td className="px-4 py-4 text-sm text-stone-800 dark:text-stone-200">
+                        <td className="px-3.5 py-2.5 text-sm text-stone-800 dark:text-stone-200">
                           {payment.payment_method}
                         </td>
-                        <td className="px-4 py-4 text-sm text-stone-500 dark:text-[#8A9AB2]">
+                        <td className="px-3.5 py-2.5 text-sm text-stone-500 dark:text-[#8A9AB2]">
                           {payment.reference_number || "—"}
                         </td>
-                        <td className="px-4 py-4 text-sm font-semibold text-stone-900 dark:text-stone-100">
+                        <td className="px-3.5 py-2.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                           {formatCurrency(payment.amount)}
                         </td>
-                        <td className="px-4 py-4 text-sm text-gray-500">
+                        <td className="px-3.5 py-2.5 text-sm text-gray-500">
                           {payment.paid_at
                             ? new Date(payment.paid_at).toLocaleString("en-IN", {
                                 day: "2-digit",
@@ -1199,9 +1200,9 @@ export default function Invoices() {
                               })
                             : "—"}
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-3.5 py-2.5">
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-medium ${statusStyle(
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle(
                               payment.status,
                             )}`}
                           >
@@ -1217,15 +1218,14 @@ export default function Invoices() {
           </div>
 
           {/* PAGINATION (10 per page) */}
-          <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
-            <Pagination
-              currentPage={transactionPage}
-              totalPages={totalPaymentPages}
-              totalRecords={filteredPayments.length}
-              pageSize={pageSize}
-              onPageChange={(p) => setTransactionPage(p)}
-            />
-          </div>
+          <Pagination
+            currentPage={transactionPage}
+            totalPages={totalPaymentPages}
+            totalRecords={filteredPayments.length}
+            pageSize={pageSize}
+            onPageChange={(p) => setTransactionPage(p)}
+            className="px-4 pb-3"
+          />
         </div>
       )}
 
@@ -1248,10 +1248,11 @@ export default function Invoices() {
 
               <select
                 value={selectedOrder}
-                onChange={(event) => setSelectedOrder(event.target.value)}
+                onChange={(event) => { setSelectedOrder(event.target.value); setGenerateFieldErrors((previous) => ({ ...previous, order: "" })); }}
                 disabled={refreshingOrders}
                 required
-                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 disabled:bg-gray-50"
+                aria-invalid={Boolean(generateFieldErrors.order)}
+                className={`w-full rounded-lg border ${generateFieldErrors.order ? "border-red-500" : "border-[#E5E9F0] dark:border-[#1E293B]"} bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 disabled:bg-gray-50`}
               >
                 <option value="">
                   {refreshingOrders ? "Refreshing orders..." : "Choose order"}
@@ -1264,6 +1265,7 @@ export default function Invoices() {
                   </option>
                 ))}
               </select>
+              {generateFieldErrors.order && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{generateFieldErrors.order}</p>}
 
               {refreshingOrders && (
                 <p className="mt-2 text-xs text-gray-500">
@@ -1297,10 +1299,12 @@ export default function Invoices() {
                 max="100"
                 step="0.01"
                 value={gstRate}
-                onChange={(event) => setGstRate(event.target.value)}
+                onChange={(event) => { setGstRate(event.target.value); setGenerateFieldErrors((previous) => ({ ...previous, gstRate: "" })); }}
                 required
-                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+                aria-invalid={Boolean(generateFieldErrors.gstRate)}
+                className={`w-full rounded-lg border ${generateFieldErrors.gstRate ? "border-red-500" : "border-[#E5E9F0] dark:border-[#1E293B]"} bg-white dark:bg-[#151D29] text-stone-900 dark:text-white px-3 py-3 text-sm outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30`}
               />
+              {generateFieldErrors.gstRate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{generateFieldErrors.gstRate}</p>}
 
               <p className="mt-1 text-xs text-stone-500">
                 Enter the GST rate applicable to this invoice.

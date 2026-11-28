@@ -96,6 +96,7 @@ export default function ActivitiesSchedule() {
     notes: "",
   });
   const [sessError, setSessError] = useState("");
+  const [sessFieldError, setSessFieldError] = useState("");
   const [savingSess, setSavingSess] = useState(false);
 
   // Cancel Session Modal
@@ -117,6 +118,7 @@ export default function ActivitiesSchedule() {
     notes: "",
   });
   const [tplError, setTplError] = useState("");
+  const [tplFieldErrors, setTplFieldErrors] = useState({});
   const [savingTpl, setSavingTpl] = useState(false);
 
   // Generate Sessions from Schedule Modal
@@ -154,6 +156,7 @@ export default function ActivitiesSchedule() {
     is_active: true,
   });
   const [staffFormError, setStaffFormError] = useState("");
+  const [staffFieldErrors, setStaffFieldErrors] = useState({});
   const [savingStaff, setSavingStaff] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -209,6 +212,7 @@ export default function ActivitiesSchedule() {
 
   useEffect(() => {
     if (searchParams.get("new")) {
+      setSessFieldError("");
       setSessModalOpen(true);
       searchParams.delete("new");
       setSearchParams(searchParams, { replace: true });
@@ -230,6 +234,7 @@ export default function ActivitiesSchedule() {
       notes: "",
     });
     setSessError("");
+    setSessFieldError("");
     setSessModalOpen(true);
   };
 
@@ -245,14 +250,16 @@ export default function ActivitiesSchedule() {
       notes: s.notes || "",
     });
     setSessError("");
+    setSessFieldError("");
     setSessModalOpen(true);
   };
 
   const handleSaveSession = async (e) => {
     e.preventDefault();
     setSessError("");
+    setSessFieldError("");
     if (!sessForm.activity_id) {
-      setSessError("Select a session activity.");
+      setSessFieldError("Select a session activity.");
       return;
     }
     setSavingSess(true);
@@ -321,12 +328,15 @@ export default function ActivitiesSchedule() {
   const handleSaveTemplate = async (e) => {
     e.preventDefault();
     setTplError("");
+    const errors = {};
     if (!tplForm.activity_id) {
-      setTplError("Select an activity.");
-      return;
+      errors.activity_id = "Select an activity.";
     }
     if (tplForm.operating_weekdays.length === 0) {
-      setTplError("Select at least one operating weekday.");
+      errors.operating_weekdays = "Select at least one operating weekday.";
+    }
+    setTplFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setSavingTpl(true);
@@ -480,6 +490,7 @@ export default function ActivitiesSchedule() {
       is_active: true,
     });
     setStaffFormError("");
+    setStaffFieldErrors({});
     setStaffModalOpen(true);
   };
 
@@ -495,24 +506,27 @@ export default function ActivitiesSchedule() {
       is_active: Boolean(u.is_active),
     });
     setStaffFormError("");
+    setStaffFieldErrors({});
     setStaffModalOpen(true);
   };
 
   const handleSaveInstructor = async (e) => {
     e.preventDefault();
     setStaffFormError("");
+    const errors = {};
     if (staffForm.full_name.trim().length < 2) {
-      setStaffFormError("Instructor name must be at least 2 characters.");
-      return;
+      errors.full_name = "Instructor name must be at least 2 characters.";
     }
     const emailCheck = validateEmailAddress(staffForm.email, { required: true });
     if (!emailCheck.valid) {
-      setStaffFormError(emailCheck.error);
-      return;
+      errors.email = emailCheck.error;
     }
     const phoneCheck = validateMobileNumber(staffForm.phone, { required: true });
     if (!phoneCheck.valid) {
-      setStaffFormError(phoneCheck.error);
+      errors.phone = phoneCheck.error;
+    }
+    setStaffFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setSavingStaff(true);
@@ -767,6 +781,7 @@ export default function ActivitiesSchedule() {
                   default_capacity: firstAct?.max_participants || 10,
                 }));
                 setTplError("");
+                setTplFieldErrors({});
                 setTplOpen(true);
               }}
               className={BUTTON_VARIANTS.secondary}
@@ -1416,6 +1431,7 @@ export default function ActivitiesSchedule() {
                 disabled={Boolean(editingSession)}
                 value={sessForm.activity_id}
                 onChange={(e) => {
+                  setSessFieldError("");
                   const act = sessionActivities.find((a) => String(a.id) === e.target.value);
                   setSessForm({
                     ...sessForm,
@@ -1424,13 +1440,15 @@ export default function ActivitiesSchedule() {
                     assigned_staff_id: act?.default_staff_id ? String(act.default_staff_id) : "",
                   });
                 }}
-                className={INPUT_STYLES.select}
+                aria-invalid={Boolean(sessFieldError)}
+                className={`${INPUT_STYLES.select} ${sessFieldError ? "border-red-500" : ""}`}
               >
                 <option value="">Select session activity...</option>
                 {sessionActivities.map((a) => (
                   <option key={a.id} value={a.id}>{a.name} ({a.duration_minutes} min)</option>
                 ))}
               </select>
+              {sessFieldError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{sessFieldError}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1574,14 +1592,16 @@ export default function ActivitiesSchedule() {
               <select
                 required
                 value={tplForm.activity_id}
-                onChange={(e) => setTplForm({ ...tplForm, activity_id: e.target.value })}
-                className={INPUT_STYLES.select}
+                onChange={(e) => { setTplForm({ ...tplForm, activity_id: e.target.value }); setTplFieldErrors((p) => ({ ...p, activity_id: "" })); }}
+                aria-invalid={Boolean(tplFieldErrors.activity_id)}
+                className={`${INPUT_STYLES.select} ${tplFieldErrors.activity_id ? "border-red-500" : ""}`}
               >
                 <option value="">Select activity...</option>
                 {sessionActivities.map((a) => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
+              {tplFieldErrors.activity_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{tplFieldErrors.activity_id}</p>}
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1601,6 +1621,7 @@ export default function ActivitiesSchedule() {
                             ? f.operating_weekdays.filter((x) => x !== wd.id)
                             : [...f.operating_weekdays, wd.id].sort(),
                         }));
+                        setTplFieldErrors((p) => ({ ...p, operating_weekdays: "" }));
                       }}
                       className={`rounded-lg px-2.5 py-1 text-xs font-semibold border cursor-pointer ${
                         selected
@@ -1613,6 +1634,7 @@ export default function ActivitiesSchedule() {
                   );
                 })}
               </div>
+              {tplFieldErrors.operating_weekdays && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{tplFieldErrors.operating_weekdays}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">Valid From *</label>
@@ -1804,10 +1826,12 @@ export default function ActivitiesSchedule() {
                 type="text"
                 required
                 value={staffForm.full_name}
-                onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
+                onChange={(e) => { setStaffForm({ ...staffForm, full_name: e.target.value }); setStaffFieldErrors((p) => ({ ...p, full_name: "" })); }}
                 placeholder="e.g. Ananya Rao"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(staffFieldErrors.full_name)}
+                className={`${INPUT_STYLES.base} ${staffFieldErrors.full_name ? "border-red-500" : ""}`}
               />
+              {staffFieldErrors.full_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{staffFieldErrors.full_name}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1829,10 +1853,12 @@ export default function ActivitiesSchedule() {
                 type="email"
                 required
                 value={staffForm.email}
-                onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                onChange={(e) => { setStaffForm({ ...staffForm, email: e.target.value }); setStaffFieldErrors((p) => ({ ...p, email: "" })); }}
                 placeholder="instructor@newaraai.dev"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(staffFieldErrors.email)}
+                className={`${INPUT_STYLES.base} ${staffFieldErrors.email ? "border-red-500" : ""}`}
               />
+              {staffFieldErrors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{staffFieldErrors.email}</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">
@@ -1842,10 +1868,12 @@ export default function ActivitiesSchedule() {
                 type="tel"
                 required
                 value={staffForm.phone}
-                onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                onChange={(e) => { setStaffForm({ ...staffForm, phone: e.target.value }); setStaffFieldErrors((p) => ({ ...p, phone: "" })); }}
                 placeholder="10-digit mobile number"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(staffFieldErrors.phone)}
+                className={`${INPUT_STYLES.base} ${staffFieldErrors.phone ? "border-red-500" : ""}`}
               />
+              {staffFieldErrors.phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{staffFieldErrors.phone}</p>}
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-bold text-stone-700 dark:text-stone-300">

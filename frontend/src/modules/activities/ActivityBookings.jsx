@@ -112,12 +112,14 @@ export default function ActivityBookings() {
   });
 
   const [createError, setCreateError] = useState("");
+  const [createFieldErrors, setCreateFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   // Quick Inline Customer Creation Modal
   const [custOpen, setCustOpen] = useState(false);
   const [custForm, setCustForm] = useState(INITIAL_CUSTOMER_FORM);
   const [custError, setCustError] = useState("");
+  const [custFieldErrors, setCustFieldErrors] = useState({});
   const [savingCust, setSavingCust] = useState(false);
 
   // Booking Detail Modal
@@ -288,11 +290,17 @@ export default function ActivityBookings() {
 
   const handleCheckAvailability = async () => {
     if (!bookingForm.resource_id || !bookingForm.slot_date || !bookingForm.slot_start_time || !bookingForm.slot_end_time) {
-      setCreateError("Select resource, date, start time, and end time first.");
+      setCreateFieldErrors({
+        ...(!bookingForm.resource_id ? { resource_id: "Select a resource." } : {}),
+        ...(!bookingForm.slot_date ? { slot_date: "Select a date." } : {}),
+        ...(!bookingForm.slot_start_time ? { slot_start_time: "Select a start time." } : {}),
+        ...(!bookingForm.slot_end_time ? { slot_end_time: "Select an end time." } : {}),
+      });
       return;
     }
     setCheckingAvail(true);
     setCreateError("");
+    setCreateFieldErrors({});
     try {
       const res = await activitiesApi.resourceAvailability(bookingForm.resource_id, {
         slot_date: bookingForm.slot_date,
@@ -319,10 +327,17 @@ export default function ActivityBookings() {
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     if (!selectedActivity) {
-      setCreateError("Select an activity first.");
+      setCreateFieldErrors({ activity: "Select an activity first." });
       return;
     }
     setCreateError("");
+    const errors = {};
+    if (!selectedActivityId) errors.activity = "Select an activity first.";
+    if (selectedActivity.booking_type !== "walk_in" && !bookingForm.customer_id) errors.customer_id = "Select a customer.";
+    if (selectedActivity.booking_type === "session" && !bookingForm.session_id) errors.session_id = "Select a scheduled session.";
+    if (selectedActivity.booking_type === "time_slot" && !bookingForm.resource_id) errors.resource_id = "Select a bookable resource.";
+    setCreateFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     setSubmitting(true);
     try {
       if (selectedActivity.booking_type === "walk_in") {
@@ -339,12 +354,6 @@ export default function ActivityBookings() {
         setCreateOpen(false);
         setTab("walkin");
         await loadData();
-        return;
-      }
-
-      if (!bookingForm.customer_id) {
-        setCreateError("Please select a customer.");
-        setSubmitting(false);
         return;
       }
 
@@ -370,18 +379,8 @@ export default function ActivityBookings() {
       };
 
       if (selectedActivity.booking_type === "session") {
-        if (!bookingForm.session_id) {
-          setCreateError("Select a scheduled session.");
-          setSubmitting(false);
-          return;
-        }
         payload.session_id = Number(bookingForm.session_id);
       } else if (selectedActivity.booking_type === "time_slot") {
-        if (!bookingForm.resource_id) {
-          setCreateError("Select a bookable resource.");
-          setSubmitting(false);
-          return;
-        }
         payload.resource_id = Number(bookingForm.resource_id);
         payload.slot_date = bookingForm.slot_date;
         payload.slot_start_time = bookingForm.slot_start_time;
@@ -403,18 +402,20 @@ export default function ActivityBookings() {
   const handleQuickCustomerSave = async (e) => {
     e.preventDefault();
     setCustError("");
+    const errors = {};
     if (custForm.full_name.trim().length < 2) {
-      setCustError("Full name must be at least 2 characters.");
-      return;
+      errors.full_name = "Full name must be at least 2 characters.";
     }
     const phoneCheck = validateMobileNumber(custForm.phone, { required: true });
     if (!phoneCheck.valid) {
-      setCustError(phoneCheck.error);
-      return;
+      errors.phone = phoneCheck.error;
     }
     const emailCheck = validateEmailAddress(custForm.email, { required: true });
     if (!emailCheck.valid) {
-      setCustError(emailCheck.error);
+      errors.email = emailCheck.error;
+    }
+    setCustFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setSavingCust(true);
@@ -982,8 +983,9 @@ export default function ActivityBookings() {
             <select
               required
               value={selectedActivityId}
-              onChange={(e) => setSelectedActivityId(e.target.value)}
-              className={INPUT_STYLES.select}
+              onChange={(e) => { setSelectedActivityId(e.target.value); setCreateFieldErrors((p) => ({ ...p, activity: "" })); }}
+              aria-invalid={Boolean(createFieldErrors.activity)}
+              className={`${INPUT_STYLES.select} ${createFieldErrors.activity ? "border-red-500" : ""}`}
             >
               <option value="">Choose an active activity...</option>
               {activitiesList.map((a) => (
@@ -992,6 +994,7 @@ export default function ActivityBookings() {
                 </option>
               ))}
             </select>
+            {createFieldErrors.activity && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.activity}</p>}
             {selectedActivity && (
               <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-stone-500">
                 <span>Duration: {selectedActivity.duration_minutes} mins</span>
@@ -1121,8 +1124,10 @@ export default function ActivityBookings() {
                         onChange={(e) => {
                           setBookingForm({ ...bookingForm, resource_id: e.target.value });
                           setAvailabilityResult(null);
+                          setCreateFieldErrors((p) => ({ ...p, resource_id: "" }));
                         }}
-                        className={INPUT_STYLES.select}
+                        aria-invalid={Boolean(createFieldErrors.resource_id)}
+                        className={`${INPUT_STYLES.select} ${createFieldErrors.resource_id ? "border-red-500" : ""}`}
                       >
                         <option value="">Select resource...</option>
                         {(selectedActivity.resources || [])
@@ -1133,6 +1138,7 @@ export default function ActivityBookings() {
                             </option>
                           ))}
                       </select>
+                      {createFieldErrors.resource_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.resource_id}</p>}
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold">Date *</label>
@@ -1143,9 +1149,12 @@ export default function ActivityBookings() {
                         onChange={(e) => {
                           setBookingForm({ ...bookingForm, slot_date: e.target.value });
                           setAvailabilityResult(null);
+                          setCreateFieldErrors((p) => ({ ...p, slot_date: "" }));
                         }}
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(createFieldErrors.slot_date)}
+                        className={`${INPUT_STYLES.base} ${createFieldErrors.slot_date ? "border-red-500" : ""}`}
                       />
+                      {createFieldErrors.slot_date && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.slot_date}</p>}
                     </div>
                     <div className="flex items-end">
                       <button
@@ -1166,9 +1175,12 @@ export default function ActivityBookings() {
                         onChange={(e) => {
                           setBookingForm({ ...bookingForm, slot_start_time: e.target.value });
                           setAvailabilityResult(null);
+                          setCreateFieldErrors((p) => ({ ...p, slot_start_time: "" }));
                         }}
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(createFieldErrors.slot_start_time)}
+                        className={`${INPUT_STYLES.base} ${createFieldErrors.slot_start_time ? "border-red-500" : ""}`}
                       />
+                      {createFieldErrors.slot_start_time && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.slot_start_time}</p>}
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold">End Time *</label>
@@ -1179,9 +1191,12 @@ export default function ActivityBookings() {
                         onChange={(e) => {
                           setBookingForm({ ...bookingForm, slot_end_time: e.target.value });
                           setAvailabilityResult(null);
+                          setCreateFieldErrors((p) => ({ ...p, slot_end_time: "" }));
                         }}
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(createFieldErrors.slot_end_time)}
+                        className={`${INPUT_STYLES.base} ${createFieldErrors.slot_end_time ? "border-red-500" : ""}`}
                       />
+                      {createFieldErrors.slot_end_time && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.slot_end_time}</p>}
                     </div>
                   </div>
                   {availabilityResult && (
@@ -1232,8 +1247,9 @@ export default function ActivityBookings() {
                     <select
                       required
                       value={bookingForm.session_id}
-                      onChange={(e) => setBookingForm({ ...bookingForm, session_id: e.target.value })}
-                      className={INPUT_STYLES.select}
+                      onChange={(e) => { setBookingForm({ ...bookingForm, session_id: e.target.value }); setCreateFieldErrors((p) => ({ ...p, session_id: "" })); }}
+                      aria-invalid={Boolean(createFieldErrors.session_id)}
+                      className={`${INPUT_STYLES.select} ${createFieldErrors.session_id ? "border-red-500" : ""}`}
                     >
                       <option value="">Choose a scheduled session...</option>
                       {availableSessions.map((s) => (
@@ -1245,6 +1261,7 @@ export default function ActivityBookings() {
                       ))}
                     </select>
                   )}
+                  {createFieldErrors.session_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.session_id}</p>}
                 </div>
               )}
 
@@ -1256,8 +1273,9 @@ export default function ActivityBookings() {
                     <select
                       required
                       value={bookingForm.customer_id}
-                      onChange={(e) => setBookingForm({ ...bookingForm, customer_id: e.target.value })}
-                      className={INPUT_STYLES.select}
+                      onChange={(e) => { setBookingForm({ ...bookingForm, customer_id: e.target.value }); setCreateFieldErrors((p) => ({ ...p, customer_id: "" })); }}
+                      aria-invalid={Boolean(createFieldErrors.customer_id)}
+                      className={`${INPUT_STYLES.select} ${createFieldErrors.customer_id ? "border-red-500" : ""}`}
                     >
                       <option value="">Select customer...</option>
                       {customers.map((c) => (
@@ -1273,6 +1291,7 @@ export default function ActivityBookings() {
                       <UserPlus size={15} />
                     </button>
                   </div>
+                  {createFieldErrors.customer_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{createFieldErrors.customer_id}</p>}
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold">Participants *</label>
@@ -1400,25 +1419,31 @@ export default function ActivityBookings() {
             required
             placeholder="Full Name *"
             value={custForm.full_name}
-            onChange={(e) => setCustForm({ ...custForm, full_name: e.target.value })}
-            className={INPUT_STYLES.base}
+            onChange={(e) => { setCustForm({ ...custForm, full_name: e.target.value }); setCustFieldErrors((p) => ({ ...p, full_name: "" })); }}
+            aria-invalid={Boolean(custFieldErrors.full_name)}
+            className={`${INPUT_STYLES.base} ${custFieldErrors.full_name ? "border-red-500" : ""}`}
           />
+          {custFieldErrors.full_name && <p className="-mt-2 text-xs text-red-600 dark:text-red-400">{custFieldErrors.full_name}</p>}
           <input
             type="tel"
             required
             placeholder="10-digit Mobile Number *"
             value={custForm.phone}
-            onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })}
-            className={INPUT_STYLES.base}
+            onChange={(e) => { setCustForm({ ...custForm, phone: e.target.value }); setCustFieldErrors((p) => ({ ...p, phone: "" })); }}
+            aria-invalid={Boolean(custFieldErrors.phone)}
+            className={`${INPUT_STYLES.base} ${custFieldErrors.phone ? "border-red-500" : ""}`}
           />
+          {custFieldErrors.phone && <p className="-mt-2 text-xs text-red-600 dark:text-red-400">{custFieldErrors.phone}</p>}
           <input
             type="email"
             required
             placeholder="Email *"
             value={custForm.email}
-            onChange={(e) => setCustForm({ ...custForm, email: e.target.value })}
-            className={INPUT_STYLES.base}
+            onChange={(e) => { setCustForm({ ...custForm, email: e.target.value }); setCustFieldErrors((p) => ({ ...p, email: "" })); }}
+            aria-invalid={Boolean(custFieldErrors.email)}
+            className={`${INPUT_STYLES.base} ${custFieldErrors.email ? "border-red-500" : ""}`}
           />
+          {custFieldErrors.email && <p className="-mt-2 text-xs text-red-600 dark:text-red-400">{custFieldErrors.email}</p>}
           <input
             type="text"
             placeholder="Address (optional)"

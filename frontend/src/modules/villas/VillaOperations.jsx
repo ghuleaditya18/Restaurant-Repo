@@ -32,13 +32,19 @@ import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
 import StatusBadge from "../../components/StatusBadge";
 import { useNotification } from "../../context/NotificationContext";
-import { getBusinessProfile, updateBusinessProfile } from "../../services/businessProfileService";
+import {
+  getBusinessProfile,
+  updateBusinessProfile,
+} from "../../services/businessProfileService";
 import {
   BUTTON_VARIANTS,
   CARD_STYLES,
   INPUT_STYLES,
 } from "../../utils/themeTokens";
-import { validateEmailAddress, validateMobileNumber } from "../../utils/validation";
+import {
+  validateEmailAddress,
+  validateMobileNumber,
+} from "../../utils/validation";
 import {
   clearPaymentForm,
   computeInstallmentPlan,
@@ -105,7 +111,14 @@ function getWhatsAppNumber(phone) {
 
 function getVillaInvoiceShareText(invoice) {
   const balance = Number(
-    Number(invoice?.balance_due ?? Math.max(0, Number(invoice?.total_amount || 0) - Number(invoice?.paid_amount || 0))).toFixed(2)
+    Number(
+      invoice?.balance_due ??
+        Math.max(
+          0,
+          Number(invoice?.total_amount || 0) -
+            Number(invoice?.paid_amount || 0),
+        ),
+    ).toFixed(2),
   );
   return (
     `Invoice ${invoice.invoice_number}\n` +
@@ -153,6 +166,8 @@ export default function VillaOperations({ view = "services" }) {
     is_active: true,
   });
   const [serviceFormError, setServiceFormError] = useState("");
+  const [serviceFieldErrors, setServiceFieldErrors] = useState({});
+  const [settingsFieldErrors, setSettingsFieldErrors] = useState({});
   const [savingService, setSavingService] = useState(false);
   const [deleteServiceTarget, setDeleteServiceTarget] = useState(null);
   const [deleteServiceLoading, setDeleteServiceLoading] = useState(false);
@@ -245,16 +260,24 @@ export default function VillaOperations({ view = "services" }) {
         setStaff(stfRes.data || []);
 
         setRequestForm((prev) => {
-          const activeCheckedIn = bkList.filter((b) => b.status === "Checked In");
+          const activeCheckedIn = bkList.filter(
+            (b) => b.status === "Checked In",
+          );
           const firstActiveSvc = svcList.find((s) => s.is_active);
           return {
             ...prev,
             booking_id:
-              prev.booking_id && activeCheckedIn.some((b) => String(b.id) === String(prev.booking_id))
+              prev.booking_id &&
+              activeCheckedIn.some(
+                (b) => String(b.id) === String(prev.booking_id),
+              )
                 ? prev.booking_id
                 : String(activeCheckedIn[0]?.id || ""),
             service_id:
-              prev.service_id && svcList.some((s) => String(s.id) === String(prev.service_id) && s.is_active)
+              prev.service_id &&
+              svcList.some(
+                (s) => String(s.id) === String(prev.service_id) && s.is_active,
+              )
                 ? prev.service_id
                 : String(firstActiveSvc?.id || ""),
           };
@@ -316,12 +339,15 @@ export default function VillaOperations({ view = "services" }) {
   const handleSaveService = async (e) => {
     e.preventDefault();
     setServiceFormError("");
+    const errors = {};
     if (!serviceForm.name.trim() || serviceForm.name.trim().length < 2) {
-      setServiceFormError("Service name must contain at least 2 characters.");
-      return;
+      errors.name = "Service name must contain at least 2 characters.";
     }
     if (serviceForm.price === "" || Number(serviceForm.price) < 0) {
-      setServiceFormError("Enter a valid non-negative price.");
+      errors.price = "Enter a valid non-negative price.";
+    }
+    setServiceFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setSavingService(true);
@@ -387,22 +413,37 @@ export default function VillaOperations({ view = "services" }) {
     const failures = [];
     let deleted = 0;
     for (const id of ids) {
-      const item = isService ? services.find((row) => row.id === id) : requests.find((row) => row.id === id);
+      const item = isService
+        ? services.find((row) => row.id === id)
+        : requests.find((row) => row.id === id);
       try {
         if (isService) await villasApi.deleteService(id);
         else await villasApi.deleteServiceRequest(id);
         deleted += 1;
       } catch (err) {
-        failures.push({ id, name: isService ? item?.name : `${item?.service_name || "Service"} (${item?.booking_number || `#${id}`})`, reason: villaError(err) });
+        failures.push({
+          id,
+          name: isService
+            ? item?.name
+            : `${item?.service_name || "Service"} (${item?.booking_number || `#${id}`})`,
+          reason: villaError(err),
+        });
       }
     }
-    if (isService) setSelectedServiceIds(new Set(failures.map((item) => item.id)));
+    if (isService)
+      setSelectedServiceIds(new Set(failures.map((item) => item.id)));
     else setSelectedRequestIds(new Set(failures.map((item) => item.id)));
     setBulkDeleteFailures(failures);
     setBulkDeleteKind("");
     await load();
-    if (deleted) showSuccess(`Deleted ${deleted} ${isService ? "service" : "request"}${deleted !== 1 ? "s" : ""}.`);
-    if (failures.length) showError(`${failures.length} record${failures.length !== 1 ? "s were" : " was"} protected; see the details below.`);
+    if (deleted)
+      showSuccess(
+        `Deleted ${deleted} ${isService ? "service" : "request"}${deleted !== 1 ? "s" : ""}.`,
+      );
+    if (failures.length)
+      showError(
+        `${failures.length} record${failures.length !== 1 ? "s were" : " was"} protected; see the details below.`,
+      );
     setBulkDeleteLoading(false);
   };
 
@@ -420,7 +461,7 @@ export default function VillaOperations({ view = "services" }) {
     setter((previous) => {
       const next = new Set(previous);
       const allSelected = ids.length > 0 && ids.every((id) => previous.has(id));
-      ids.forEach((id) => allSelected ? next.delete(id) : next.add(id));
+      ids.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
       return next;
     });
   };
@@ -430,9 +471,18 @@ export default function VillaOperations({ view = "services" }) {
     const plan = computeInstallmentPlan(invoice);
     setExpandedPayInvoiceIds((prev) => {
       const nextOpen = forceOpen !== null ? forceOpen : !prev[invoice.id];
-      if (nextOpen && !paymentForms[invoice.id]?.amount && plan.balanceDue > 0) {
+      if (
+        nextOpen &&
+        !paymentForms[invoice.id]?.amount &&
+        plan.balanceDue > 0
+      ) {
         setPaymentForms((forms) =>
-          setPaymentFormField(forms, invoice.id, "amount", String(plan.balanceDue))
+          setPaymentFormField(
+            forms,
+            invoice.id,
+            "amount",
+            String(plan.balanceDue),
+          ),
         );
       }
       return { ...prev, [invoice.id]: nextOpen };
@@ -443,12 +493,18 @@ export default function VillaOperations({ view = "services" }) {
     e.preventDefault();
     const rawForm = getPaymentForm(paymentForms, invoice.id);
     const balance = Number(
-      Number(invoice.balance_due ?? Number(invoice.total_amount) - Number(invoice.paid_amount)).toFixed(2)
+      Number(
+        invoice.balance_due ??
+          Number(invoice.total_amount) - Number(invoice.paid_amount),
+      ).toFixed(2),
     );
-    const rowForm = rawForm.amount === "" ? { ...rawForm, amount: String(balance) } : rawForm;
+    const rowForm =
+      rawForm.amount === "" ? { ...rawForm, amount: String(balance) } : rawForm;
     const validationError = validateInvoicePayment(rowForm, balance, invoice);
     if (validationError) {
-      setPaymentForms((prev) => setPaymentFormError(prev, invoice.id, validationError));
+      setPaymentForms((prev) =>
+        setPaymentFormError(prev, invoice.id, validationError),
+      );
       return;
     }
     setPayingInvoiceId(invoice.id);
@@ -514,7 +570,9 @@ export default function VillaOperations({ view = "services" }) {
         window.setTimeout(() => URL.revokeObjectURL(url), 120000);
       } else {
         savePdfBlob(blob, `Villa-Invoice-${invoice.invoice_number}.pdf`);
-        showInfo("PDF downloaded because pop-ups were blocked. Open it to print.");
+        showInfo(
+          "PDF downloaded because pop-ups were blocked. Open it to print.",
+        );
       }
     } catch (err) {
       if (printWindow && !printWindow.closed) {
@@ -533,7 +591,7 @@ export default function VillaOperations({ view = "services" }) {
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(getVillaInvoiceShareText(invoice))}`;
     window.open(url, "_blank", "noopener,noreferrer");
     showInfo(
-      `WhatsApp opened for ${invoice.customer_name || "guest"} with invoice details ready to send.`
+      `WhatsApp opened for ${invoice.customer_name || "guest"} with invoice details ready to send.`,
     );
   };
 
@@ -544,12 +602,16 @@ export default function VillaOperations({ view = "services" }) {
       return;
     }
     if (!preparedPdf || Number(preparedPdf.invoiceId) !== Number(invoice.id)) {
-      showError("The invoice PDF is still preparing. Please try again in a moment.");
+      showError(
+        "The invoice PDF is still preparing. Please try again in a moment.",
+      );
       return;
     }
 
     const filename = `Villa-Invoice-${invoice.invoice_number}.pdf`;
-    const file = new File([preparedPdf.blob], filename, { type: "application/pdf" });
+    const file = new File([preparedPdf.blob], filename, {
+      type: "application/pdf",
+    });
     const shareText = getVillaInvoiceShareText(invoice);
     const shareData = {
       title: `Invoice ${invoice.invoice_number}`,
@@ -586,10 +648,10 @@ export default function VillaOperations({ view = "services" }) {
     window.open(
       `https://wa.me/${phone}?text=${encodeURIComponent(shareText)}`,
       "_blank",
-      "noopener,noreferrer"
+      "noopener,noreferrer",
     );
     showInfo(
-      "The PDF was downloaded and the guest's WhatsApp chat was opened. Attach the PDF and tap Send."
+      "The PDF was downloaded and the guest's WhatsApp chat was opened. Attach the PDF and tap Send.",
     );
   };
 
@@ -599,7 +661,9 @@ export default function VillaOperations({ view = "services" }) {
     setPdfPreparing(true);
     setRefundForm({
       payment_id: preselectPayment ? String(preselectPayment.id) : "",
-      refund_amount: preselectPayment ? String(preselectPayment.refundable_amount) : "",
+      refund_amount: preselectPayment
+        ? String(preselectPayment.refundable_amount)
+        : "",
       refund_method: preselectPayment ? preselectPayment.method : "UPI",
       refund_reference: "",
       reason: "",
@@ -632,7 +696,12 @@ export default function VillaOperations({ view = "services" }) {
         .finally(() => setPdfPreparing(false));
     } catch (err) {
       setPdfPreparing(false);
-      setInvoiceModal({ invoice, history: null, loading: false, error: villaError(err) });
+      setInvoiceModal({
+        invoice,
+        history: null,
+        loading: false,
+        error: villaError(err),
+      });
     }
   };
 
@@ -649,16 +718,29 @@ export default function VillaOperations({ view = "services" }) {
       : Number(invoiceModal.history?.paid_amount ?? inv.paid_amount ?? 0);
 
     const amountNum = Number(refundForm.refund_amount);
-    if (!refundForm.refund_amount || !Number.isFinite(amountNum) || amountNum <= 0) {
-      setRefundForm((prev) => ({ ...prev, error: "Enter a valid refund amount greater than zero." }));
+    if (
+      !refundForm.refund_amount ||
+      !Number.isFinite(amountNum) ||
+      amountNum <= 0
+    ) {
+      setRefundForm((prev) => ({
+        ...prev,
+        error: "Enter a valid refund amount greater than zero.",
+      }));
       return;
     }
     if (Number(amountNum.toFixed(2)) > Number(maxRefundable.toFixed(2))) {
-      setRefundForm((prev) => ({ ...prev, error: `Refund amount cannot exceed ${villaMoney(maxRefundable)}.` }));
+      setRefundForm((prev) => ({
+        ...prev,
+        error: `Refund amount cannot exceed ${villaMoney(maxRefundable)}.`,
+      }));
       return;
     }
     if (!refundForm.reason.trim() || refundForm.reason.trim().length < 2) {
-      setRefundForm((prev) => ({ ...prev, error: "Refund reason is required." }));
+      setRefundForm((prev) => ({
+        ...prev,
+        error: "Refund reason is required.",
+      }));
       return;
     }
 
@@ -675,7 +757,9 @@ export default function VillaOperations({ view = "services" }) {
     setRefundForm((prev) => ({ ...prev, error: "" }));
     try {
       await villasApi.issueRefund(inv.id, {
-        payment_id: refundForm.payment_id ? Number(refundForm.payment_id) : undefined,
+        payment_id: refundForm.payment_id
+          ? Number(refundForm.payment_id)
+          : undefined,
         refund_amount: amountNum,
         refund_method: refundForm.refund_method,
         refund_reference: refundForm.refund_reference.trim() || undefined,
@@ -696,12 +780,12 @@ export default function VillaOperations({ view = "services" }) {
   // --- Computed Lists ---
   const checkedInStays = useMemo(
     () => bookings.filter((b) => b.status === "Checked In"),
-    [bookings]
+    [bookings],
   );
 
   const activeCatalogueServices = useMemo(
     () => services.filter((s) => s.is_active),
-    [services]
+    [services],
   );
 
   const filteredCatalogue = useMemo(() => {
@@ -710,7 +794,7 @@ export default function VillaOperations({ view = "services" }) {
       (s) =>
         !q ||
         s.name.toLowerCase().includes(q) ||
-        (s.description || "").toLowerCase().includes(q)
+        (s.description || "").toLowerCase().includes(q),
     );
   }, [services, serviceSearch]);
 
@@ -731,13 +815,14 @@ export default function VillaOperations({ view = "services" }) {
 
   const pagedRequests = useMemo(
     () => paginate(filteredRequests, reqPage),
-    [filteredRequests, reqPage]
+    [filteredRequests, reqPage],
   );
 
   const filteredInvoices = useMemo(() => {
     const q = invoiceSearch.trim().toLowerCase();
     return invoices.filter((i) => {
-      if (invoiceStatusFilter && i.payment_status !== invoiceStatusFilter) return false;
+      if (invoiceStatusFilter && i.payment_status !== invoiceStatusFilter)
+        return false;
       if (!q) return true;
       return (
         (i.invoice_number || "").toLowerCase().includes(q) ||
@@ -750,46 +835,49 @@ export default function VillaOperations({ view = "services" }) {
 
   const pagedInvoices = useMemo(
     () => paginate(filteredInvoices, invoicePage),
-    [filteredInvoices, invoicePage]
+    [filteredInvoices, invoicePage],
   );
 
   const invoiceTotals = useMemo(() => {
-    const netCollected = invoices.reduce((sum, i) => sum + Number(i.paid_amount || 0), 0);
-    const totalRefunded = invoices.reduce((sum, i) => sum + Number(i.refunded_amount || 0), 0);
+    const netCollected = invoices.reduce(
+      (sum, i) => sum + Number(i.paid_amount || 0),
+      0,
+    );
+    const totalRefunded = invoices.reduce(
+      (sum, i) => sum + Number(i.refunded_amount || 0),
+      0,
+    );
     const outstanding = invoices.reduce(
       (sum, i) =>
         i.payment_status === "Void"
           ? sum
-          : sum + Number(i.balance_due ?? Math.max(0, Number(i.total_amount) - Number(i.paid_amount))),
-      0
+          : sum +
+            Number(
+              i.balance_due ??
+                Math.max(0, Number(i.total_amount) - Number(i.paid_amount)),
+            ),
+      0,
     );
     return { netCollected, totalRefunded, outstanding };
   }, [invoices]);
 
   const pagedReportBookings = useMemo(
     () => paginate(bookings, reportPage),
-    [bookings, reportPage]
+    [bookings, reportPage],
   );
 
   const pageMeta = {
     services: {
       title: "Guest Services",
-      description:
-        "Manage concierge, transfer, and villa service catalogue items and schedule requests for checked-in stays.",
     },
     invoices: {
       title: "Invoices",
-      description:
-        "Track stay folios, record payments per invoice, process refunds/reversals, and download PDF folios.",
     },
     reports: {
       title: "Reports",
-      description:
-        "Analyze occupancy rate, average daily rate (ADR), accommodation vs. service revenue, unit utilization, and repeat guest activity.",
     },
     settings: {
       title: "Property Settings",
-      description: "Update Villas & Units property contact details and public business profile.",
     },
   }[view];
 
@@ -800,7 +888,9 @@ export default function VillaOperations({ view = "services" }) {
       label: "Service",
       width: "min-w-[180px]",
       render: (s) => (
-        <span className="font-semibold text-[#172033] dark:text-[#F8FAFC]">{s.name}</span>
+        <span className="font-semibold text-[#172033] dark:text-[#F8FAFC]">
+          {s.name}
+        </span>
       ),
     },
     {
@@ -861,7 +951,7 @@ export default function VillaOperations({ view = "services" }) {
                     price: Number(s.price),
                     is_active: !s.is_active,
                   }),
-                `Service "${s.name}" ${!s.is_active ? "activated" : "deactivated"}.`
+                `Service "${s.name}" ${!s.is_active ? "activated" : "deactivated"}.`,
               )
             }
             title={s.is_active ? "Deactivate Service" : "Activate Service"}
@@ -912,7 +1002,9 @@ export default function VillaOperations({ view = "services" }) {
       width: "min-w-[190px]",
       render: (r) => (
         <div>
-          <div className="font-mono text-xs font-bold whitespace-nowrap">{r.booking_number}</div>
+          <div className="font-mono text-xs font-bold whitespace-nowrap">
+            {r.booking_number}
+          </div>
           <div className="text-xs text-[#64748B] dark:text-[#8A9AB2]">
             {r.guest_name} {r.unit_name ? `· ${r.unit_name}` : ""}
           </div>
@@ -933,7 +1025,9 @@ export default function VillaOperations({ view = "services" }) {
       render: (r) => (
         <div>
           <div className="font-semibold">
-            {villaMoney(r.line_total ?? Number(r.unit_price) * Number(r.quantity))}
+            {villaMoney(
+              r.line_total ?? Number(r.unit_price) * Number(r.quantity),
+            )}
           </div>
           <div className="text-[11px] text-[#64748B] dark:text-[#8A9AB2]">
             {r.quantity} × {villaMoney(r.unit_price)}
@@ -951,7 +1045,9 @@ export default function VillaOperations({ view = "services" }) {
       key: "status",
       label: "Status",
       align: "center",
-      render: (r) => <StatusBadge status={r.status} label={r.status} size="sm" />,
+      render: (r) => (
+        <StatusBadge status={r.status} label={r.status} size="sm" />
+      ),
     },
     {
       key: "actions",
@@ -959,7 +1055,9 @@ export default function VillaOperations({ view = "services" }) {
       align: "right",
       cellClassName: "whitespace-nowrap",
       render: (r) => {
-        const stayLocked = Boolean(r.booking_status && r.booking_status !== "Checked In");
+        const stayLocked = Boolean(
+          r.booking_status && r.booking_status !== "Checked In",
+        );
         const canRemove =
           !stayLocked && !["Completed", "In Progress"].includes(r.status);
         return (
@@ -971,7 +1069,7 @@ export default function VillaOperations({ view = "services" }) {
               onChange={(e) =>
                 runAction(
                   () => villasApi.requestStatus(r.id, e.target.value),
-                  `Service request marked "${e.target.value}".`
+                  `Service request marked "${e.target.value}".`,
                 )
               }
               className={`${INPUT_STYLES.select} w-[135px] py-1 text-xs disabled:opacity-50`}
@@ -1044,7 +1142,8 @@ export default function VillaOperations({ view = "services" }) {
       key: "paid_amount",
       label: "Net Paid",
       align: "right",
-      cellClassName: "whitespace-nowrap font-semibold tabular-nums text-emerald-600 dark:text-emerald-400",
+      cellClassName:
+        "whitespace-nowrap font-semibold tabular-nums text-emerald-600 dark:text-emerald-400",
       render: (i) => villaMoney(i.paid_amount),
     },
     {
@@ -1055,7 +1154,13 @@ export default function VillaOperations({ view = "services" }) {
       render: (i) => {
         const refAmt = Number(i.refunded_amount || 0);
         return (
-          <span className={refAmt > 0 ? "font-semibold text-rose-600 dark:text-rose-400" : "text-stone-400"}>
+          <span
+            className={
+              refAmt > 0
+                ? "font-semibold text-rose-600 dark:text-rose-400"
+                : "text-stone-400"
+            }
+          >
             {villaMoney(refAmt)}
           </span>
         );
@@ -1068,10 +1173,18 @@ export default function VillaOperations({ view = "services" }) {
       cellClassName: "whitespace-nowrap font-semibold tabular-nums",
       render: (i) => {
         const balance = Number(
-          Number(i.balance_due ?? Number(i.total_amount) - Number(i.paid_amount)).toFixed(2)
+          Number(
+            i.balance_due ?? Number(i.total_amount) - Number(i.paid_amount),
+          ).toFixed(2),
         );
         return (
-          <span className={balance > 0 ? "text-rose-600 dark:text-rose-400" : "text-stone-500"}>
+          <span
+            className={
+              balance > 0
+                ? "text-rose-600 dark:text-rose-400"
+                : "text-stone-500"
+            }
+          >
             {villaMoney(balance)}
           </span>
         );
@@ -1082,7 +1195,13 @@ export default function VillaOperations({ view = "services" }) {
       label: "Payment Status",
       align: "center",
       cellClassName: "whitespace-nowrap",
-      render: (i) => <StatusBadge status={i.payment_status} label={i.payment_status} size="sm" />,
+      render: (i) => (
+        <StatusBadge
+          status={i.payment_status}
+          label={i.payment_status}
+          size="sm"
+        />
+      ),
     },
     {
       key: "actions",
@@ -1091,7 +1210,9 @@ export default function VillaOperations({ view = "services" }) {
       cellClassName: "whitespace-nowrap",
       render: (i) => {
         const balance = Number(
-          Number(i.balance_due ?? Number(i.total_amount) - Number(i.paid_amount)).toFixed(2)
+          Number(
+            i.balance_due ?? Number(i.total_amount) - Number(i.paid_amount),
+          ).toFixed(2),
         );
         const canPay =
           i.payment_status !== "Void" &&
@@ -1172,9 +1293,21 @@ export default function VillaOperations({ view = "services" }) {
       {view === "services" && (
         <>
           {bulkDeleteFailures.length > 0 && (
-            <div role="status" className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-4 py-3 text-xs text-rose-800 dark:text-rose-200">
-              <p className="font-semibold">Some selected records were protected:</p>
-              <ul className="mt-1 space-y-1">{bulkDeleteFailures.map((item) => <li key={item.id}><span className="font-medium">{item.name}:</span> {item.reason}</li>)}</ul>
+            <div
+              role="status"
+              className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 px-4 py-3 text-xs text-rose-800 dark:text-rose-200"
+            >
+              <p className="font-semibold">
+                Some selected records were protected:
+              </p>
+              <ul className="mt-1 space-y-1">
+                {bulkDeleteFailures.map((item) => (
+                  <li key={item.id}>
+                    <span className="font-medium">{item.name}:</span>{" "}
+                    {item.reason}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-fit max-w-full">
@@ -1197,7 +1330,11 @@ export default function VillaOperations({ view = "services" }) {
             <StatCard
               compact
               title="Open Requests"
-              value={requests.filter((r) => ["Requested", "Scheduled", "In Progress"].includes(r.status)).length}
+              value={
+                requests.filter((r) =>
+                  ["Requested", "Scheduled", "In Progress"].includes(r.status),
+                ).length
+              }
               description="Awaiting fulfilment"
               icon={Wrench}
               color="sky"
@@ -1208,7 +1345,15 @@ export default function VillaOperations({ view = "services" }) {
               value={villaMoney(
                 requests
                   .filter((r) => r.status === "Completed")
-                  .reduce((sum, r) => sum + Number(r.line_total || Number(r.unit_price) * Number(r.quantity)), 0)
+                  .reduce(
+                    (sum, r) =>
+                      sum +
+                      Number(
+                        r.line_total ||
+                          Number(r.unit_price) * Number(r.quantity),
+                      ),
+                    0,
+                  ),
               )}
               description="Billed to stay folios"
               icon={IndianRupee}
@@ -1224,7 +1369,8 @@ export default function VillaOperations({ view = "services" }) {
                   Request Service for Checked-In Stay
                 </h2>
                 <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Completed requests automatically post to the guest&apos;s active villa invoice.
+                  Completed requests automatically post to the guest&apos;s
+                  active villa invoice.
                 </p>
               </div>
 
@@ -1240,17 +1386,24 @@ export default function VillaOperations({ view = "services" }) {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!requestForm.booking_id || !requestForm.service_id) {
-                      showError("Select both a checked-in stay and an active service.");
+                      showError(
+                        "Select both a checked-in stay and an active service.",
+                      );
                       return;
                     }
                     runAction(async () => {
-                      await villasApi.addServiceRequest(requestForm.booking_id, {
-                        service_id: Number(requestForm.service_id),
-                        staff_id: requestForm.staff_id ? Number(requestForm.staff_id) : null,
-                        quantity: Number(requestForm.quantity),
-                        scheduled_for: requestForm.scheduled_for || null,
-                        notes: requestForm.notes.trim() || null,
-                      });
+                      await villasApi.addServiceRequest(
+                        requestForm.booking_id,
+                        {
+                          service_id: Number(requestForm.service_id),
+                          staff_id: requestForm.staff_id
+                            ? Number(requestForm.staff_id)
+                            : null,
+                          quantity: Number(requestForm.quantity),
+                          scheduled_for: requestForm.scheduled_for || null,
+                          notes: requestForm.notes.trim() || null,
+                        },
+                      );
                       setRequestForm((prev) => ({
                         ...prev,
                         quantity: 1,
@@ -1261,11 +1414,18 @@ export default function VillaOperations({ view = "services" }) {
                   }}
                 >
                   <div>
-                    <label className="block text-xs font-semibold mb-1">Checked-In Stay *</label>
+                    <label className="block text-xs font-semibold mb-1">
+                      Checked-In Stay *
+                    </label>
                     <select
                       required
                       value={requestForm.booking_id}
-                      onChange={(e) => setRequestForm({ ...requestForm, booking_id: e.target.value })}
+                      onChange={(e) =>
+                        setRequestForm({
+                          ...requestForm,
+                          booking_id: e.target.value,
+                        })
+                      }
                       className={INPUT_STYLES.select}
                     >
                       <option value="">Select in-house stay</option>
@@ -1279,11 +1439,18 @@ export default function VillaOperations({ view = "services" }) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold mb-1">Service *</label>
+                      <label className="block text-xs font-semibold mb-1">
+                        Service *
+                      </label>
                       <select
                         required
                         value={requestForm.service_id}
-                        onChange={(e) => setRequestForm({ ...requestForm, service_id: e.target.value })}
+                        onChange={(e) =>
+                          setRequestForm({
+                            ...requestForm,
+                            service_id: e.target.value,
+                          })
+                        }
                         className={INPUT_STYLES.select}
                       >
                         <option value="">Select service</option>
@@ -1295,14 +1462,21 @@ export default function VillaOperations({ view = "services" }) {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold mb-1">Quantity *</label>
+                      <label className="block text-xs font-semibold mb-1">
+                        Quantity *
+                      </label>
                       <input
                         type="number"
                         min={1}
                         max={100}
                         required
                         value={requestForm.quantity}
-                        onChange={(e) => setRequestForm({ ...requestForm, quantity: e.target.value })}
+                        onChange={(e) =>
+                          setRequestForm({
+                            ...requestForm,
+                            quantity: e.target.value,
+                          })
+                        }
                         className={INPUT_STYLES.base}
                       />
                     </div>
@@ -1310,43 +1484,68 @@ export default function VillaOperations({ view = "services" }) {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold mb-1">Assign Staff (Optional)</label>
+                      <label className="block text-xs font-semibold mb-1">
+                        Assign Staff (Optional)
+                      </label>
                       <select
                         value={requestForm.staff_id}
-                        onChange={(e) => setRequestForm({ ...requestForm, staff_id: e.target.value })}
+                        onChange={(e) =>
+                          setRequestForm({
+                            ...requestForm,
+                            staff_id: e.target.value,
+                          })
+                        }
                         className={INPUT_STYLES.select}
                       >
                         <option value="">Unassigned</option>
                         {staff.map((st) => (
                           <option key={st.id} value={st.id}>
-                            {st.name} {st.designation ? `(${st.designation})` : ""}
+                            {st.name}{" "}
+                            {st.designation ? `(${st.designation})` : ""}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold mb-1">Scheduled Time</label>
+                      <label className="block text-xs font-semibold mb-1">
+                        Scheduled Time
+                      </label>
                       <input
                         type="datetime-local"
                         value={requestForm.scheduled_for}
-                        onChange={(e) => setRequestForm({ ...requestForm, scheduled_for: e.target.value })}
+                        onChange={(e) =>
+                          setRequestForm({
+                            ...requestForm,
+                            scheduled_for: e.target.value,
+                          })
+                        }
                         className={INPUT_STYLES.base}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold mb-1">Concierge Notes</label>
+                    <label className="block text-xs font-semibold mb-1">
+                      Concierge Notes
+                    </label>
                     <input
                       type="text"
                       value={requestForm.notes}
-                      onChange={(e) => setRequestForm({ ...requestForm, notes: e.target.value })}
+                      onChange={(e) =>
+                        setRequestForm({
+                          ...requestForm,
+                          notes: e.target.value,
+                        })
+                      }
                       placeholder="Setup location, dietary preferences, flight details..."
                       className={INPUT_STYLES.base}
                     />
                   </div>
 
-                  <button type="submit" className={`${BUTTON_VARIANTS.primary} w-full justify-center`}>
+                  <button
+                    type="submit"
+                    className={`${BUTTON_VARIANTS.primary} w-full justify-center`}
+                  >
                     <Plus size={15} />
                     <span>Log Guest Service Request</span>
                   </button>
@@ -1358,8 +1557,26 @@ export default function VillaOperations({ view = "services" }) {
             <div className="xl:col-span-7 min-w-0">
               {selectedServiceIds.size > 0 && (
                 <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5">
-                  <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">{selectedServiceIds.size} eligible service{selectedServiceIds.size !== 1 ? "s" : ""} selected</span>
-                  <div className="flex items-center gap-2"><button type="button" className={BUTTON_VARIANTS.secondary} onClick={() => setSelectedServiceIds(new Set())}>Clear Selection</button><button type="button" className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setBulkDeleteKind("services")}>Delete Selected</button></div>
+                  <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                    {selectedServiceIds.size} eligible service
+                    {selectedServiceIds.size !== 1 ? "s" : ""} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className={BUTTON_VARIANTS.secondary}
+                      onClick={() => setSelectedServiceIds(new Set())}
+                    >
+                      Clear Selection
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
+                      onClick={() => setBulkDeleteKind("services")}
+                    >
+                      Delete Selected
+                    </button>
+                  </div>
                 </div>
               )}
               <VillaDataTable
@@ -1367,7 +1584,10 @@ export default function VillaOperations({ view = "services" }) {
                 subtitle="Configure experiences, transfers, and in-villa extras."
                 headerActions={
                   <div className="relative w-full sm:w-56">
-                    <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                    <Search
+                      size={14}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                    />
                     <input
                       type="text"
                       value={serviceSearch}
@@ -1386,8 +1606,12 @@ export default function VillaOperations({ view = "services" }) {
                 tableMinWidth="min-w-[680px]"
                 selectedIds={selectedServiceIds}
                 onSelectRow={(id) => toggleSelection(setSelectedServiceIds, id)}
-                onSelectAll={(ids) => togglePageSelection(setSelectedServiceIds, ids)}
-                isRowSelectable={(service) => !requests.some((request) => request.service_id === service.id)}
+                onSelectAll={(ids) =>
+                  togglePageSelection(setSelectedServiceIds, ids)
+                }
+                isRowSelectable={(service) =>
+                  !requests.some((request) => request.service_id === service.id)
+                }
               />
             </div>
           </div>
@@ -1395,8 +1619,26 @@ export default function VillaOperations({ view = "services" }) {
           {/* SERVICE REQUESTS TABLE */}
           {selectedRequestIds.size > 0 && (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/20 px-4 py-2.5">
-              <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">{selectedRequestIds.size} eligible request{selectedRequestIds.size !== 1 ? "s" : ""} selected on this page</span>
-              <div className="flex items-center gap-2"><button type="button" className={BUTTON_VARIANTS.secondary} onClick={() => setSelectedRequestIds(new Set())}>Clear Selection</button><button type="button" className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white" onClick={() => setBulkDeleteKind("requests")}>Delete Selected</button></div>
+              <span className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {selectedRequestIds.size} eligible request
+                {selectedRequestIds.size !== 1 ? "s" : ""} selected on this page
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={BUTTON_VARIANTS.secondary}
+                  onClick={() => setSelectedRequestIds(new Set())}
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white"
+                  onClick={() => setBulkDeleteKind("requests")}
+                >
+                  Delete Selected
+                </button>
+              </div>
             </div>
           )}
           <VillaDataTable
@@ -1405,7 +1647,10 @@ export default function VillaOperations({ view = "services" }) {
             headerActions={
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                  />
                   <input
                     type="text"
                     value={reqSearch}
@@ -1448,8 +1693,13 @@ export default function VillaOperations({ view = "services" }) {
             }}
             selectedIds={selectedRequestIds}
             onSelectRow={(id) => toggleSelection(setSelectedRequestIds, id)}
-            onSelectAll={(ids) => togglePageSelection(setSelectedRequestIds, ids)}
-            isRowSelectable={(request) => request.booking_status === "Checked In" && !["Completed", "In Progress"].includes(request.status)}
+            onSelectAll={(ids) =>
+              togglePageSelection(setSelectedRequestIds, ids)
+            }
+            isRowSelectable={(request) =>
+              request.booking_status === "Checked In" &&
+              !["Completed", "In Progress"].includes(request.status)
+            }
           />
         </>
       )}
@@ -1492,9 +1742,14 @@ export default function VillaOperations({ view = "services" }) {
             />
           </div>
 
-          <div className={`${CARD_STYLES.base} !p-2.5 w-fit max-w-full flex flex-wrap items-center gap-2.5`}>
+          <div
+            className={`${CARD_STYLES.base} !p-2.5 w-fit max-w-full flex flex-wrap items-center gap-2.5`}
+          >
             <div className="relative w-full sm:w-72 min-w-0">
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+              />
               <input
                 type="text"
                 value={invoiceSearch}
@@ -1517,11 +1772,13 @@ export default function VillaOperations({ view = "services" }) {
                 className={`${INPUT_STYLES.select} !w-auto min-w-[165px]`}
               >
                 <option value="">All Payment Statuses</option>
-                {["Pending", "Partially Paid", "Paid", "Refunded", "Void"].map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                {["Pending", "Partially Paid", "Paid", "Refunded", "Void"].map(
+                  (s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ),
+                )}
               </select>
               {(invoiceSearch || invoiceStatusFilter) && (
                 <button
@@ -1552,11 +1809,14 @@ export default function VillaOperations({ view = "services" }) {
               const plan = computeInstallmentPlan(i);
               const balance = plan.balanceDue;
               const rowForm = getPaymentForm(paymentForms, i.id);
-              const activeAmount = rowForm.amount === "" ? String(balance) : rowForm.amount;
-              const isFullSelected = Math.abs(Number(activeAmount) - balance) <= 0.01;
+              const activeAmount =
+                rowForm.amount === "" ? String(balance) : rowForm.amount;
+              const isFullSelected =
+                Math.abs(Number(activeAmount) - balance) <= 0.01;
               const isFirstInstallmentSelected =
                 !plan.hasPriorPayment &&
-                Math.abs(Number(activeAmount) - plan.firstInstallmentAmount) <= 0.01 &&
+                Math.abs(Number(activeAmount) - plan.firstInstallmentAmount) <=
+                  0.01 &&
                 !isFullSelected;
               return (
                 <div className="w-fit max-w-full space-y-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-white dark:bg-[#101722] p-3">
@@ -1566,11 +1826,15 @@ export default function VillaOperations({ view = "services" }) {
                         Record Payment · {i.invoice_number}
                       </span>
                       <span className="text-stone-500 dark:text-[#8A9AB2]">
-                        Balance Due: <strong className="text-[#172033] dark:text-stone-100">{villaMoney(balance)}</strong>
+                        Balance Due:{" "}
+                        <strong className="text-[#172033] dark:text-stone-100">
+                          {villaMoney(balance)}
+                        </strong>
                       </span>
                       {plan.hasPriorPayment && (
                         <span className="rounded-md bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                          Installment 1 paid: {villaMoney(plan.paidAmount)} · Final installment (2/2)
+                          Installment 1 paid: {villaMoney(plan.paidAmount)} ·
+                          Final installment (2/2)
                         </span>
                       )}
                     </div>
@@ -1579,7 +1843,12 @@ export default function VillaOperations({ view = "services" }) {
                         type="button"
                         onClick={() =>
                           setPaymentForms((prev) =>
-                            setPaymentFormField(prev, i.id, "amount", String(balance))
+                            setPaymentFormField(
+                              prev,
+                              i.id,
+                              "amount",
+                              String(balance),
+                            ),
                           )
                         }
                         className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
@@ -1592,28 +1861,30 @@ export default function VillaOperations({ view = "services" }) {
                           ? `2nd Installment · Final (${villaMoney(balance)})`
                           : `Full Payment (${villaMoney(balance)})`}
                       </button>
-                      {!plan.hasPriorPayment && plan.firstInstallmentAmount < balance && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPaymentForms((prev) =>
-                              setPaymentFormField(
-                                prev,
-                                i.id,
-                                "amount",
-                                String(plan.firstInstallmentAmount)
+                      {!plan.hasPriorPayment &&
+                        plan.firstInstallmentAmount < balance && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPaymentForms((prev) =>
+                                setPaymentFormField(
+                                  prev,
+                                  i.id,
+                                  "amount",
+                                  String(plan.firstInstallmentAmount),
+                                ),
                               )
-                            )
-                          }
-                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
-                            isFirstInstallmentSelected
-                              ? "border-amber-500 bg-amber-50 dark:bg-[#30251C] text-amber-800 dark:text-[#FFB02E]"
-                              : "border-[#E5E9F0] dark:border-[#1E293B] text-stone-600 dark:text-stone-300 hover:border-amber-400"
-                          }`}
-                        >
-                          1st Installment · 50% Pre-Stay ({villaMoney(plan.firstInstallmentAmount)})
-                        </button>
-                      )}
+                            }
+                            className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition cursor-pointer ${
+                              isFirstInstallmentSelected
+                                ? "border-amber-500 bg-amber-50 dark:bg-[#30251C] text-amber-800 dark:text-[#FFB02E]"
+                                : "border-[#E5E9F0] dark:border-[#1E293B] text-stone-600 dark:text-stone-300 hover:border-amber-400"
+                            }`}
+                          >
+                            1st Installment · 50% Pre-Stay (
+                            {villaMoney(plan.firstInstallmentAmount)})
+                          </button>
+                        )}
                     </div>
                   </div>
                   <form
@@ -1624,7 +1895,11 @@ export default function VillaOperations({ view = "services" }) {
                       aria-label={`Payment amount for ${i.invoice_number}`}
                       className={`${INPUT_STYLES.base} !w-36 tabular-nums`}
                       type="number"
-                      min={plan.hasPriorPayment ? balance : plan.firstInstallmentAmount}
+                      min={
+                        plan.hasPriorPayment
+                          ? balance
+                          : plan.firstInstallmentAmount
+                      }
                       max={balance}
                       step="0.01"
                       placeholder="Amount (₹)"
@@ -1632,7 +1907,12 @@ export default function VillaOperations({ view = "services" }) {
                       value={activeAmount}
                       onChange={(e) =>
                         setPaymentForms((prev) =>
-                          setPaymentFormField(prev, i.id, "amount", e.target.value)
+                          setPaymentFormField(
+                            prev,
+                            i.id,
+                            "amount",
+                            e.target.value,
+                          ),
                         )
                       }
                     />
@@ -1642,7 +1922,12 @@ export default function VillaOperations({ view = "services" }) {
                       value={rowForm.method}
                       onChange={(e) =>
                         setPaymentForms((prev) =>
-                          setPaymentFormField(prev, i.id, "method", e.target.value)
+                          setPaymentFormField(
+                            prev,
+                            i.id,
+                            "method",
+                            e.target.value,
+                          ),
                         )
                       }
                     >
@@ -1660,7 +1945,12 @@ export default function VillaOperations({ view = "services" }) {
                       value={rowForm.reference}
                       onChange={(e) =>
                         setPaymentForms((prev) =>
-                          setPaymentFormField(prev, i.id, "reference", e.target.value)
+                          setPaymentFormField(
+                            prev,
+                            i.id,
+                            "reference",
+                            e.target.value,
+                          ),
                         )
                       }
                     />
@@ -1671,7 +1961,11 @@ export default function VillaOperations({ view = "services" }) {
                       className={`${BUTTON_VARIANTS.primary} w-auto shrink-0`}
                     >
                       <CreditCard size={14} />
-                      <span>{payingInvoiceId === i.id ? "Saving..." : "Record Payment"}</span>
+                      <span>
+                        {payingInvoiceId === i.id
+                          ? "Saving..."
+                          : "Record Payment"}
+                      </span>
                     </button>
                   </form>
                   <p className="text-[11px] text-stone-500 dark:text-[#8A9AB2]">
@@ -1680,7 +1974,10 @@ export default function VillaOperations({ view = "services" }) {
                       : `Pay in full (${villaMoney(balance)}) or in 2 installments: minimum 50% (${villaMoney(plan.firstInstallmentAmount)}) before guest check-in and remaining balance as 2nd installment.`}
                   </p>
                   {rowForm.error && (
-                    <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+                    <p
+                      role="alert"
+                      className="text-xs text-rose-600 dark:text-rose-400"
+                    >
                       {rowForm.error}
                     </p>
                   )}
@@ -1701,28 +1998,40 @@ export default function VillaOperations({ view = "services" }) {
       {/* ===================== VIEW: REPORTS ===================== */}
       {view === "reports" && (
         <>
-          <div className={`${CARD_STYLES.base} !p-3 w-fit max-w-full flex flex-wrap items-end gap-3`}>
+          <div
+            className={`${CARD_STYLES.base} !p-3 w-fit max-w-full flex flex-wrap items-end gap-3`}
+          >
             <div className="flex flex-wrap items-end gap-2.5">
               <div>
-                <label className="block text-xs font-semibold mb-1">Period Start</label>
+                <label className="block text-xs font-semibold mb-1">
+                  Period Start
+                </label>
                 <input
                   type="date"
                   value={reportRange.start_date}
                   onChange={(e) => {
                     setReportPage(1);
-                    setReportRange({ ...reportRange, start_date: e.target.value });
+                    setReportRange({
+                      ...reportRange,
+                      start_date: e.target.value,
+                    });
                   }}
                   className={`${INPUT_STYLES.base} !w-auto`}
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1">Period End</label>
+                <label className="block text-xs font-semibold mb-1">
+                  Period End
+                </label>
                 <input
                   type="date"
                   value={reportRange.end_date}
                   onChange={(e) => {
                     setReportPage(1);
-                    setReportRange({ ...reportRange, end_date: e.target.value });
+                    setReportRange({
+                      ...reportRange,
+                      end_date: e.target.value,
+                    });
                   }}
                   className={`${INPUT_STYLES.base} !w-auto`}
                 />
@@ -1732,7 +2041,10 @@ export default function VillaOperations({ view = "services" }) {
               <button
                 type="button"
                 onClick={() =>
-                  setReportRange({ start_date: toIsoDate(-30), end_date: toIsoDate(30) })
+                  setReportRange({
+                    start_date: toIsoDate(-30),
+                    end_date: toIsoDate(30),
+                  })
                 }
                 className={BUTTON_VARIANTS.secondary}
               >
@@ -1741,7 +2053,10 @@ export default function VillaOperations({ view = "services" }) {
               <button
                 type="button"
                 onClick={() =>
-                  setReportRange({ start_date: toIsoDate(-7), end_date: toIsoDate(7) })
+                  setReportRange({
+                    start_date: toIsoDate(-7),
+                    end_date: toIsoDate(7),
+                  })
                 }
                 className={BUTTON_VARIANTS.secondary}
               >
@@ -1754,7 +2069,9 @@ export default function VillaOperations({ view = "services" }) {
             <StatCard
               compact
               title="Occupancy Rate"
-              value={loading ? "—" : `${reportData?.summary?.occupancy_rate ?? 0}%`}
+              value={
+                loading ? "—" : `${reportData?.summary?.occupancy_rate ?? 0}%`
+              }
               description={`${reportData?.summary?.nights_sold ?? 0} of ${reportData?.summary?.available_unit_nights ?? 0} unit-nights`}
               icon={Percent}
               color="sky"
@@ -1770,7 +2087,11 @@ export default function VillaOperations({ view = "services" }) {
             <StatCard
               compact
               title="Net Revenue Collected"
-              value={loading ? "—" : villaMoney(reportData?.summary?.net_revenue_received)}
+              value={
+                loading
+                  ? "—"
+                  : villaMoney(reportData?.summary?.net_revenue_received)
+              }
               description={`Service rev: ${villaMoney(reportData?.summary?.service_revenue)}`}
               icon={IndianRupee}
               color="emerald"
@@ -1778,30 +2099,45 @@ export default function VillaOperations({ view = "services" }) {
             <StatCard
               compact
               title="Outstanding Balance"
-              value={loading ? "—" : villaMoney(reportData?.summary?.outstanding_balance)}
+              value={
+                loading
+                  ? "—"
+                  : villaMoney(reportData?.summary?.outstanding_balance)
+              }
               description={`Cancel / No-Show: ${reportData?.summary?.cancellation_no_show_rate ?? 0}%`}
               icon={Wallet}
-              color={Number(reportData?.summary?.outstanding_balance || 0) > 0 ? "rose" : "emerald"}
+              color={
+                Number(reportData?.summary?.outstanding_balance || 0) > 0
+                  ? "rose"
+                  : "emerald"
+              }
             />
           </div>
 
           {reportData?.status_breakdown && (
             <div className={CARD_STYLES.base}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">
-                Stay Status Distribution ({reportData.summary?.total_stays ?? 0} total stays)
+                Stay Status Distribution ({reportData.summary?.total_stays ?? 0}{" "}
+                total stays)
               </h3>
               <div className="flex flex-wrap gap-2.5">
-                {Object.entries(reportData.status_breakdown).map(([statusKey, count]) => (
-                  <div
-                    key={statusKey}
-                    className="inline-flex items-center gap-2 rounded-xl border border-stone-200 dark:border-stone-800 px-3 py-1.5 text-xs"
-                  >
-                    <StatusBadge status={statusKey} label={statusKey} size="sm" />
-                    <span className="font-bold tabular-nums text-stone-900 dark:text-stone-100">
-                      {count}
-                    </span>
-                  </div>
-                ))}
+                {Object.entries(reportData.status_breakdown).map(
+                  ([statusKey, count]) => (
+                    <div
+                      key={statusKey}
+                      className="inline-flex items-center gap-2 rounded-xl border border-stone-200 dark:border-stone-800 px-3 py-1.5 text-xs"
+                    >
+                      <StatusBadge
+                        status={statusKey}
+                        label={statusKey}
+                        size="sm"
+                      />
+                      <span className="font-bold tabular-nums text-stone-900 dark:text-stone-100">
+                        {count}
+                      </span>
+                    </div>
+                  ),
+                )}
               </div>
             </div>
           )}
@@ -1821,13 +2157,27 @@ export default function VillaOperations({ view = "services" }) {
                   label: "Unit & Villa",
                   render: (u) => (
                     <div>
-                      <div className="font-semibold text-[#172033] dark:text-[#F8FAFC]">{u.unit_name}</div>
-                      <div className="text-[11px] text-[#64748B] dark:text-[#8A9AB2]">{u.villa_name}</div>
+                      <div className="font-semibold text-[#172033] dark:text-[#F8FAFC]">
+                        {u.unit_name}
+                      </div>
+                      <div className="text-[11px] text-[#64748B] dark:text-[#8A9AB2]">
+                        {u.villa_name}
+                      </div>
                     </div>
                   ),
                 },
-                { key: "stays", label: "Stays", align: "right", cellClassName: "tabular-nums" },
-                { key: "nights_sold", label: "Nights", align: "right", cellClassName: "tabular-nums" },
+                {
+                  key: "stays",
+                  label: "Stays",
+                  align: "right",
+                  cellClassName: "tabular-nums",
+                },
+                {
+                  key: "nights_sold",
+                  label: "Nights",
+                  align: "right",
+                  cellClassName: "tabular-nums",
+                },
                 {
                   key: "accommodation_revenue",
                   label: "Room Revenue",
@@ -1857,14 +2207,21 @@ export default function VillaOperations({ view = "services" }) {
                   label: "Guest",
                   render: (g) => (
                     <div>
-                      <div className="font-semibold text-[#172033] dark:text-[#F8FAFC]">{g.full_name}</div>
+                      <div className="font-semibold text-[#172033] dark:text-[#F8FAFC]">
+                        {g.full_name}
+                      </div>
                       <div className="text-[11px] font-mono text-[#64748B] dark:text-[#8A9AB2]">
                         {g.guest_reference}
                       </div>
                     </div>
                   ),
                 },
-                { key: "stays", label: "Stays", align: "right", cellClassName: "tabular-nums" },
+                {
+                  key: "stays",
+                  label: "Stays",
+                  align: "right",
+                  cellClassName: "tabular-nums",
+                },
                 {
                   key: "total_booked",
                   label: "Room Spend",
@@ -1895,7 +2252,11 @@ export default function VillaOperations({ view = "services" }) {
                 cellClassName: "whitespace-nowrap",
                 render: (b) => b.guest_name || b.customer_name,
               },
-              { key: "unit_name", label: "Unit", cellClassName: "whitespace-nowrap" },
+              {
+                key: "unit_name",
+                label: "Unit",
+                cellClassName: "whitespace-nowrap",
+              },
               {
                 key: "dates",
                 label: "Stay Dates",
@@ -1906,7 +2267,9 @@ export default function VillaOperations({ view = "services" }) {
                 key: "status",
                 label: "Status",
                 align: "center",
-                render: (b) => <StatusBadge status={b.status} label={b.status} size="sm" />,
+                render: (b) => (
+                  <StatusBadge status={b.status} label={b.status} size="sm" />
+                ),
               },
               {
                 key: "total_amount",
@@ -1945,25 +2308,27 @@ export default function VillaOperations({ view = "services" }) {
             onSubmit={(e) => {
               e.preventDefault();
               setSettingsError("");
+              const errors = {};
               const trimmedName = String(profile.business_name || "").trim();
               if (trimmedName.length < 2) {
-                setSettingsError("Property Name must contain at least 2 characters.");
-                return;
+                errors.business_name = "Property name must contain at least 2 characters.";
               }
               const emailCheck = validateEmailAddress(profile.business_email, {
                 required: true,
                 label: "Official Email",
               });
               if (!emailCheck.valid) {
-                setSettingsError(emailCheck.error);
-                return;
+                errors.business_email = emailCheck.error;
               }
               const phoneCheck = validateMobileNumber(profile.business_phone, {
                 required: true,
                 label: "Contact Phone",
               });
               if (!phoneCheck.valid) {
-                setSettingsError(phoneCheck.error);
+                errors.business_phone = phoneCheck.error;
+              }
+              setSettingsFieldErrors(errors);
+              if (Object.keys(errors).length > 0) {
                 return;
               }
               const cleaned = {
@@ -1978,7 +2343,14 @@ export default function VillaOperations({ view = "services" }) {
               }, "Property details saved.");
             }}
           >
-            <Field label="Property Name *" field="business_name" profile={profile} setProfile={setProfile} />
+            <Field
+              label="Property Name *"
+              field="business_name"
+              profile={profile}
+              setProfile={setProfile}
+              error={settingsFieldErrors.business_name}
+              onValueChange={() => setSettingsFieldErrors((p) => ({ ...p, business_name: "" }))}
+            />
             <Field
               label="Official Email *"
               field="business_email"
@@ -1986,6 +2358,8 @@ export default function VillaOperations({ view = "services" }) {
               placeholder="e.g. contact@resort.com"
               profile={profile}
               setProfile={setProfile}
+              error={settingsFieldErrors.business_email}
+              onValueChange={() => setSettingsFieldErrors((p) => ({ ...p, business_email: "" }))}
             />
             <Field
               label="Contact Phone *"
@@ -1996,15 +2370,24 @@ export default function VillaOperations({ view = "services" }) {
               hint="10-digit mobile starting with 6, 7, 8, or 9."
               profile={profile}
               setProfile={setProfile}
+              error={settingsFieldErrors.business_phone}
+              onValueChange={() => setSettingsFieldErrors((p) => ({ ...p, business_phone: "" }))}
             />
-            <Field label="City" field="city" profile={profile} setProfile={setProfile} />
+            <Field
+              label="City"
+              field="city"
+              profile={profile}
+              setProfile={setProfile}
+            />
             <label className="text-xs font-semibold sm:col-span-2">
               Address
               <textarea
                 className={`${INPUT_STYLES.base} mt-1`}
                 rows="2"
                 value={profile.address_line || ""}
-                onChange={(e) => setProfile({ ...profile, address_line: e.target.value })}
+                onChange={(e) =>
+                  setProfile({ ...profile, address_line: e.target.value })
+                }
               />
             </label>
             <label className="text-xs font-semibold sm:col-span-2">
@@ -2013,7 +2396,9 @@ export default function VillaOperations({ view = "services" }) {
                 className={`${INPUT_STYLES.base} mt-1`}
                 rows="3"
                 value={profile.description || ""}
-                onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+                onChange={(e) =>
+                  setProfile({ ...profile, description: e.target.value })
+                }
               />
             </label>
             <div>
@@ -2030,7 +2415,11 @@ export default function VillaOperations({ view = "services" }) {
       <Modal
         isOpen={Boolean(serviceModal)}
         onClose={() => !savingService && setServiceModal(null)}
-        title={serviceModal?.mode === "edit" ? "Edit Guest Service" : "Add Guest Service"}
+        title={
+          serviceModal?.mode === "edit"
+            ? "Edit Guest Service"
+            : "Add Guest Service"
+        }
         subtitle="Configure billable resort amenities, experiences, or transfers."
         size="md"
         footer={
@@ -2049,12 +2438,20 @@ export default function VillaOperations({ view = "services" }) {
               disabled={savingService}
               className={BUTTON_VARIANTS.primary}
             >
-              {savingService ? "Saving..." : serviceModal?.mode === "edit" ? "Save Service" : "Create Service"}
+              {savingService
+                ? "Saving..."
+                : serviceModal?.mode === "edit"
+                  ? "Save Service"
+                  : "Create Service"}
             </button>
           </div>
         }
       >
-        <form id="villa-service-modal-form" onSubmit={handleSaveService} className="space-y-4">
+        <form
+          id="villa-service-modal-form"
+          onSubmit={handleSaveService}
+          className="space-y-4"
+        >
           {serviceFormError && (
             <AlertBanner
               variant="error"
@@ -2063,34 +2460,50 @@ export default function VillaOperations({ view = "services" }) {
             />
           )}
           <div>
-            <label className="block text-xs font-semibold mb-1">Service Name *</label>
+            <label className="block text-xs font-semibold mb-1">
+              Service Name *
+            </label>
             <input
               type="text"
               required
               value={serviceForm.name}
-              onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
+              onChange={(e) =>
+                (setServiceForm({ ...serviceForm, name: e.target.value }), setServiceFieldErrors((p) => ({ ...p, name: "" })))
+              }
               placeholder="e.g. Private Floating Breakfast"
-              className={INPUT_STYLES.base}
+              aria-invalid={Boolean(serviceFieldErrors.name)}
+              className={`${INPUT_STYLES.base} ${serviceFieldErrors.name ? "border-red-500" : ""}`}
             />
+            {serviceFieldErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{serviceFieldErrors.name}</p>}
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1">Price (₹) *</label>
+            <label className="block text-xs font-semibold mb-1">
+              Price (₹) *
+            </label>
             <input
               type="number"
               min="0"
               step="0.01"
               required
               value={serviceForm.price}
-              onChange={(e) => setServiceForm({ ...serviceForm, price: e.target.value })}
-              className={INPUT_STYLES.base}
+              onChange={(e) =>
+                (setServiceForm({ ...serviceForm, price: e.target.value }), setServiceFieldErrors((p) => ({ ...p, price: "" })))
+              }
+              aria-invalid={Boolean(serviceFieldErrors.price)}
+              className={`${INPUT_STYLES.base} ${serviceFieldErrors.price ? "border-red-500" : ""}`}
             />
+            {serviceFieldErrors.price && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{serviceFieldErrors.price}</p>}
           </div>
           <div>
-            <label className="block text-xs font-semibold mb-1">Description</label>
+            <label className="block text-xs font-semibold mb-1">
+              Description
+            </label>
             <textarea
               rows={2}
               value={serviceForm.description}
-              onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
+              onChange={(e) =>
+                setServiceForm({ ...serviceForm, description: e.target.value })
+              }
               placeholder="Included inclusions, lead time, or setup notes..."
               className={INPUT_STYLES.base}
             />
@@ -2099,7 +2512,9 @@ export default function VillaOperations({ view = "services" }) {
             <input
               type="checkbox"
               checked={Boolean(serviceForm.is_active)}
-              onChange={(e) => setServiceForm({ ...serviceForm, is_active: e.target.checked })}
+              onChange={(e) =>
+                setServiceForm({ ...serviceForm, is_active: e.target.checked })
+              }
             />
             <span>Service is active and available for requests</span>
           </label>
@@ -2132,7 +2547,9 @@ export default function VillaOperations({ view = "services" }) {
         impactSummary={
           deleteReqTarget
             ? `${deleteReqTarget.guest_name} · ${villaMoney(
-                deleteReqTarget.line_total ?? Number(deleteReqTarget.unit_price) * Number(deleteReqTarget.quantity)
+                deleteReqTarget.line_total ??
+                  Number(deleteReqTarget.unit_price) *
+                    Number(deleteReqTarget.quantity),
               )}`
             : null
         }
@@ -2146,14 +2563,48 @@ export default function VillaOperations({ view = "services" }) {
         onClose={() => !bulkDeleteLoading && setBulkDeleteKind("")}
         title={`Delete ${(bulkDeleteKind === "services" ? selectedServiceIds : selectedRequestIds).size} Selected ${bulkDeleteKind === "services" ? "Service" : "Request"}${(bulkDeleteKind === "services" ? selectedServiceIds : selectedRequestIds).size !== 1 ? "s" : ""}`}
         size="sm"
-        footer={<div className="flex justify-end gap-2"><button type="button" className={BUTTON_VARIANTS.secondary} disabled={bulkDeleteLoading} onClick={() => setBulkDeleteKind("")}>Cancel</button><button type="button" className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={bulkDeleteLoading} onClick={confirmBulkDelete}>{bulkDeleteLoading ? "Deleting..." : "Confirm Delete"}</button></div>}
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className={BUTTON_VARIANTS.secondary}
+              disabled={bulkDeleteLoading}
+              onClick={() => setBulkDeleteKind("")}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              disabled={bulkDeleteLoading}
+              onClick={confirmBulkDelete}
+            >
+              {bulkDeleteLoading ? "Deleting..." : "Confirm Delete"}
+            </button>
+          </div>
+        }
       >
-        <p className="mb-3 text-sm text-[#64748B] dark:text-[#8A9AB2]">Protected services and billed or closed requests are rejected by the server and reported after processing.</p>
+        <p className="mb-3 text-sm text-[#64748B] dark:text-[#8A9AB2]">
+          Protected services and billed or closed requests are rejected by the
+          server and reported after processing.
+        </p>
         <ul className="max-h-48 overflow-y-auto divide-y divide-[#E5E9F0] rounded-xl border border-[#E5E9F0]">
-          {Array.from(bulkDeleteKind === "services" ? selectedServiceIds : selectedRequestIds).map((id) => {
+          {Array.from(
+            bulkDeleteKind === "services"
+              ? selectedServiceIds
+              : selectedRequestIds,
+          ).map((id) => {
             const service = bulkDeleteKind === "services";
-            const row = service ? services.find((item) => item.id === id) : requests.find((item) => item.id === id);
-            return <li key={id} className="px-3 py-2 text-sm">{service ? row?.name : `${row?.service_name || "Service"} (${row?.booking_number || `#${id}`})`}</li>;
+            const row = service
+              ? services.find((item) => item.id === id)
+              : requests.find((item) => item.id === id);
+            return (
+              <li key={id} className="px-3 py-2 text-sm">
+                {service
+                  ? row?.name
+                  : `${row?.service_name || "Service"} (${row?.booking_number || `#${id}`})`}
+              </li>
+            );
           })}
         </ul>
       </Modal>
@@ -2162,7 +2613,11 @@ export default function VillaOperations({ view = "services" }) {
       <Modal
         isOpen={Boolean(invoiceModal)}
         onClose={() => !refunding && setInvoiceModal(null)}
-        title={invoiceModal ? `Invoice ${invoiceModal.invoice.invoice_number}` : "Invoice Details"}
+        title={
+          invoiceModal
+            ? `Invoice ${invoiceModal.invoice.invoice_number}`
+            : "Invoice Details"
+        }
         subtitle={
           invoiceModal
             ? `${invoiceModal.invoice.booking_number} · ${invoiceModal.invoice.customer_name} · Check-in: ${villaDateWithTime(invoiceModal.invoice.check_in, invoiceModal.invoice.check_in_time)} · Check-out: ${villaDateWithTime(invoiceModal.invoice.check_out, invoiceModal.invoice.check_out_time)}`
@@ -2170,14 +2625,18 @@ export default function VillaOperations({ view = "services" }) {
         }
         size="lg"
         footer={
-          invoiceModal && (() => {
+          invoiceModal &&
+          (() => {
             const inv = invoiceModal.invoice;
             const modalBalance = Number(
               Number(
                 invoiceModal.history?.balance_due ??
                   inv.balance_due ??
-                  Math.max(0, Number(inv.total_amount) - Number(inv.paid_amount))
-              ).toFixed(2)
+                  Math.max(
+                    0,
+                    Number(inv.total_amount) - Number(inv.paid_amount),
+                  ),
+              ).toFixed(2),
             );
             const canModalPay =
               inv.payment_status !== "Void" &&
@@ -2193,7 +2652,11 @@ export default function VillaOperations({ view = "services" }) {
                     className={BUTTON_VARIANTS.outline}
                   >
                     <Download size={15} />
-                    <span>{downloadingPdfId === inv.id ? "Downloading..." : "Download PDF"}</span>
+                    <span>
+                      {downloadingPdfId === inv.id
+                        ? "Downloading..."
+                        : "Download PDF"}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -2216,7 +2679,11 @@ export default function VillaOperations({ view = "services" }) {
                   <button
                     type="button"
                     onClick={() => handleWhatsAppPdfShare(inv)}
-                    disabled={pdfPreparing || !preparedPdf || Number(preparedPdf.invoiceId) !== Number(inv.id)}
+                    disabled={
+                      pdfPreparing ||
+                      !preparedPdf ||
+                      Number(preparedPdf.invoiceId) !== Number(inv.id)
+                    }
                     className={`${BUTTON_VARIANTS.outline} disabled:opacity-50`}
                     title="Share invoice PDF file"
                   >
@@ -2253,21 +2720,28 @@ export default function VillaOperations({ view = "services" }) {
       >
         {invoiceModal && (
           <div className="space-y-5 text-sm">
-            {invoiceModal.loading && <p className="text-stone-500">Loading invoice breakdown...</p>}
+            {invoiceModal.loading && (
+              <p className="text-stone-500">Loading invoice breakdown...</p>
+            )}
             {invoiceModal.error && (
               <AlertBanner variant="error" message={invoiceModal.error} />
             )}
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/60 p-3">
               <div>
-                <span className="text-xs text-stone-500 block">Grand Total</span>
-                <b className="tabular-nums">{villaMoney(invoiceModal.invoice.total_amount)}</b>
+                <span className="text-xs text-stone-500 block">
+                  Grand Total
+                </span>
+                <b className="tabular-nums">
+                  {villaMoney(invoiceModal.invoice.total_amount)}
+                </b>
               </div>
               <div>
                 <span className="text-xs text-stone-500 block">Gross Paid</span>
                 <b className="tabular-nums">
                   {villaMoney(
-                    invoiceModal.history?.gross_paid_amount ?? invoiceModal.invoice.gross_paid_amount
+                    invoiceModal.history?.gross_paid_amount ??
+                      invoiceModal.invoice.gross_paid_amount,
                   )}
                 </b>
               </div>
@@ -2275,20 +2749,29 @@ export default function VillaOperations({ view = "services" }) {
                 <span className="text-xs text-stone-500 block">Refunded</span>
                 <b className="text-rose-600 dark:text-rose-400 tabular-nums">
                   {villaMoney(
-                    invoiceModal.history?.refunded_amount ?? invoiceModal.invoice.refunded_amount
+                    invoiceModal.history?.refunded_amount ??
+                      invoiceModal.invoice.refunded_amount,
                   )}
                 </b>
               </div>
               <div>
                 <span className="text-xs text-stone-500 block">Net Paid</span>
                 <b className="text-emerald-600 dark:text-emerald-400 tabular-nums">
-                  {villaMoney(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount)}
+                  {villaMoney(
+                    invoiceModal.history?.paid_amount ??
+                      invoiceModal.invoice.paid_amount,
+                  )}
                 </b>
               </div>
               <div>
-                <span className="text-xs text-stone-500 block">Balance Due</span>
+                <span className="text-xs text-stone-500 block">
+                  Balance Due
+                </span>
                 <b className="text-amber-700 dark:text-amber-300 tabular-nums">
-                  {villaMoney(invoiceModal.history?.balance_due ?? invoiceModal.invoice.balance_due)}
+                  {villaMoney(
+                    invoiceModal.history?.balance_due ??
+                      invoiceModal.invoice.balance_due,
+                  )}
                 </b>
               </div>
             </div>
@@ -2302,9 +2785,18 @@ export default function VillaOperations({ view = "services" }) {
                 rows={invoiceModal.invoice.items || []}
                 emptyTitle="No itemized charges recorded"
                 columns={[
-                  { key: "item_type", label: "Type", cellClassName: "font-semibold whitespace-nowrap" },
+                  {
+                    key: "item_type",
+                    label: "Type",
+                    cellClassName: "font-semibold whitespace-nowrap",
+                  },
                   { key: "description", label: "Description" },
-                  { key: "quantity", label: "Qty", align: "right", cellClassName: "tabular-nums" },
+                  {
+                    key: "quantity",
+                    label: "Qty",
+                    align: "right",
+                    cellClassName: "tabular-nums",
+                  },
                   {
                     key: "unit_price",
                     label: "Unit Price",
@@ -2316,7 +2808,8 @@ export default function VillaOperations({ view = "services" }) {
                     key: "total_amount",
                     label: "Total",
                     align: "right",
-                    cellClassName: "font-semibold tabular-nums whitespace-nowrap",
+                    cellClassName:
+                      "font-semibold tabular-nums whitespace-nowrap",
                     render: (it) => villaMoney(it.total_amount),
                   },
                 ]}
@@ -2329,16 +2822,27 @@ export default function VillaOperations({ view = "services" }) {
               </h4>
               {(() => {
                 const isCancelledOrNoShowAdvance =
-                  ["Cancelled", "No Show"].includes(invoiceModal.invoice.booking_status) &&
-                  Number(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount ?? 0) > 0;
+                  ["Cancelled", "No Show"].includes(
+                    invoiceModal.invoice.booking_status,
+                  ) &&
+                  Number(
+                    invoiceModal.history?.paid_amount ??
+                      invoiceModal.invoice.paid_amount ??
+                      0,
+                  ) > 0;
                 const paymentHistoryCols = [
                   {
                     key: "created_at",
                     label: "Date",
                     cellClassName: "whitespace-nowrap text-xs",
-                    render: (p) => (p.created_at ? villaDateTime(p.created_at) : "—"),
+                    render: (p) =>
+                      p.created_at ? villaDateTime(p.created_at) : "—",
                   },
-                  { key: "method", label: "Method", cellClassName: "whitespace-nowrap" },
+                  {
+                    key: "method",
+                    label: "Method",
+                    cellClassName: "whitespace-nowrap",
+                  },
                   {
                     key: "reference",
                     label: "Reference",
@@ -2348,21 +2852,29 @@ export default function VillaOperations({ view = "services" }) {
                     key: "amount",
                     label: "Amount",
                     align: "right",
-                    cellClassName: "font-semibold tabular-nums whitespace-nowrap",
+                    cellClassName:
+                      "font-semibold tabular-nums whitespace-nowrap",
                     render: (p) => villaMoney(p.amount),
                   },
                   {
                     key: "refunded_amount",
                     label: "Refunded",
                     align: "right",
-                    cellClassName: "text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap",
+                    cellClassName:
+                      "text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap",
                     render: (p) => villaMoney(p.refunded_amount),
                   },
                   {
                     key: "status",
                     label: "Status",
                     align: "center",
-                    render: (p) => <StatusBadge status={p.status} label={p.status} size="sm" />,
+                    render: (p) => (
+                      <StatusBadge
+                        status={p.status}
+                        label={p.status}
+                        size="sm"
+                      />
+                    ),
                   },
                 ];
                 if (isCancelledOrNoShowAdvance) {
@@ -2396,7 +2908,11 @@ export default function VillaOperations({ view = "services" }) {
                 return (
                   <VillaDataTable
                     tableMinWidth="min-w-[600px]"
-                    rows={invoiceModal.history?.payments || invoiceModal.invoice.payments || []}
+                    rows={
+                      invoiceModal.history?.payments ||
+                      invoiceModal.invoice.payments ||
+                      []
+                    }
                     emptyTitle="No payments recorded yet"
                     columns={paymentHistoryCols}
                   />
@@ -2404,22 +2920,33 @@ export default function VillaOperations({ view = "services" }) {
               })()}
             </div>
 
-            {((invoiceModal.history?.reversals || invoiceModal.invoice.reversals || []).length > 0 ||
-              ["Cancelled", "No Show"].includes(invoiceModal.invoice.booking_status)) && (
+            {((
+              invoiceModal.history?.reversals ||
+              invoiceModal.invoice.reversals ||
+              []
+            ).length > 0 ||
+              ["Cancelled", "No Show"].includes(
+                invoiceModal.invoice.booking_status,
+              )) && (
               <div>
                 <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-stone-500">
                   Refund &amp; Reversal History
                 </h4>
                 <VillaDataTable
                   tableMinWidth="min-w-[640px]"
-                  rows={invoiceModal.history?.reversals || invoiceModal.invoice.reversals || []}
+                  rows={
+                    invoiceModal.history?.reversals ||
+                    invoiceModal.invoice.reversals ||
+                    []
+                  }
                   emptyTitle="No refunds recorded"
                   columns={[
                     {
                       key: "created_at",
                       label: "Date",
                       cellClassName: "whitespace-nowrap text-xs",
-                      render: (r) => (r.created_at ? villaDateTime(r.created_at) : "—"),
+                      render: (r) =>
+                        r.created_at ? villaDateTime(r.created_at) : "—",
                     },
                     {
                       key: "payment_id",
@@ -2427,7 +2954,11 @@ export default function VillaOperations({ view = "services" }) {
                       cellClassName: "whitespace-nowrap font-mono",
                       render: (r) => `#${r.payment_id}`,
                     },
-                    { key: "refund_method", label: "Method", cellClassName: "whitespace-nowrap" },
+                    {
+                      key: "refund_method",
+                      label: "Method",
+                      cellClassName: "whitespace-nowrap",
+                    },
                     {
                       key: "refund_reference",
                       label: "Reference",
@@ -2438,7 +2969,8 @@ export default function VillaOperations({ view = "services" }) {
                       key: "refund_amount",
                       label: "Amount",
                       align: "right",
-                      cellClassName: "font-semibold text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap",
+                      cellClassName:
+                        "font-semibold text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap",
                       render: (r) => villaMoney(r.refund_amount),
                     },
                     {
@@ -2446,7 +2978,11 @@ export default function VillaOperations({ view = "services" }) {
                       label: "Status",
                       align: "center",
                       render: (r) => (
-                        <StatusBadge status={r.reversal_status} label={r.reversal_status} size="sm" />
+                        <StatusBadge
+                          status={r.reversal_status}
+                          label={r.reversal_status}
+                          size="sm"
+                        />
                       ),
                     },
                   ]}
@@ -2454,90 +2990,117 @@ export default function VillaOperations({ view = "services" }) {
               </div>
             )}
 
-            {["Cancelled", "No Show"].includes(invoiceModal.invoice.booking_status) &&
-              Number(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount ?? 0) > 0 && (
-              <form
-                onSubmit={handleRefundSubmit}
-                className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-stone-900 p-3.5 space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
-                    Issue Payment Refund
-                  </h4>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold text-amber-800 dark:text-amber-300 underline cursor-pointer"
-                    onClick={() =>
-                      setRefundForm((prev) => ({
-                        ...prev,
-                        payment_id: "",
-                        refund_amount: String(
-                          invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount
-                        ),
-                        error: "",
-                      }))
-                    }
-                  >
-                    Fill Full Net Refund (
-                    {villaMoney(invoiceModal.history?.paid_amount ?? invoiceModal.invoice.paid_amount)})
-                  </button>
-                </div>
-                {refundForm.error && (
-                  <AlertBanner variant="error" message={refundForm.error} />
-                )}
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    className={`${INPUT_STYLES.base} !w-36`}
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="Refund amount"
-                    required
-                    value={refundForm.refund_amount}
-                    onChange={(e) =>
-                      setRefundForm((prev) => ({ ...prev, refund_amount: e.target.value, error: "" }))
-                    }
-                  />
-                  <select
-                    className={`${INPUT_STYLES.select} !w-auto min-w-[125px]`}
-                    value={refundForm.refund_method}
-                    onChange={(e) =>
-                      setRefundForm((prev) => ({ ...prev, refund_method: e.target.value }))
-                    }
-                  >
-                    <option>UPI</option>
-                    <option>Card</option>
-                    <option>Net Banking</option>
-                    <option>Cash</option>
-                  </select>
-                  <input
-                    className={`${INPUT_STYLES.base} !w-44`}
-                    placeholder="Refund ref (optional)"
-                    value={refundForm.refund_reference}
-                    onChange={(e) =>
-                      setRefundForm((prev) => ({ ...prev, refund_reference: e.target.value }))
-                    }
-                  />
-                  <input
-                    className={`${INPUT_STYLES.base} !w-52`}
-                    placeholder="Refund reason *"
-                    required
-                    value={refundForm.reason}
-                    onChange={(e) =>
-                      setRefundForm((prev) => ({ ...prev, reason: e.target.value, error: "" }))
-                    }
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={refunding}
-                  className={BUTTON_VARIANTS.danger}
+            {["Cancelled", "No Show"].includes(
+              invoiceModal.invoice.booking_status,
+            ) &&
+              Number(
+                invoiceModal.history?.paid_amount ??
+                  invoiceModal.invoice.paid_amount ??
+                  0,
+              ) > 0 && (
+                <form
+                  onSubmit={handleRefundSubmit}
+                  className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-stone-900 p-3.5 space-y-3"
                 >
-                  <RotateCcw size={13} />
-                  <span>{refunding ? "Recording refund..." : "Submit Refund"}</span>
-                </button>
-              </form>
-            )}
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                      Issue Payment Refund
+                    </h4>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-amber-800 dark:text-amber-300 underline cursor-pointer"
+                      onClick={() =>
+                        setRefundForm((prev) => ({
+                          ...prev,
+                          payment_id: "",
+                          refund_amount: String(
+                            invoiceModal.history?.paid_amount ??
+                              invoiceModal.invoice.paid_amount,
+                          ),
+                          error: "",
+                        }))
+                      }
+                    >
+                      Fill Full Net Refund (
+                      {villaMoney(
+                        invoiceModal.history?.paid_amount ??
+                          invoiceModal.invoice.paid_amount,
+                      )}
+                      )
+                    </button>
+                  </div>
+                  {refundForm.error && (
+                    <AlertBanner variant="error" message={refundForm.error} />
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      className={`${INPUT_STYLES.base} !w-36`}
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="Refund amount"
+                      required
+                      value={refundForm.refund_amount}
+                      onChange={(e) =>
+                        setRefundForm((prev) => ({
+                          ...prev,
+                          refund_amount: e.target.value,
+                          error: "",
+                        }))
+                      }
+                    />
+                    <select
+                      className={`${INPUT_STYLES.select} !w-auto min-w-[125px]`}
+                      value={refundForm.refund_method}
+                      onChange={(e) =>
+                        setRefundForm((prev) => ({
+                          ...prev,
+                          refund_method: e.target.value,
+                        }))
+                      }
+                    >
+                      <option>UPI</option>
+                      <option>Card</option>
+                      <option>Net Banking</option>
+                      <option>Cash</option>
+                    </select>
+                    <input
+                      className={`${INPUT_STYLES.base} !w-44`}
+                      placeholder="Refund ref (optional)"
+                      value={refundForm.refund_reference}
+                      onChange={(e) =>
+                        setRefundForm((prev) => ({
+                          ...prev,
+                          refund_reference: e.target.value,
+                        }))
+                      }
+                    />
+                    <input
+                      className={`${INPUT_STYLES.base} !w-52`}
+                      placeholder="Refund reason *"
+                      required
+                      value={refundForm.reason}
+                      onChange={(e) =>
+                        setRefundForm((prev) => ({
+                          ...prev,
+                          reason: e.target.value,
+                          error: "",
+                        }))
+                      }
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={refunding}
+                    className={BUTTON_VARIANTS.danger}
+                  >
+                    <RotateCcw size={13} />
+                    <span>
+                      {refunding ? "Recording refund..." : "Submit Refund"}
+                    </span>
+                  </button>
+                </form>
+              )}
           </div>
         )}
       </Modal>
@@ -2545,7 +3108,18 @@ export default function VillaOperations({ view = "services" }) {
   );
 }
 
-function Field({ label, field, profile, setProfile, type = "text", placeholder = "", maxLength, hint = "" }) {
+function Field({
+  label,
+  field,
+  profile,
+  setProfile,
+  type = "text",
+  placeholder = "",
+  maxLength,
+  hint = "",
+  error = "",
+  onValueChange,
+}) {
   return (
     <label className="text-xs font-semibold block">
       {label}
@@ -2553,11 +3127,17 @@ function Field({ label, field, profile, setProfile, type = "text", placeholder =
         type={type}
         maxLength={maxLength}
         placeholder={placeholder}
-        className={`${INPUT_STYLES.base} mt-1`}
+        aria-invalid={Boolean(error)}
+        className={`${INPUT_STYLES.base} mt-1 ${error ? "border-red-500" : ""}`}
         value={profile[field] || ""}
-        onChange={(e) => setProfile({ ...profile, [field]: e.target.value })}
+        onChange={(e) => { setProfile({ ...profile, [field]: e.target.value }); onValueChange?.(); }}
       />
-      {hint && <span className="mt-1 block text-[11px] font-normal text-stone-500 dark:text-stone-400">{hint}</span>}
+      {error && <span className="mt-1 block text-xs font-normal text-red-600 dark:text-red-400">{error}</span>}
+      {hint && (
+        <span className="mt-1 block text-[11px] font-normal text-stone-500 dark:text-stone-400">
+          {hint}
+        </span>
+      )}
     </label>
   );
 }

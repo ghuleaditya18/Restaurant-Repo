@@ -802,7 +802,7 @@ export default function Menu() {
   // ==========================================
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Menu Management"
@@ -812,18 +812,18 @@ export default function Menu() {
             <button
               type="button"
               onClick={openCategoryManager}
-              className="flex items-center gap-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] px-4 py-2.5 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer transition shadow-2xs"
+              className="flex items-center gap-2 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] px-3.5 py-2 text-sm font-medium text-stone-900 dark:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800 cursor-pointer transition shadow-2xs"
             >
-              <Tags size={17} />
+              <Tags size={16} />
               <span>Manage Categories</span>
             </button>
 
             <button
               type="button"
               onClick={openAddItemModal}
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer transition"
+              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-3.5 py-2 text-sm font-bold text-[#0D1420] shadow-xs hover:opacity-95 cursor-pointer transition"
             >
-              <Plus size={17} />
+              <Plus size={16} />
               <span>Add Menu Item</span>
             </button>
           </div>
@@ -832,7 +832,7 @@ export default function Menu() {
 
       {/* SUMMARY CARDS */}
 
-      <div className="mb-4 grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard
           compact
           title="Total Menu Items"
@@ -878,9 +878,9 @@ export default function Menu() {
       <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND FILTER */}
 
-        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+            <h2 className="text-sm sm:text-base font-semibold text-stone-900 dark:text-stone-100">
               Restaurant Menu
             </h2>
 
@@ -890,11 +890,11 @@ export default function Menu() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#78716C] dark:text-[#8A9AB2]"
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#78716C] dark:text-[#8A9AB2]"
               />
 
               <input
@@ -906,7 +906,7 @@ export default function Menu() {
                   setSearch(event.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-8 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-[#8A9AB2] outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-1.5 pl-8 pr-7 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-[#8A9AB2] outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-48"
               />
 
               {search && (
@@ -917,9 +917,9 @@ export default function Menu() {
                     setCurrentPage(1);
                   }}
                   aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#78716C] dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#78716C] dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
                 >
-                  <X size={15} />
+                  <X size={14} />
                 </button>
               )}
             </div>
@@ -931,7 +931,7 @@ export default function Menu() {
                 setSelectedCategory(event.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Categories</option>
 
@@ -949,7 +949,7 @@ export default function Menu() {
                 setAvailabilityFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-900 dark:text-stone-100 outline-none focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Items</option>
               <option value="AVAILABLE">Available</option>
@@ -962,9 +962,9 @@ export default function Menu() {
               disabled={loading}
               title="Refresh menu"
               aria-label="Refresh menu"
-              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] dark:hover:bg-[#1E293B] disabled:opacity-60"
+              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-1.5 text-stone-900 dark:text-stone-100 hover:bg-[#FAFAF9] dark:hover:bg-[#1E293B] disabled:opacity-60 cursor-pointer"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
@@ -973,18 +973,21 @@ export default function Menu() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-xs uppercase tracking-wide text-[#78716C] dark:text-[#8A9AB2]">
+            <colgroup>
+              <col className="w-10" />
+            </colgroup>
+            <thead className="bg-[#FAF9F6] dark:bg-[#151D29] text-[11px] uppercase tracking-wide text-[#78716C] dark:text-[#8A9AB2]">
               <tr>
-                <th className="px-4 py-3 text-center font-medium"><input type="checkbox" aria-label="Select all menu items on this page" checked={paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
-                <th className="px-4 py-3 font-medium">Menu Item</th>
-                <th className="hidden px-4 py-3 font-medium md:table-cell">
+                <th className="w-10 px-3 py-2.5 text-center font-medium"><input type="checkbox" aria-label="Select all menu items on this page" checked={paginatedItems.length > 0 && paginatedItems.every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className="px-3.5 py-2.5 font-medium">Menu Item</th>
+                <th className="hidden px-3.5 py-2.5 font-medium md:table-cell">
                   Category
                 </th>
-                <th className="px-4 py-3 font-medium">Price</th>
-                <th className="hidden px-4 py-3 font-medium sm:table-cell">
+                <th className="px-3.5 py-2.5 font-medium">Price</th>
+                <th className="hidden px-3.5 py-2.5 font-medium sm:table-cell">
                   Availability
                 </th>
-                <th className="px-4 py-3 text-center font-medium">Actions</th>
+                <th className="px-3.5 py-2.5 text-center font-medium">Actions</th>
               </tr>
             </thead>
 
@@ -1020,15 +1023,15 @@ export default function Menu() {
               ) : (
                 paginatedItems.map((item) => (
                   <tr key={item.id} className="transition hover:bg-[#FAF9F6] dark:hover:bg-[#151D29]/60">
-                    <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select menu item ${item.name}`} checked={selectedIds.has(item.id)} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500" /></td>
+                    <td className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label={`Select menu item ${item.name}`} checked={selectedIds.has(item.id)} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* ITEM (image + name + description) */}
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <div className="flex items-center gap-3">
                         <MenuImage
                           src={getItemImage(item)}
                           alt={item.name}
-                          className="h-11 w-11 shrink-0 rounded-lg border border-[#E7E5E4] dark:border-[#1E293B]"
-                          iconSize={16}
+                          className="h-10 w-10 shrink-0 rounded-lg border border-[#E7E5E4] dark:border-[#1E293B]"
+                          iconSize={15}
                         />
 
                         <div className="min-w-0">
@@ -1048,34 +1051,31 @@ export default function Menu() {
                       </div>
                     </td>
 
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm text-stone-900 dark:text-stone-100 md:table-cell">
+                    <td className="hidden whitespace-nowrap px-3.5 py-2.5 text-sm text-stone-900 dark:text-stone-100 md:table-cell">
                       {item.category_name || "—"}
                     </td>
 
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="whitespace-nowrap px-3.5 py-2.5">
                       <span className="inline-flex items-center text-sm font-semibold text-stone-900 dark:text-stone-100">
                         <IndianRupee size={13} />
                         {formatPrice(item.price)}
                       </span>
                     </td>
 
-                    <td className="hidden px-4 py-3 sm:table-cell">
-                      <div className="flex flex-col gap-1 items-start">
-                        <AvailabilityBadge available={item.is_available} />
-                        <InventoryStatusBadge status={item.inventory_status} maxServings={item.max_preparable_servings} />
-                      </div>
+                    <td className="hidden px-3.5 py-2.5 sm:table-cell">
+                      <AvailabilityBadge available={item.is_available} />
                     </td>
 
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={() => setViewingItemId(item.id)}
                           title="View details"
                           aria-label={`View ${item.name}`}
-                          className="rounded-lg p-2 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B]"
+                          className="rounded-lg p-1.5 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B] cursor-pointer"
                         >
-                          <Eye size={16} />
+                          <Eye size={15} />
                         </button>
 
                         <button
@@ -1083,9 +1083,9 @@ export default function Menu() {
                           onClick={() => openEditItemModal(item)}
                           title="Edit menu item"
                           aria-label={`Edit ${item.name}`}
-                          className="rounded-lg p-2 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B]"
+                          className="rounded-lg p-1.5 text-stone-900 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E293B] cursor-pointer"
                         >
-                          <Pencil size={16} />
+                          <Pencil size={15} />
                         </button>
 
                         <button
@@ -1102,14 +1102,14 @@ export default function Menu() {
                               ? "Mark unavailable"
                               : "Mark available"
                           }: ${item.name}`}
-                          className={`rounded-lg p-2 hover:bg-stone-100 dark:hover:bg-[#1E293B] disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`rounded-lg p-1.5 hover:bg-stone-100 dark:hover:bg-[#1E293B] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer ${
                             item.is_available
                               ? "text-stone-900 dark:text-stone-100"
                               : "text-[#78716C] dark:text-[#8A9AB2]"
                           }`}
                         >
                           <Power
-                            size={16}
+                            size={15}
                             className={
                               availabilityUpdatingId === item.id
                                 ? "animate-pulse"
@@ -1123,9 +1123,9 @@ export default function Menu() {
                           onClick={() => requestDeleteItem(item)}
                           title="Delete menu item"
                           aria-label={`Delete ${item.name}`}
-                          className="rounded-lg p-2 text-[#6B625B] dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 hover:text-red-700"
+                          className="rounded-lg p-1.5 text-[#6B625B] dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 hover:text-red-700 cursor-pointer"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -1137,15 +1137,14 @@ export default function Menu() {
         </div>
 
         {/* PAGINATION (10 per page) */}
-        <div className="p-4 border-t border-[#E7E5E4] dark:border-stone-800">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalRecords={filteredItems.length}
-            pageSize={pageSize}
-            onPageChange={(p) => setCurrentPage(p)}
-          />
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRecords={filteredItems.length}
+          pageSize={pageSize}
+          onPageChange={(p) => setCurrentPage(p)}
+          className="px-4 pb-3"
+        />
       </div>
 
       {/* ==================================

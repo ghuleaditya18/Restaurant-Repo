@@ -448,7 +448,7 @@ export default function Staff() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Staff"
@@ -456,7 +456,7 @@ export default function Staff() {
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
           >
             <Plus size={17} />
             <span>Add New Staff</span>
@@ -465,7 +465,7 @@ export default function Staff() {
       />
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-3 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard
           compact
           title="Total Staff"
@@ -499,19 +499,19 @@ export default function Staff() {
       {/* Staff Table Container */}
       <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedStaff} onClear={clear} />
       <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
-        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-bold text-stone-900 dark:text-white">Staff Directory</h2>
+            <h2 className="text-sm sm:text-base font-bold text-stone-900 dark:text-white">Staff Directory</h2>
             <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredStaff.length} {filteredStaff.length === 1 ? "employee" : "employees"} listed
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <div className="relative">
               <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
+                size={14}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
               <input
                 type="text"
@@ -522,7 +522,7 @@ export default function Staff() {
                 }}
                 placeholder="Search name, code, designation..."
                 aria-label="Search staff"
-                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-64"
+                className="w-full rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-1.5 pl-8 pr-3 text-xs text-stone-900 dark:text-white outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-56"
               />
             </div>
 
@@ -532,9 +532,9 @@ export default function Staff() {
               disabled={loading}
               title="Refresh staff list"
               aria-label="Refresh staff list"
-              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-2 text-stone-600 dark:text-[#8A9AB2] transition hover:bg-stone-50 dark:hover:bg-[#101722] disabled:opacity-60 cursor-pointer"
+              className="flex items-center justify-center rounded-lg border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-1.5 text-stone-600 dark:text-[#8A9AB2] transition hover:bg-stone-50 dark:hover:bg-[#101722] disabled:opacity-60 cursor-pointer"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
@@ -542,15 +542,18 @@ export default function Staff() {
         {/* Staff Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+            <colgroup>
+              <col className="w-10" />
+            </colgroup>
+            <thead className="bg-stone-50/80 dark:bg-stone-900/60 text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
               <tr>
-                <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all staff on this page" checked={paginatedStaff.length > 0 && paginatedStaff.every((member) => selectedIds.has(member.id))} onChange={() => toggleMany(paginatedStaff.map((member) => member.id))} className="h-4 w-4 accent-amber-500" /></th>
-                <th className="px-4 py-3">Employee</th>
-                <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Code</th>
-                <th className="hidden whitespace-nowrap px-4 py-3 md:table-cell">Designation</th>
-                <th className="hidden whitespace-nowrap px-4 py-3 lg:table-cell">Joining Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label="Select all staff on this page" checked={paginatedStaff.length > 0 && paginatedStaff.every((member) => selectedIds.has(member.id))} onChange={() => toggleMany(paginatedStaff.map((member) => member.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className="px-3.5 py-2.5">Employee</th>
+                <th className="hidden whitespace-nowrap px-3.5 py-2.5 md:table-cell">Code</th>
+                <th className="hidden whitespace-nowrap px-3.5 py-2.5 md:table-cell">Designation</th>
+                <th className="hidden whitespace-nowrap px-3.5 py-2.5 lg:table-cell">Joining Date</th>
+                <th className="px-3.5 py-2.5">Status</th>
+                <th className="px-3.5 py-2.5 text-center">Actions</th>
               </tr>
             </thead>
 
@@ -559,7 +562,7 @@ export default function Staff() {
                 <tr>
                   <td
                     colSpan="7"
-                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
+                    className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     Loading staff records...
                   </td>
@@ -568,7 +571,7 @@ export default function Staff() {
                 <tr>
                   <td
                     colSpan="7"
-                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-stone-400"
+                    className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                   >
                     <p>No staff members found.</p>
                     {hasActiveFilters && (
@@ -585,11 +588,11 @@ export default function Staff() {
               ) : (
                 paginatedStaff.map((member) => (
                   <tr key={member.id} className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40">
-                    <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select staff ${member.full_name}`} checked={selectedIds.has(member.id)} onChange={() => toggle(member.id)} className="h-4 w-4 accent-amber-500" /></td>
+                    <td className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label={`Select staff ${member.full_name}`} checked={selectedIds.has(member.id)} onChange={() => toggle(member.id)} className="h-4 w-4 accent-amber-500" /></td>
                     {/* Employee Details */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-sm shadow-2xs">
+                    <td className="px-3.5 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-xs shadow-2xs">
                           <AuthenticatedImage
                             src={member.image_url}
                             alt={member.full_name}
@@ -598,7 +601,7 @@ export default function Staff() {
                         </div>
 
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-stone-900 dark:text-white">
+                          <p className="truncate font-semibold text-stone-900 dark:text-white leading-tight">
                             {member.full_name}
                           </p>
                           <p className="truncate text-xs text-stone-500 dark:text-stone-400">
@@ -614,22 +617,22 @@ export default function Staff() {
                     </td>
 
                     {/* Employee Code */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 font-mono text-xs text-stone-700 dark:text-stone-300 md:table-cell">
+                    <td className="hidden whitespace-nowrap px-3.5 py-2.5 font-mono text-xs text-stone-700 dark:text-stone-300 md:table-cell">
                       {member.employee_code || "—"}
                     </td>
 
                     {/* Designation */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-sm font-medium text-stone-700 dark:text-stone-300 md:table-cell">
+                    <td className="hidden whitespace-nowrap px-3.5 py-2.5 text-sm font-medium text-stone-700 dark:text-stone-300 md:table-cell">
                       {member.designation || "—"}
                     </td>
 
                     {/* Joining Date */}
-                    <td className="hidden whitespace-nowrap px-4 py-3 text-xs text-stone-500 dark:text-stone-400 lg:table-cell">
+                    <td className="hidden whitespace-nowrap px-3.5 py-2.5 text-xs text-stone-500 dark:text-stone-400 lg:table-cell">
                       {formatDate(member.joining_date)}
                     </td>
 
                     {/* Status */}
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           member.is_active
@@ -643,16 +646,16 @@ export default function Staff() {
                     </td>
 
                     {/* Actions */}
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={() => openViewModal(member)}
                           title="View staff details"
                           aria-label={`View ${member.full_name}`}
-                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
+                          className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
-                          <Eye size={16} />
+                          <Eye size={15} />
                         </button>
 
                         <button
@@ -660,9 +663,9 @@ export default function Staff() {
                           onClick={() => openEditModal(member)}
                           title="Edit staff"
                           aria-label={`Edit ${member.full_name}`}
-                          className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
+                          className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                         >
-                          <Pencil size={16} />
+                          <Pencil size={15} />
                         </button>
 
                         <button
@@ -670,13 +673,13 @@ export default function Staff() {
                           onClick={() => handleStatusChange(member)}
                           disabled={statusUpdatingId === member.id}
                           title={member.is_active ? "Deactivate staff" : "Activate staff"}
-                          className={`rounded-lg p-2 transition cursor-pointer ${
+                          className={`rounded-lg p-1.5 transition cursor-pointer ${
                             member.is_active
                               ? "text-amber-700 hover:bg-amber-50"
                               : "text-emerald-700 hover:bg-emerald-50"
                           }`}
                         >
-                          <Power size={16} />
+                          <Power size={15} />
                         </button>
 
                         <button
@@ -684,9 +687,9 @@ export default function Staff() {
                           onClick={() => handleDeleteStaff(member)}
                           disabled={deletingId === member.id}
                           title="Delete staff"
-                          className="rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
+                          className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-700 transition cursor-pointer"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -698,15 +701,14 @@ export default function Staff() {
         </div>
 
         {/* PAGINATION (10 per page) */}
-        <div className="p-4 border-t border-[#E5E9F0] dark:border-[#1E293B]">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalRecords={filteredStaff.length}
-            pageSize={pageSize}
-            onPageChange={(p) => setCurrentPage(p)}
-          />
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRecords={filteredStaff.length}
+          pageSize={pageSize}
+          onPageChange={(p) => setCurrentPage(p)}
+          className="px-4 pb-3"
+        />
       </div>
 
       {/* Add / Edit Staff Modal */}

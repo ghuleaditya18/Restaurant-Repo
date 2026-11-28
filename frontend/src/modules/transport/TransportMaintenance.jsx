@@ -40,6 +40,7 @@ export default function TransportMaintenance() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -70,8 +71,12 @@ export default function TransportMaintenance() {
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError("");
-    if (!form.vehicle_id || !form.service_description.trim()) {
-      return setFormError("Vehicle and service description are required.");
+    const nextFieldErrors = {};
+    if (!form.vehicle_id) nextFieldErrors.vehicle_id = "Select a vehicle.";
+    if (!form.service_description.trim()) nextFieldErrors.service_description = "Service description is required.";
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
+      return;
     }
     setSaving(true);
     try {
@@ -244,10 +249,11 @@ export default function TransportMaintenance() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">Vehicle *</label>
-              <select required disabled={Boolean(editing)} value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })} className={INPUT_STYLES.select}>
+              <select required disabled={Boolean(editing)} value={form.vehicle_id} onChange={(e) => { setForm({ ...form, vehicle_id: e.target.value }); setFieldErrors((p) => ({ ...p, vehicle_id: "" })); }} aria-invalid={Boolean(fieldErrors.vehicle_id)} className={`${INPUT_STYLES.select} ${fieldErrors.vehicle_id ? "border-red-500 focus:border-red-500" : ""}`}>
                 <option value="">Select vehicle...</option>
                 {vehicles.map((v) => <option key={v.id} value={v.id}>{v.vehicle_name} ({v.registration_number})</option>)}
               </select>
+              {fieldErrors.vehicle_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.vehicle_id}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Maintenance Type *</label>
@@ -284,7 +290,8 @@ export default function TransportMaintenance() {
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1">Service Description *</label>
-            <textarea required rows={2} value={form.service_description} onChange={(e) => setForm({ ...form, service_description: e.target.value })} className={INPUT_STYLES.base} />
+            <textarea required rows={2} value={form.service_description} onChange={(e) => { setForm({ ...form, service_description: e.target.value }); setFieldErrors((p) => ({ ...p, service_description: "" })); }} aria-invalid={Boolean(fieldErrors.service_description)} className={`${INPUT_STYLES.base} ${fieldErrors.service_description ? "border-red-500 focus:border-red-500" : ""}`} />
+            {fieldErrors.service_description && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.service_description}</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1">Notes</label>

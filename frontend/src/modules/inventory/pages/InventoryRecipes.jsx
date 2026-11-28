@@ -230,11 +230,11 @@ export default function InventoryRecipes() {
   const live = selectedMenuItem ? computeLiveCost() : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="relative w-full sm:w-56">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
             placeholder="Search dish or category..."
@@ -243,7 +243,7 @@ export default function InventoryRecipes() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className={`${INPUT_STYLES.base} pl-9`}
+            className={`${INPUT_STYLES.base} pl-8 !py-1.5 text-xs`}
           />
         </div>
         <button
@@ -264,7 +264,7 @@ export default function InventoryRecipes() {
           <table className="w-full min-w-[900px] text-left border-collapse">
             <thead>
               <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
-                <th className={TABLE_STYLES.th}><input type="checkbox" aria-label="Select recipe BOMs on this page" checked={paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).length > 0 && paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className={`${TABLE_STYLES.th} w-10 text-center`}><input type="checkbox" aria-label="Select recipe BOMs on this page" checked={paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).length > 0 && paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).every((item) => selectedIds.has(item.id))} onChange={() => toggleMany(paginatedItems.filter((item) => recipeMap[item.id]?.items?.length).map((item) => item.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className={TABLE_STYLES.th}>Menu Item</th>
                 <th className={TABLE_STYLES.th}>Category</th>
                 <th className={TABLE_STYLES.th}>Selling Price</th>
@@ -289,7 +289,7 @@ export default function InventoryRecipes() {
 
                   return (
                     <tr key={item.id} className={TABLE_STYLES.tr}>
-                      <td className={TABLE_STYLES.td}><input type="checkbox" aria-label={`Select recipe BOM for ${item.name}`} checked={selectedIds.has(item.id)} disabled={!hasRecipe} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
+                      <td className={`${TABLE_STYLES.td} w-10 text-center`}><input type="checkbox" aria-label={`Select recipe BOM for ${item.name}`} checked={selectedIds.has(item.id)} disabled={!hasRecipe} onChange={() => toggle(item.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                       <td className={TABLE_STYLES.td}>
                         <div className="font-bold text-stone-900 dark:text-stone-100">{item.name}</div>
                       </td>

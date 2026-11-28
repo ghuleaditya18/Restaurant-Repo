@@ -245,12 +245,12 @@ export default function InventoryWastage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-52">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
               placeholder="Search item, notes, ref..."
@@ -259,7 +259,7 @@ export default function InventoryWastage() {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className={`${INPUT_STYLES.base} pl-9`}
+              className={`${INPUT_STYLES.base} pl-8 !py-1.5 text-xs`}
             />
           </div>
 
@@ -269,7 +269,7 @@ export default function InventoryWastage() {
               setPreset(e.target.value);
               setCurrentPage(1);
             }}
-            className={`${INPUT_STYLES.select} w-36`}
+            className={`${INPUT_STYLES.select} !w-auto min-w-[120px] !py-1.5 text-xs`}
           >
             <option value="today">Today</option>
             <option value="last_7_days">Last 7 Days</option>
@@ -283,7 +283,7 @@ export default function InventoryWastage() {
               setTypeFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className={`${INPUT_STYLES.select} w-44`}
+            className={`${INPUT_STYLES.select} !w-auto min-w-[155px] !py-1.5 text-xs`}
           >
             <option value="">All Movement Types</option>
             <option value="PURCHASE">Purchase (GRN)</option>

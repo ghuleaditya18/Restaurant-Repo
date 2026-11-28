@@ -42,6 +42,7 @@ export default function PackageCustomers() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const [detail, setDetail] = useState(null);
@@ -133,6 +134,7 @@ export default function PackageCustomers() {
     setEditing(null);
     setForm(INITIAL_FORM);
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -145,6 +147,7 @@ export default function PackageCustomers() {
       address: c.address || "",
     });
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -160,18 +163,20 @@ export default function PackageCustomers() {
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError("");
+    const nextFieldErrors = {};
     if (form.full_name.trim().length < 2) {
-      setFormError("Customer name must contain at least 2 characters.");
-      return;
+      nextFieldErrors.full_name = "Customer name must contain at least 2 characters.";
     }
     const phoneCheck = validateMobileNumber(form.phone, { required: true });
     if (!phoneCheck.valid) {
-      setFormError(phoneCheck.error);
-      return;
+      nextFieldErrors.phone = phoneCheck.error;
     }
     const emailCheck = validateEmailAddress(form.email, { required: true });
     if (!emailCheck.valid) {
-      setFormError(emailCheck.error);
+      nextFieldErrors.email = emailCheck.error;
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -408,9 +413,14 @@ export default function PackageCustomers() {
               type="text"
               required
               value={form.full_name}
-              onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-              className={INPUT_STYLES.base}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, full_name: e.target.value }));
+                setFieldErrors((previous) => ({ ...previous, full_name: "" }));
+              }}
+              aria-invalid={Boolean(fieldErrors.full_name)}
+              className={`${INPUT_STYLES.base} ${fieldErrors.full_name ? "border-red-500 focus:border-red-500" : ""}`}
             />
+            {fieldErrors.full_name && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.full_name}</p>}
           </div>
           <div>
             <label className="block text-xs font-bold uppercase mb-1">Mobile Number *</label>
@@ -420,10 +430,15 @@ export default function PackageCustomers() {
               maxLength={10}
               required
               value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: sanitizeMobileInput(e.target.value) }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, phone: sanitizeMobileInput(e.target.value) }));
+                setFieldErrors((previous) => ({ ...previous, phone: "" }));
+              }}
               placeholder="10-digit mobile (6-9...)"
-              className={INPUT_STYLES.base}
+              aria-invalid={Boolean(fieldErrors.phone)}
+              className={`${INPUT_STYLES.base} ${fieldErrors.phone ? "border-red-500 focus:border-red-500" : ""}`}
             />
+            {fieldErrors.phone && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.phone}</p>}
           </div>
           <div>
             <label className="block text-xs font-bold uppercase mb-1">Email Address *</label>
@@ -431,9 +446,14 @@ export default function PackageCustomers() {
               type="email"
               required
               value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              className={INPUT_STYLES.base}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, email: e.target.value }));
+                setFieldErrors((previous) => ({ ...previous, email: "" }));
+              }}
+              aria-invalid={Boolean(fieldErrors.email)}
+              className={`${INPUT_STYLES.base} ${fieldErrors.email ? "border-red-500 focus:border-red-500" : ""}`}
             />
+            {fieldErrors.email && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.email}</p>}
           </div>
           <div>
             <label className="block text-xs font-bold uppercase mb-1">Address</label>

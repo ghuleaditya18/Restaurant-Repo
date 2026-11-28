@@ -61,7 +61,7 @@ export default function SpaBookings() {
   const [loading, setLoading] = useState(true);
 
   // Filter state
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState(() => searchParams.get("tab") || "all");
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -486,11 +486,10 @@ export default function SpaBookings() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
-        title="Spa Bookings"
-        description="Appointment scheduling, treatment status transitions, therapist assignment, and billing."
+        title="Bookings"
         actions={
           <button
             type="button"
@@ -507,7 +506,7 @@ export default function SpaBookings() {
               });
               setCreateModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 transition shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] hover:opacity-95 transition shadow-xs cursor-pointer"
           >
             <Plus size={16} />
             <span>New Appointment</span>
@@ -516,9 +515,9 @@ export default function SpaBookings() {
       />
 
       {/* Tabs and Filters */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
         {/* Status Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
           {[
             { id: "all", label: "All" },
             { id: "today", label: "Today" },
@@ -534,7 +533,7 @@ export default function SpaBookings() {
                 setActiveTab(tab.id);
                 setCurrentPage(1);
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 activeTab === tab.id
                   ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold"
                   : "bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800"
@@ -546,9 +545,9 @@ export default function SpaBookings() {
         </div>
 
         {/* Search & Date Controls */}
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-44 sm:w-60">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+        <div className="flex items-center gap-2">
+          <div className="relative w-44 sm:w-48">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
               value={searchQuery}
@@ -556,7 +555,7 @@ export default function SpaBookings() {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              placeholder="Search"
+              placeholder="Search..."
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
             />
           </div>
@@ -587,28 +586,28 @@ export default function SpaBookings() {
       </div>
 
       {/* Bookings Table */}
-      <div className="rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs overflow-hidden">
+      <div className="rounded-xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-16 text-center text-sm text-stone-400">Loading appointments...</div>
+          <div className="p-10 text-center text-sm text-stone-400">Loading appointments...</div>
         ) : filteredBookings.length === 0 ? (
-          <div className="p-16 text-center text-stone-400">
-            <Calendar size={36} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
+          <div className="p-10 text-center text-stone-400">
+            <Calendar size={32} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
             <p className="text-sm font-semibold text-stone-600 dark:text-stone-300">No bookings found</p>
             <p className="text-xs text-stone-400 mt-1">Adjust filters or create a new booking.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-xs uppercase tracking-wider border-b border-stone-200 dark:border-stone-800">
+              <thead className="bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-[11px] uppercase tracking-wider border-b border-stone-200 dark:border-stone-800">
                 <tr>
-                  <th className="py-3 px-4">Booking Ref</th>
-                  <th className="py-3 px-4">Customer</th>
-                  <th className="py-3 px-4">Therapist</th>
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Services</th>
-                  <th className="py-3 px-4">Est. Total</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-2.5 px-3">Booking Ref</th>
+                  <th className="py-2.5 px-3">Customer</th>
+                  <th className="py-2.5 px-3">Therapist</th>
+                  <th className="py-2.5 px-3">Date & Time</th>
+                  <th className="py-2.5 px-3">Services</th>
+                  <th className="py-2.5 px-3">Est. Total</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-700 dark:text-stone-200">
@@ -617,34 +616,34 @@ export default function SpaBookings() {
                     key={b.id}
                     className="hover:bg-stone-50/60 dark:hover:bg-stone-800/40 transition"
                   >
-                    <td className="py-3 px-4 font-mono font-bold text-xs text-stone-900 dark:text-stone-100 whitespace-nowrap">
+                    <td className="py-2.5 px-3 font-mono font-bold text-xs text-stone-900 dark:text-stone-100 whitespace-nowrap">
                       {b.booking_number}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-3">
                       <div className="font-semibold text-stone-900 dark:text-stone-100">{b.customer_name}</div>
                       <div className="text-xs text-stone-400">{b.customer_phone}</div>
                     </td>
-                    <td className="py-3 px-4 font-medium text-stone-800 dark:text-stone-200">
+                    <td className="py-2.5 px-3 font-medium text-stone-800 dark:text-stone-200">
                       {b.therapist_name}
                     </td>
-                    <td className="py-3 px-4 whitespace-nowrap">
+                    <td className="py-2.5 px-3 whitespace-nowrap">
                       <div className="font-medium text-stone-900 dark:text-stone-100">{b.booking_date}</div>
                       <div className="text-xs text-stone-500 dark:text-stone-400">
                         {formatTimeRange12Hour(b.start_time, b.end_time)}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-3">
                       <div className="max-w-[180px] truncate text-xs text-stone-600 dark:text-stone-300">
                         {b.booking_services.map((s) => s.service_name).join(", ")}
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-extrabold text-stone-900 dark:text-stone-100">
+                    <td className="py-2.5 px-3 font-extrabold text-stone-900 dark:text-stone-100">
                       {formatCurrency(b.estimated_total)}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-3">
                       <BookingStatusBadge status={b.status} />
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-2.5 px-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Three-Stage Primary Status Workflow Triggers: Booked -> In Progress -> Completed */}
                         {["Booked", "Pending", "Confirmed"].includes(b.status) && (
@@ -782,7 +781,8 @@ export default function SpaBookings() {
           totalPages={Math.ceil(filteredBookings.length / pageSize) || 1}
           onPageChange={setCurrentPage}
           totalRecords={filteredBookings.length}
-          limit={pageSize}
+          pageSize={pageSize}
+          className="px-4 pb-3"
         />
       </div>
 

@@ -164,11 +164,10 @@ export default function SpaCustomers() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
-        title="Spa Customers"
-        description="Registered spa guests, treatment preferences, and appointment records."
+        title="Customers"
         actions={
           <button
             type="button"
@@ -179,7 +178,7 @@ export default function SpaCustomers() {
               setIsImageRemoved(false);
               setModalOpen(true);
             }}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold hover:opacity-95 transition shadow-xs cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-bold rounded-xl bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] hover:opacity-95 transition shadow-xs cursor-pointer"
           >
             <Plus size={16} />
             <span>Register Customer</span>
@@ -188,52 +187,57 @@ export default function SpaCustomers() {
       />
 
       {/* Search Input */}
-      <div className="relative max-w-md">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setCurrentPage(1);
-          }}
-          placeholder="Search "
-          className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] transition"
-        />
+      <div className="w-fit max-w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-2">
+        <div className="relative w-full sm:w-56">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search customers..."
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-[#151D29] text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] transition"
+          />
+        </div>
       </div>
 
       {/* Customers Table */}
       <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedCustomers} onClear={clear} />
-      <div className="rounded-2xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs overflow-hidden">
+      <div className="rounded-xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-16 text-center text-sm text-stone-400">Loading guests...</div>
+          <div className="p-10 text-center text-sm text-stone-400">Loading guests...</div>
         ) : customers.length === 0 ? (
-          <div className="p-16 text-center text-stone-400">
-            <Users size={36} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
+          <div className="p-10 text-center text-stone-400">
+            <Users size={32} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
             <p className="text-sm font-semibold text-stone-600 dark:text-stone-300">No customers found</p>
             <p className="text-xs text-stone-400 mt-1">Register a new guest or adjust your search.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs sm:text-sm">
-              <thead className="bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-xs uppercase tracking-wider border-b border-stone-200 dark:border-stone-800">
+              <colgroup>
+                <col className="w-10" />
+              </colgroup>
+              <thead className="bg-stone-50 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-[11px] uppercase tracking-wider border-b border-stone-200 dark:border-stone-800">
                 <tr>
-                  <th className="py-3 px-4"><input type="checkbox" aria-label="Select all spa customers on this page" checked={customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((customer) => selectedIds.has(customer.id))} onChange={() => toggleMany(customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((customer) => customer.id))} className="h-4 w-4 accent-amber-500" /></th>
-                  <th className="py-3 px-4">Customer Name</th>
-                  <th className="py-3 px-4">Contact Phone</th>
-                  <th className="py-3 px-4">Email Address</th>
-                  <th className="py-3 px-4">Total Visits</th>
-                  <th className="py-3 px-4">Notes / Preferences</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="w-10 py-2.5 px-3 text-center"><input type="checkbox" aria-label="Select all spa customers on this page" checked={customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((customer) => selectedIds.has(customer.id))} onChange={() => toggleMany(customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((customer) => customer.id))} className="h-4 w-4 accent-amber-500" /></th>
+                  <th className="py-2.5 px-3.5">Customer Name</th>
+                  <th className="py-2.5 px-3.5">Contact Phone</th>
+                  <th className="py-2.5 px-3.5">Email Address</th>
+                  <th className="py-2.5 px-3.5">Total Visits</th>
+                  <th className="py-2.5 px-3.5">Notes / Preferences</th>
+                  <th className="py-2.5 px-3.5">Status</th>
+                  <th className="py-2.5 px-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-stone-700 dark:text-stone-200">
                 {customers.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
                   <tr key={c.id} className="hover:bg-stone-50/60 dark:hover:bg-stone-800/40 transition">
-                    <td className="py-3.5 px-4"><input type="checkbox" aria-label={`Select spa customer ${c.full_name}`} checked={selectedIds.has(c.id)} onChange={() => toggle(c.id)} className="h-4 w-4 accent-amber-500" /></td>
-                    <td className="py-3.5 px-4 font-bold text-stone-900 dark:text-stone-100">
-                      <div className="flex items-center gap-3">
+                    <td className="w-10 py-2.5 px-3 text-center"><input type="checkbox" aria-label={`Select spa customer ${c.full_name}`} checked={selectedIds.has(c.id)} onChange={() => toggle(c.id)} className="h-4 w-4 accent-amber-500" /></td>
+                    <td className="py-2.5 px-3.5 font-bold text-stone-900 dark:text-stone-100">
+                      <div className="flex items-center gap-2.5">
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#FFB02E] to-[#D97706] text-[#0D1420] font-bold border border-[#F59E0B]/50 text-xs shadow-2xs">
                           <AuthenticatedImage
                             src={c.image_url}
@@ -244,13 +248,13 @@ export default function SpaCustomers() {
                         <span>{c.full_name}</span>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 font-medium text-stone-700 dark:text-stone-300">
+                    <td className="py-2.5 px-3.5 font-medium text-stone-700 dark:text-stone-300">
                       <span className="flex items-center gap-1.5">
                         <Phone size={13} className="text-stone-400" />
                         <span>{c.phone}</span>
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-stone-600 dark:text-stone-300">
+                    <td className="py-2.5 px-3.5 text-stone-600 dark:text-stone-300">
                       {c.email ? (
                         <span className="flex items-center gap-1.5">
                           <Mail size={13} className="text-stone-400" />
@@ -260,13 +264,13 @@ export default function SpaCustomers() {
                         <span className="text-stone-400">N/A</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-stone-900 dark:text-stone-100">
+                    <td className="py-2.5 px-3.5 font-semibold text-stone-900 dark:text-stone-100">
                       {c.booking_count} bookings
                     </td>
-                    <td className="py-3.5 px-4 max-w-[200px] truncate text-stone-500 dark:text-stone-400 text-xs">
+                    <td className="py-2.5 px-3.5 max-w-[200px] truncate text-stone-500 dark:text-stone-400 text-xs">
                       {c.notes || "—"}
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-2.5 px-3.5">
                       <span
                         className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                           c.is_active
@@ -277,7 +281,7 @@ export default function SpaCustomers() {
                         {c.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-2.5 px-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
@@ -325,11 +329,12 @@ export default function SpaCustomers() {
           </div>
         )}
         <Pagination
-            currentPage={currentPage}
+          currentPage={currentPage}
           totalPages={Math.ceil(customers.length / pageSize) || 1}
           onPageChange={setCurrentPage}
           totalRecords={customers.length}
-          limit={pageSize}
+          pageSize={pageSize}
+          className="px-4 pb-3"
         />
       </div>
 

@@ -108,7 +108,7 @@ function formatRole(role, context) {
     return context === "SPA" ? "Spa Staff" : "Staff";
   }
   const r = String(role).trim().toLowerCase();
-  if (r === "manager") return "Manager";
+  if (r === "manager") return "Resort Manager";
   if (r === "staff") return "Staff";
   if (r === "receptionist") return "Receptionist";
   if (r === "admin") return "Admin";
@@ -236,37 +236,8 @@ function SidebarProfile({ user, collapsed = false, onNavigate, onLogout }) {
               : "bottom-full left-0 right-0 mb-2 w-full min-w-[210px]"
           }`}
         >
-          {/* User Details Header with Avatar, Name, Email and Badge */}
-          <div className="border-b border-[#1E293B] px-2.5 py-2.5">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full overflow-hidden bg-gradient-to-br from-[#FFB02E] to-[#D97706] border border-[#F59E0B]/50 text-xs font-bold text-[#0D1420] shadow-xs">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={userName}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <span>{userInitial}</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs sm:text-sm font-bold text-white">{userName}</p>
-                <p className="truncate text-[11px] text-[#8A9AB2] mt-0.5">{user?.email || "No email"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block rounded-full bg-[#30251C] border border-[#F59E0B]/40 px-2 py-0.5 text-[9px] font-bold text-[#FFB02E] uppercase tracking-wider">
-                {userRole}
-              </span>
-            </div>
-          </div>
-
           {/* View Profile Action */}
-          <div className="pt-1.5 pb-1">
+          <div className="pb-1">
             <button
               type="button"
               role="menuitem"

@@ -455,24 +455,24 @@ export default function InventoryStock() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Top Controls */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-56">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
               placeholder="Search ingredient or SKU..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={`${INPUT_STYLES.base} pl-9`}
+              className={`${INPUT_STYLES.base} pl-8 !py-1.5 text-xs`}
             />
           </div>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className={`${INPUT_STYLES.select} w-40`}
+            className={`${INPUT_STYLES.select} !w-auto min-w-[140px] !py-1.5 text-xs`}
           >
             <option value="">All Categories</option>
             {categories.map((c) => (
@@ -484,13 +484,13 @@ export default function InventoryStock() {
           <button
             type="button"
             onClick={() => setLowStockOnly(!lowStockOnly)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer ${
               lowStockOnly
                 ? "bg-amber-500 text-white border-amber-600"
                 : "border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300"
             }`}
           >
-            <AlertTriangle size={14} />
+            <AlertTriangle size={13} />
             <span className="hidden sm:inline">Low Stock</span>
           </button>
 

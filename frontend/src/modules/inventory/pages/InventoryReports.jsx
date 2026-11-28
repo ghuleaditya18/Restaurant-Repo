@@ -69,9 +69,9 @@ export default function InventoryReports() {
   }, [loadReport]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Sub-tab Navigation */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-xl overflow-x-auto">
           {[
             { key: "valuation", label: "Stock Valuation", icon: DollarSign },
@@ -133,28 +133,28 @@ export default function InventoryReports() {
       {reportTab === "valuation" && (
         <div className="space-y-4">
           {valuationData && (
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
-              <div className={CARD_STYLES.base}>
-                <div className="text-xs font-bold uppercase text-stone-500">Total Asset Value</div>
-                <div className="text-xl font-extrabold text-stone-900 dark:text-stone-100 mt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className={`${CARD_STYLES.base} !px-3 !py-2.5`}>
+                <div className="text-[11px] font-bold uppercase text-stone-500 truncate">Total Asset Value</div>
+                <div className="text-base sm:text-lg font-bold tabular-nums text-stone-900 dark:text-stone-100 mt-0.5">
                   ₹{Number(valuationData.total_valuation).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
               </div>
-              <div className={CARD_STYLES.base}>
-                <div className="text-xs font-bold uppercase text-stone-500">Tracked Items</div>
-                <div className="text-xl font-extrabold text-stone-900 dark:text-stone-100 mt-1">
+              <div className={`${CARD_STYLES.base} !px-3 !py-2.5`}>
+                <div className="text-[11px] font-bold uppercase text-stone-500 truncate">Tracked Items</div>
+                <div className="text-base sm:text-lg font-bold tabular-nums text-stone-900 dark:text-stone-100 mt-0.5">
                   {valuationData.total_items}
                 </div>
               </div>
-              <div className={CARD_STYLES.base}>
-                <div className="text-xs font-bold uppercase text-amber-600">Low Stock Items</div>
-                <div className="text-xl font-extrabold text-amber-600 mt-1">
+              <div className={`${CARD_STYLES.base} !px-3 !py-2.5`}>
+                <div className="text-[11px] font-bold uppercase text-amber-600 truncate">Low Stock Items</div>
+                <div className="text-base sm:text-lg font-bold tabular-nums text-amber-600 mt-0.5">
                   {valuationData.low_stock_count}
                 </div>
               </div>
-              <div className={CARD_STYLES.base}>
-                <div className="text-xs font-bold uppercase text-rose-600">Out of Stock</div>
-                <div className="text-xl font-extrabold text-rose-600 mt-1">
+              <div className={`${CARD_STYLES.base} !px-3 !py-2.5`}>
+                <div className="text-[11px] font-bold uppercase text-rose-600 truncate">Out of Stock</div>
+                <div className="text-base sm:text-lg font-bold tabular-nums text-rose-600 mt-0.5">
                   {valuationData.out_of_stock_count}
                 </div>
               </div>

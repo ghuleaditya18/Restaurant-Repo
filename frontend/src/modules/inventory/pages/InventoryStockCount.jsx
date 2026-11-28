@@ -189,7 +189,7 @@ export default function InventoryStockCount() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Top Controls */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-stone-700 dark:text-stone-300">
@@ -223,7 +223,7 @@ export default function InventoryStockCount() {
           <table className="w-full min-w-[950px] text-left border-collapse">
             <thead>
               <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/50">
-                <th className={TABLE_STYLES.th}><input type="checkbox" aria-label="Select Draft stock counts on this page" checked={counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").length > 0 && counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").every((count) => selectedIds.has(count.id))} onChange={() => toggleMany(counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").map((count) => count.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className={`${TABLE_STYLES.th} w-10 text-center`}><input type="checkbox" aria-label="Select Draft stock counts on this page" checked={counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").length > 0 && counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").every((count) => selectedIds.has(count.id))} onChange={() => toggleMany(counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).filter((count) => count.status === "Draft").map((count) => count.id))} className="h-4 w-4 accent-amber-500" /></th>
                 <th className={TABLE_STYLES.th}>Audit Number</th>
                 <th className={TABLE_STYLES.th}>Count Date</th>
                 <th className={TABLE_STYLES.th}>Items Counted</th>
@@ -243,7 +243,7 @@ export default function InventoryStockCount() {
               ) : (
                 counts.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
                   <tr key={c.id} className={TABLE_STYLES.tr}>
-                    <td className={TABLE_STYLES.td}><input type="checkbox" aria-label={`Select Draft stock count ${c.count_number}`} checked={selectedIds.has(c.id)} disabled={c.status !== "Draft"} onChange={() => toggle(c.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
+                    <td className={`${TABLE_STYLES.td} w-10 text-center`}><input type="checkbox" aria-label={`Select Draft stock count ${c.count_number}`} checked={selectedIds.has(c.id)} disabled={c.status !== "Draft"} onChange={() => toggle(c.id)} className="h-4 w-4 accent-amber-500 disabled:opacity-30" /></td>
                     <td className={TABLE_STYLES.td}>
                       <span className="font-bold font-mono text-stone-900 dark:text-stone-100">{c.count_number}</span>
                     </td>

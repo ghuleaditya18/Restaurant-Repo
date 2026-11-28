@@ -90,12 +90,14 @@ export default function PackageBookings() {
   const [availability, setAvailability] = useState(null);
   const [checkingAvail, setCheckingAvail] = useState(false);
   const [bookingError, setBookingError] = useState("");
+  const [bookingFieldErrors, setBookingFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
 
   // Inline Customer Creation Modal
   const [inlineCustOpen, setInlineCustOpen] = useState(false);
   const [inlineCustForm, setInlineCustForm] = useState(INITIAL_CUSTOMER_FORM);
   const [inlineCustError, setInlineCustError] = useState("");
+  const [inlineCustFieldErrors, setInlineCustFieldErrors] = useState({});
   const [savingCust, setSavingCust] = useState(false);
 
   // Details & History Modal
@@ -106,6 +108,7 @@ export default function PackageBookings() {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelError, setCancelError] = useState("");
+  const [cancelFieldError, setCancelFieldError] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -237,18 +240,20 @@ export default function PackageBookings() {
   const handleSaveInlineCustomer = async (e) => {
     e.preventDefault();
     setInlineCustError("");
+    const errors = {};
     if (inlineCustForm.full_name.trim().length < 2) {
-      setInlineCustError("Customer full name must contain at least 2 characters.");
-      return;
+      errors.full_name = "Customer full name must contain at least 2 characters.";
     }
     const phoneCheck = validateMobileNumber(inlineCustForm.phone, { required: true });
     if (!phoneCheck.valid) {
-      setInlineCustError(phoneCheck.error);
-      return;
+      errors.phone = phoneCheck.error;
     }
     const emailCheck = validateEmailAddress(inlineCustForm.email, { required: true });
     if (!emailCheck.valid) {
-      setInlineCustError(emailCheck.error);
+      errors.email = emailCheck.error;
+    }
+    setInlineCustFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setSavingCust(true);
@@ -276,16 +281,18 @@ export default function PackageBookings() {
   const handleCreateBooking = async (e) => {
     e.preventDefault();
     setBookingError("");
+    const errors = {};
     if (!bookingForm.customer_id) {
-      setBookingError("Please select or register a customer.");
-      return;
+      errors.customer_id = "Select or register a customer.";
     }
     if (!bookingForm.package_id) {
-      setBookingError("Please select an active package.");
-      return;
+      errors.package_id = "Select an active package.";
     }
     if (availability && !availability.available) {
-      setBookingError(availability.reasons?.join(" ") || "Package is unavailable for these details.");
+      errors.package_id = availability.reasons?.join(" ") || "This package is unavailable for these details.";
+    }
+    setBookingFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
 
@@ -344,8 +351,9 @@ export default function PackageBookings() {
   const handleConfirmCancel = async (e) => {
     e.preventDefault();
     setCancelError("");
+    setCancelFieldError("");
     if (!cancelReason.trim() || cancelReason.trim().length < 3) {
-      setCancelError("Cancellation reason is required (minimum 3 characters).");
+      setCancelFieldError("Enter a cancellation reason with at least 3 characters.");
       return;
     }
     setCancelling(true);
@@ -745,7 +753,8 @@ export default function PackageBookings() {
                   const picked = customers.find((c) => String(c.id) === String(nextId));
                   setCustomerSearch(picked ? `${picked.full_name} (${picked.phone})` : "");
                 }}
-                className={INPUT_STYLES.select}
+                  aria-invalid={Boolean(bookingFieldErrors.customer_id)}
+                  className={`${INPUT_STYLES.select} ${bookingFieldErrors.customer_id ? "border-red-500" : ""}`}
               >
                 <option value="">— Select Customer —</option>
                 {filteredCustomers.map((c) => (
@@ -754,6 +763,7 @@ export default function PackageBookings() {
                   </option>
                 ))}
               </select>
+              {bookingFieldErrors.customer_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{bookingFieldErrors.customer_id}</p>}
             </div>
           </div>
 
@@ -766,8 +776,9 @@ export default function PackageBookings() {
               <select
                 required
                 value={bookingForm.package_id}
-                onChange={(e) => setBookingForm((f) => ({ ...f, package_id: e.target.value }))}
-                className={INPUT_STYLES.select}
+                onChange={(e) => { setBookingForm((f) => ({ ...f, package_id: e.target.value })); setBookingFieldErrors((p) => ({ ...p, package_id: "" })); }}
+                aria-invalid={Boolean(bookingFieldErrors.package_id)}
+                className={`${INPUT_STYLES.select} ${bookingFieldErrors.package_id ? "border-red-500" : ""}`}
               >
                 <option value="">— Choose Available Package —</option>
                 {packagesList.map((p) => (
@@ -776,6 +787,7 @@ export default function PackageBookings() {
                   </option>
                 ))}
               </select>
+              {bookingFieldErrors.package_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{bookingFieldErrors.package_id}</p>}
             </div>
 
             <div className="sm:col-span-3">
@@ -958,10 +970,12 @@ export default function PackageBookings() {
               type="text"
               required
               value={inlineCustForm.full_name}
-              onChange={(e) => setInlineCustForm((f) => ({ ...f, full_name: e.target.value }))}
+              onChange={(e) => { setInlineCustForm((f) => ({ ...f, full_name: e.target.value })); setInlineCustFieldErrors((p) => ({ ...p, full_name: "" })); }}
               placeholder="e.g. Aarav Sharma"
-              className={INPUT_STYLES.base}
+              aria-invalid={Boolean(inlineCustFieldErrors.full_name)}
+              className={`${INPUT_STYLES.base} ${inlineCustFieldErrors.full_name ? "border-red-500" : ""}`}
             />
+            {inlineCustFieldErrors.full_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{inlineCustFieldErrors.full_name}</p>}
           </div>
           <div>
             <label className="block text-xs font-bold uppercase mb-1">Mobile Number *</label>
@@ -971,12 +985,15 @@ export default function PackageBookings() {
               maxLength={10}
               required
               value={inlineCustForm.phone}
-              onChange={(e) =>
-                setInlineCustForm((f) => ({ ...f, phone: sanitizeMobileInput(e.target.value) }))
-              }
+              onChange={(e) => {
+                setInlineCustForm((f) => ({ ...f, phone: sanitizeMobileInput(e.target.value) }));
+                setInlineCustFieldErrors((p) => ({ ...p, phone: "" }));
+              }}
               placeholder="10-digit mobile (6-9...)"
-              className={INPUT_STYLES.base}
+              aria-invalid={Boolean(inlineCustFieldErrors.phone)}
+              className={`${INPUT_STYLES.base} ${inlineCustFieldErrors.phone ? "border-red-500" : ""}`}
             />
+            {inlineCustFieldErrors.phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{inlineCustFieldErrors.phone}</p>}
           </div>
           <div>
             <label className="block text-xs font-bold uppercase mb-1">Email Address *</label>
@@ -984,10 +1001,12 @@ export default function PackageBookings() {
               type="email"
               required
               value={inlineCustForm.email}
-              onChange={(e) => setInlineCustForm((f) => ({ ...f, email: e.target.value }))}
+              onChange={(e) => { setInlineCustForm((f) => ({ ...f, email: e.target.value })); setInlineCustFieldErrors((p) => ({ ...p, email: "" })); }}
               placeholder="customer@example.com"
-              className={INPUT_STYLES.base}
+              aria-invalid={Boolean(inlineCustFieldErrors.email)}
+              className={`${INPUT_STYLES.base} ${inlineCustFieldErrors.email ? "border-red-500" : ""}`}
             />
+            {inlineCustFieldErrors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{inlineCustFieldErrors.email}</p>}
           </div>
           <div>
             <label className="block text-xs font-bold uppercase mb-1">Address (Optional)</label>
@@ -1027,10 +1046,12 @@ export default function PackageBookings() {
               rows={3}
               required
               value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
+              onChange={(e) => { setCancelReason(e.target.value); setCancelFieldError(""); }}
               placeholder="e.g. Guest rescheduled travel dates..."
-              className={INPUT_STYLES.base}
+              aria-invalid={Boolean(cancelFieldError)}
+              className={`${INPUT_STYLES.base} ${cancelFieldError ? "border-red-500" : ""}`}
             />
+            {cancelFieldError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{cancelFieldError}</p>}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setCancelTarget(null)} className={BUTTON_VARIANTS.secondary}>

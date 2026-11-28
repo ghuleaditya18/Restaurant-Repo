@@ -31,7 +31,7 @@ export default function Inventory() {
   const [activeTab, setActiveTab] = useState("stock");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Inventory"
@@ -48,14 +48,14 @@ export default function Inventory() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`group inline-flex items-center gap-2 border-b-2 py-3 px-3.5 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                className={`group inline-flex items-center gap-2 border-b-2 py-2.5 px-3 text-xs sm:text-sm font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap ${
                   isActive
                     ? "border-[#F59E0B] text-[#9A3412] dark:text-[#FFB02E]"
                     : "border-transparent text-stone-500 hover:border-stone-300 dark:hover:border-stone-700 hover:text-stone-700 dark:hover:text-stone-300"
                 }`}
               >
                 <Icon
-                  size={16}
+                  size={15}
                   className={isActive ? "text-[#F59E0B]" : "text-stone-400 group-hover:text-stone-600 dark:group-hover:text-stone-300"}
                 />
                 <span>{tab.label}</span>
@@ -66,7 +66,7 @@ export default function Inventory() {
       </div>
 
       {/* Active Tab Screen */}
-      <div className="pt-2">
+      <div>
         {activeTab === "stock" && <InventoryStock />}
         {activeTab === "purchases" && <InventoryPurchases />}
         {activeTab === "suppliers" && <InventorySuppliers />}

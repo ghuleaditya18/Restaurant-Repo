@@ -332,7 +332,7 @@ export default function Tables() {
   // ==========================================
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Tables"
@@ -340,16 +340,16 @@ export default function Tables() {
           <button
             type="button"
             onClick={openAddModal}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2.5 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] px-4 py-2 text-sm font-bold text-[#0D1420] shadow-xs transition hover:opacity-95 cursor-pointer"
           >
-            <Plus size={18} />
+            <Plus size={17} />
             <span>Add New Table</span>
           </button>
         }
       />
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
         <StatCard
           compact
           title="Total Tables"
@@ -404,21 +404,21 @@ export default function Tables() {
 
       {/* TABLE LIST CONTAINER */}
       <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelected} onClear={clear} />
-      <div className="overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
+      <div className="w-full max-w-4xl overflow-hidden rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] shadow-xs">
         {/* SEARCH AND FILTER */}
-        <div className="flex flex-col gap-4 border-b border-[#E5E9F0] dark:border-[#1E293B] p-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 border-b border-[#E5E9F0] dark:border-[#1E293B] px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="font-bold text-stone-900 dark:text-stone-100">Restaurant Tables</h2>
+            <h2 className="text-sm sm:text-base font-bold text-stone-900 dark:text-stone-100">Restaurant Tables</h2>
             <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">
               {filteredTables.length} {filteredTables.length === 1 ? "table" : "tables"} found
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
+                size={14}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 dark:text-[#8A9AB2]"
               />
               <input
                 type="text"
@@ -428,7 +428,7 @@ export default function Tables() {
                   setSearch(event.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-2 pl-9 pr-3 text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-[#8A9AB2] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-60"
+                className="w-full rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] py-1.5 pl-8 pr-3 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-[#8A9AB2] outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30 sm:w-48"
               />
             </div>
 
@@ -438,7 +438,7 @@ export default function Tables() {
                 setStatusFilter(event.target.value);
                 setCurrentPage(1);
               }}
-              className="rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-sm text-stone-800 dark:text-stone-100 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
+              className="rounded-lg border border-stone-300 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-2.5 py-1.5 text-xs text-stone-800 dark:text-stone-100 outline-none transition focus:border-[#F59E0B] focus:ring-2 focus:ring-[#F59E0B]/30"
             >
               <option value="ALL">All Tables</option>
               <option value="AVAILABLE">Available</option>
@@ -451,24 +451,27 @@ export default function Tables() {
               onClick={loadTables}
               disabled={loading}
               title="Refresh tables"
-              className="flex items-center justify-center rounded-lg border border-stone-200 dark:border-[#1E293B] bg-white dark:bg-[#151D29] px-3 py-2 text-stone-600 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#1E293B] transition cursor-pointer"
+              className="flex items-center justify-center rounded-lg border border-stone-200 dark:border-[#1E293B] bg-white dark:bg-[#151D29] p-1.5 text-stone-600 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#1E293B] transition cursor-pointer"
             >
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
         </div>
 
         {/* TABLE RECORDS */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px] text-left">
-            <thead className="bg-stone-50/80 dark:bg-[#151D29] text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
+          <table className="w-full min-w-[640px] text-left">
+            <colgroup>
+              <col className="w-10" />
+            </colgroup>
+            <thead className="bg-stone-50/80 dark:bg-[#151D29] text-[11px] font-semibold uppercase tracking-wider text-stone-500 dark:text-[#8A9AB2]">
               <tr>
-                <th className="px-4 py-3 text-center"><input type="checkbox" aria-label="Select all tables on this page" checked={paginatedTables.length > 0 && paginatedTables.every((table) => selectedIds.has(table.id))} onChange={() => toggleMany(paginatedTables.map((table) => table.id))} className="h-4 w-4 accent-amber-500" /></th>
-                <th className="px-4 py-3">Table Number</th>
-                <th className="px-4 py-3">Capacity</th>
-                <th className="px-4 py-3">Occupancy Status</th>
-                <th className="px-4 py-3">Account Status</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label="Select all tables on this page" checked={paginatedTables.length > 0 && paginatedTables.every((table) => selectedIds.has(table.id))} onChange={() => toggleMany(paginatedTables.map((table) => table.id))} className="h-4 w-4 accent-amber-500" /></th>
+                <th className="px-3 py-2.5">Table Number</th>
+                <th className="px-3 py-2.5">Capacity</th>
+                <th className="px-3 py-2.5">Occupancy Status</th>
+                <th className="px-3 py-2.5">Account Status</th>
+                <th className="px-3 py-2.5 text-center">Actions</th>
               </tr>
             </thead>
 
@@ -477,7 +480,7 @@ export default function Tables() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-[#8A9AB2]"
+                    className="px-4 py-10 text-center text-sm text-stone-500 dark:text-[#8A9AB2]"
                   >
                     Loading restaurant tables...
                   </td>
@@ -486,7 +489,7 @@ export default function Tables() {
                 <tr>
                   <td
                     colSpan="6"
-                    className="px-4 py-12 text-center text-sm text-stone-500 dark:text-[#8A9AB2]"
+                    className="px-4 py-10 text-center text-sm text-stone-500 dark:text-[#8A9AB2]"
                   >
                     No restaurant tables found.
                   </td>
@@ -496,36 +499,36 @@ export default function Tables() {
                   const isOccupied = table.status?.toLowerCase() === "occupied";
                   return (
                     <tr key={table.id} className="transition hover:bg-stone-50/70 dark:hover:bg-[#151D29]/60">
-                      <td className="px-4 py-3 text-center"><input type="checkbox" aria-label={`Select table ${table.table_number}`} checked={selectedIds.has(table.id)} onChange={() => toggle(table.id)} className="h-4 w-4 accent-amber-500" /></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`flex h-9 w-9 items-center justify-center rounded-lg border ${
+                      <td className="w-10 px-3 py-2 text-center"><input type="checkbox" aria-label={`Select table ${table.table_number}`} checked={selectedIds.has(table.id)} onChange={() => toggle(table.id)} className="h-4 w-4 accent-amber-500" /></td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
                             isOccupied
                               ? "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
                               : "bg-[#FFF7E8] text-[#9A3412] border-[#FFEDD5] dark:bg-[#30251C] dark:text-[#FFB02E] dark:border-[#9A3412]/40"
                           }`}>
-                            <Armchair size={18} />
+                            <Armchair size={15} />
                           </div>
 
                           <div>
-                            <p className="font-semibold text-stone-900 dark:text-stone-100">
+                            <p className="font-semibold text-stone-900 dark:text-stone-100 leading-tight">
                               Table {table.table_number}
                             </p>
-                            <p className="text-xs text-stone-400 dark:text-[#8A9AB2]">
+                            <p className="text-[11px] text-stone-400 dark:text-[#8A9AB2]">
                               ID: {table.id}
                             </p>
                           </div>
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-sm text-stone-600 dark:text-stone-300">
+                      <td className="px-3 py-2 text-xs sm:text-sm text-stone-600 dark:text-stone-300 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5 font-medium">
-                          <Users size={15} className="text-stone-400 dark:text-[#8A9AB2]" />
+                          <Users size={14} className="text-stone-400 dark:text-[#8A9AB2]" />
                           {table.capacity} seats
                         </span>
                       </td>
 
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             isOccupied
@@ -538,7 +541,7 @@ export default function Tables() {
                         </span>
                       </td>
 
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 whitespace-nowrap">
                         <span
                           className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             table.is_active
@@ -550,24 +553,24 @@ export default function Tables() {
                         </span>
                       </td>
 
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2">
                         <div className="flex items-center justify-center gap-1">
                           <button
                             type="button"
                             onClick={() => openViewModal(table)}
                             title="View table details"
-                            className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1E293B] hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
+                            className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1E293B] hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                           >
-                            <Eye size={16} />
+                            <Eye size={15} />
                           </button>
 
                           <button
                             type="button"
                             onClick={() => openEditModal(table)}
                             title="Edit table"
-                            className="rounded-lg p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1E293B] hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
+                            className="rounded-lg p-1.5 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#1E293B] hover:text-stone-900 dark:hover:text-white transition cursor-pointer"
                           >
-                            <Pencil size={16} />
+                            <Pencil size={15} />
                           </button>
 
                           <button
@@ -578,22 +581,22 @@ export default function Tables() {
                                 ? "Deactivate table"
                                 : "Activate table"
                             }
-                            className={`rounded-lg p-2 transition cursor-pointer ${
+                            className={`rounded-lg p-1.5 transition cursor-pointer ${
                               table.is_active
                                 ? "text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                                 : "text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                             }`}
                           >
-                            <Power size={16} />
+                            <Power size={15} />
                           </button>
 
                           <button
                             type="button"
                             onClick={() => handleDelete(table)}
                             title="Delete table"
-                            className="rounded-lg p-2 text-stone-400 dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 hover:text-red-700 transition cursor-pointer"
+                            className="rounded-lg p-1.5 text-stone-400 dark:text-rose-400 hover:bg-red-50 dark:hover:bg-rose-950/30 hover:text-red-700 transition cursor-pointer"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </td>
@@ -606,15 +609,14 @@ export default function Tables() {
         </div>
 
         {/* PAGINATION (10 per page) */}
-        <div className="p-4 border-t border-stone-200/80 dark:border-stone-800">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalRecords={filteredTables.length}
-            pageSize={pageSize}
-            onPageChange={(p) => setCurrentPage(p)}
-          />
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalRecords={filteredTables.length}
+          pageSize={pageSize}
+          onPageChange={(p) => setCurrentPage(p)}
+          className="px-4 pb-3"
+        />
       </div>
 
       {/* ADD / EDIT MODAL */}

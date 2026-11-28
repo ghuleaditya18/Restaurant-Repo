@@ -93,7 +93,7 @@ export default function VillasInventory() {
   const { showSuccess, showError, confirm } = useNotification();
 
   const rawTab = searchParams.get("tab");
-  const activeTab = TABS.some((t) => t.key === rawTab) ? rawTab : "units";
+  const activeTab = TABS.some((t) => t.key === rawTab) ? rawTab : "villas";
 
   const [villas, setVillas] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -114,6 +114,8 @@ export default function VillasInventory() {
   const [modalState, setModalState] = useState(null);
   const [form, setForm] = useState({});
   const [formError, setFormError] = useState("");
+  const [validationErrors, setValidationErrors] = useState({});
+  const [imageError, setImageError] = useState("");
   const [saving, setSaving] = useState(false);
   const [pendingImageFile, setPendingImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
@@ -151,13 +153,14 @@ export default function VillasInventory() {
     if (!file) return;
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     if (!allowed.includes(file.type)) {
-      setFormError("Please select a valid JPG, PNG, or WebP cover image.");
+      setImageError("Select a valid JPG, PNG, or WebP image.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setFormError("Cover image must be 5 MB or smaller.");
+      setImageError("Image must be 5 MB or smaller.");
       return;
     }
+    setImageError("");
     setFormError("");
     if (imagePreviewUrl && imagePreviewUrl.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreviewUrl);
@@ -273,6 +276,8 @@ export default function VillasInventory() {
         description: item?.description || "",
       });
     }
+    setValidationErrors({});
+    setImageError("");
     setModalState({ type, mode, item });
   };
 
@@ -281,16 +286,17 @@ export default function VillasInventory() {
     if (!modalState) return;
     const { type, mode, item } = modalState;
     setFormError("");
+    setValidationErrors({});
 
     try {
       if (type === "villa") {
         if (!form.name?.trim() || form.name.trim().length < 2) {
-          setFormError("Villa name must contain at least 2 characters.");
+          setValidationErrors({ name: "Villa name must contain at least 2 characters." });
           return;
         }
         const feeRaw = String(form.late_checkout_fee ?? "").trim();
         if (feeRaw !== "" && (Number.isNaN(Number(feeRaw)) || Number(feeRaw) < 0)) {
-          setFormError("Late checkout fee must be a valid non-negative INR amount.");
+          setValidationErrors({ late_checkout_fee: "Enter a valid non-negative amount." });
           return;
         }
         setSaving(true);
@@ -322,7 +328,7 @@ export default function VillasInventory() {
         );
       } else if (type === "category") {
         if (!form.name?.trim() || form.name.trim().length < 2) {
-          setFormError("Category name must contain at least 2 characters.");
+          setValidationErrors({ name: "Category name must contain at least 2 characters." });
           return;
         }
         setSaving(true);
@@ -340,20 +346,23 @@ export default function VillasInventory() {
         }
       } else if (type === "unit") {
         if (!form.villa_id || !form.category_id) {
-          setFormError("Select both a Villa and a Unit Category.");
+          setValidationErrors({
+            ...(!form.villa_id ? { villa_id: "Select a villa." } : {}),
+            ...(!form.category_id ? { category_id: "Select a unit category." } : {}),
+          });
           return;
         }
         if (!form.name?.trim()) {
-          setFormError("Unit name is required.");
+          setValidationErrors({ name: "Unit name is required." });
           return;
         }
         if (Number(form.base_rate) <= 0) {
-          setFormError("Base nightly rate must be greater than zero.");
+          setValidationErrors({ base_rate: "Base nightly rate must be greater than zero." });
           return;
         }
         const unitFeeRaw = String(form.late_checkout_fee ?? "").trim();
         if (unitFeeRaw !== "" && (Number.isNaN(Number(unitFeeRaw)) || Number(unitFeeRaw) < 0)) {
-          setFormError("Late checkout fee must be a valid non-negative INR amount.");
+          setValidationErrors({ late_checkout_fee: "Enter a valid non-negative amount." });
           return;
         }
         setSaving(true);
@@ -389,15 +398,20 @@ export default function VillasInventory() {
         );
       } else if (type === "rate") {
         if (!form.unit_id || !form.name?.trim() || !form.start_date || !form.end_date) {
-          setFormError("All seasonal rate fields are required.");
+          setValidationErrors({
+            ...(!form.unit_id ? { unit_id: "Select a unit." } : {}),
+            ...(!form.name?.trim() ? { name: "Rate name is required." } : {}),
+            ...(!form.start_date ? { start_date: "Start date is required." } : {}),
+            ...(!form.end_date ? { end_date: "End date is required." } : {}),
+          });
           return;
         }
         if (form.end_date <= form.start_date) {
-          setFormError("End date must be after start date.");
+          setValidationErrors({ end_date: "End date must be after start date." });
           return;
         }
         if (Number(form.nightly_rate) <= 0) {
-          setFormError("Nightly rate must be greater than zero.");
+          setValidationErrors({ nightly_rate: "Nightly rate must be greater than zero." });
           return;
         }
         setSaving(true);
@@ -417,11 +431,16 @@ export default function VillasInventory() {
         }
       } else if (type === "block") {
         if (!form.unit_id || !form.start_date || !form.end_date || !form.reason?.trim()) {
-          setFormError("Unit, date range, and reason are required.");
+          setValidationErrors({
+            ...(!form.unit_id ? { unit_id: "Select a unit." } : {}),
+            ...(!form.start_date ? { start_date: "Start date is required." } : {}),
+            ...(!form.end_date ? { end_date: "End date is required." } : {}),
+            ...(!form.reason?.trim() ? { reason: "Reason is required." } : {}),
+          });
           return;
         }
         if (form.end_date <= form.start_date) {
-          setFormError("End date must be after start date.");
+          setValidationErrors({ end_date: "End date must be after start date." });
           return;
         }
         setSaving(true);
@@ -1448,6 +1467,7 @@ export default function VillasInventory() {
                 </span>
               )}
             </div>
+            {imageError && <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">{imageError}</p>}
           </div>
         </div>
       </div>
@@ -1458,7 +1478,6 @@ export default function VillasInventory() {
     <div className="space-y-4">
       <PageHeader
         title="Villas & Units"
-        description="Manage resort properties, guest accommodation units, categories, seasonal pricing, availability holds, and housekeeping readiness."
         actions={
           primaryActionLabel && (
             <button
@@ -1579,151 +1598,148 @@ export default function VillasInventory() {
         </div>
       )}
 
-      {/* RESPONSIVE SEARCH & FILTER BAR */}
-      <div className={`${CARD_STYLES.base} !p-2.5 w-fit max-w-full`}>
-        <div
-          className={
-            activeTab === "units"
-              ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[220px_140px_155px_170px_auto]"
-              : activeTab === "villas"
-                ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-[260px_auto]"
+      {/* RESPONSIVE SEARCH, FILTER BAR & SEPARATE TABLE/CARDS TOGGLE */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className={`${CARD_STYLES.base} !p-2 w-fit max-w-full`}>
+          <div
+            className={
+              activeTab === "units"
+                ? "grid grid-cols-1 items-center gap-2 sm:grid-cols-2 xl:grid-cols-[220px_140px_155px_170px]"
                 : "flex flex-wrap items-center gap-2"
-          }
-        >
-          {/* Search field */}
-          <div className={`flex min-w-0 items-center gap-2 ${activeTab === "units" ? "w-full" : ""}`}>
-            <div className={`relative min-w-0 ${activeTab === "units" ? "w-full" : activeTab === "villas" ? "w-full max-w-[260px]" : "w-56 max-w-full"}`}>
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${activeTab}...`}
-                className={`${INPUT_STYLES.base} w-full pl-9`}
-              />
-            </div>
-            {(searchQuery || villaFilter || categoryFilter || hkFilter || blockTypeFilter) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setVillaFilter("");
-                  setCategoryFilter("");
-                  setHkFilter("");
-                  setBlockTypeFilter("");
-                }}
-                className={`${BUTTON_VARIANTS.secondary} shrink-0`}
-              >
-                Reset
-              </button>
-            )}
-          </div>
-
-          {/* Units / Housekeeping filters */}
-          {(activeTab === "units" || activeTab === "housekeeping") && (
-            <>
-              <select
-                value={villaFilter}
-                onChange={(e) => setVillaFilter(e.target.value)}
-                className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "!w-auto min-w-[130px]"}`}
-              >
-                <option value="">All Villas</option>
-                {villas.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-
-              {activeTab === "units" && (
-                <select
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                  className={`${INPUT_STYLES.select} min-w-0 w-full`}
+            }
+          >
+            {/* Search field */}
+            <div className={`flex min-w-0 items-center gap-2 ${activeTab === "units" ? "w-full" : ""}`}>
+              <div className={`relative min-w-0 ${activeTab === "units" ? "w-full" : activeTab === "villas" ? "w-60 max-w-full" : "w-56 max-w-full"}`}>
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search ${activeTab}...`}
+                  className={`${INPUT_STYLES.base} w-full pl-9`}
+                />
+              </div>
+              {(searchQuery || villaFilter || categoryFilter || hkFilter || blockTypeFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setVillaFilter("");
+                    setCategoryFilter("");
+                    setHkFilter("");
+                    setBlockTypeFilter("");
+                  }}
+                  className={`${BUTTON_VARIANTS.secondary} shrink-0`}
                 >
-                  <option value="">All Categories</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {/* Units / Housekeeping filters */}
+            {(activeTab === "units" || activeTab === "housekeeping") && (
+              <>
+                <select
+                  value={villaFilter}
+                  onChange={(e) => setVillaFilter(e.target.value)}
+                  className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "!w-auto min-w-[130px]"}`}
+                >
+                  <option value="">All Villas</option>
+                  {villas.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
                     </option>
                   ))}
                 </select>
-              )}
 
+                {activeTab === "units" && (
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className={`${INPUT_STYLES.select} min-w-0 w-full`}
+                  >
+                    <option value="">All Categories</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <select
+                  value={hkFilter}
+                  onChange={(e) => setHkFilter(e.target.value)}
+                  className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "!w-auto min-w-[150px]"}`}
+                >
+                  <option value="">All Housekeeping</option>
+                  {HOUSEKEEPING_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
+            {/* Block type filter */}
+            {activeTab === "blocks" && (
               <select
-                value={hkFilter}
-                onChange={(e) => setHkFilter(e.target.value)}
-                className={`${INPUT_STYLES.select} ${activeTab === "units" ? "min-w-0 w-full" : "!w-auto min-w-[150px]"}`}
+                value={blockTypeFilter}
+                onChange={(e) => setBlockTypeFilter(e.target.value)}
+                className={`${INPUT_STYLES.select} !w-auto min-w-[140px]`}
               >
-                <option value="">All Housekeeping</option>
-                {HOUSEKEEPING_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                <option value="">All Block Types</option>
+                {BLOCK_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
                   </option>
                 ))}
               </select>
-            </>
-          )}
-
-          {/* Block type filter */}
-          {activeTab === "blocks" && (
-            <select
-              value={blockTypeFilter}
-              onChange={(e) => setBlockTypeFilter(e.target.value)}
-              className={`${INPUT_STYLES.select} !w-auto min-w-[140px]`}
-            >
-              <option value="">All Block Types</option>
-              {BLOCK_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Spacer pushes Table/Cards toggle to the far right */}
-          {(activeTab === "villas" || activeTab === "units") && (
-            <div className="justify-self-end shrink-0">
-              <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50 dark:bg-[#0D1420] p-1 gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedIds(new Set());
-                    setBulkFailures([]);
-                    setViewMode("table");
-                  }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                    viewMode === "table"
-                      ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
-                      : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
-                  }`}
-                >
-                  <List size={13} />
-                  <span>Table</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedIds(new Set());
-                    setBulkFailures([]);
-                    setViewMode("cards");
-                  }}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                    viewMode === "cards"
-                      ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
-                      : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
-                  }`}
-                >
-                  <LayoutGrid size={13} />
-                  <span>Cards</span>
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {(activeTab === "villas" || activeTab === "units") && (
+          <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1 gap-1 shrink-0 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIds(new Set());
+                setBulkFailures([]);
+                setViewMode("table");
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                viewMode === "table"
+                  ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+              }`}
+            >
+              <List size={13} />
+              <span>Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedIds(new Set());
+                setBulkFailures([]);
+                setViewMode("cards");
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+                viewMode === "cards"
+                  ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+              }`}
+            >
+              <LayoutGrid size={13} />
+              <span>Cards</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* SLIDING CARDS VIEW OR DATA TABLE */}
@@ -2128,7 +2144,7 @@ export default function VillasInventory() {
           </div>
         }
       >
-        <form id="villas-inventory-modal-form" onSubmit={handleSaveModal} className="space-y-4">
+        <form id="villas-inventory-modal-form" onSubmit={handleSaveModal} onChange={() => setValidationErrors({})} className="space-y-4">
           {formError && (
             <AlertBanner variant="error" message={formError} onDismiss={() => setFormError("")} />
           )}
@@ -2149,6 +2165,7 @@ export default function VillasInventory() {
                   placeholder="e.g. Sahyadri Ridge Villa"
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.name}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">Address / Wing</label>
@@ -2204,6 +2221,7 @@ export default function VillasInventory() {
                       placeholder="Inherit property default"
                       className={INPUT_STYLES.base}
                     />
+                    {validationErrors.late_checkout_fee && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.late_checkout_fee}</p>}
                   </div>
                 </div>
                 <p className="mt-1.5 text-[11px] text-stone-500">
@@ -2233,6 +2251,7 @@ export default function VillasInventory() {
                   placeholder="e.g. Poolside Suite"
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.name}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">Description</label>
@@ -2272,6 +2291,7 @@ export default function VillasInventory() {
                       placeholder="e.g. Horizon Plunge Suite"
                       className={INPUT_STYLES.base}
                     />
+                    {validationErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.name}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1">Parent Villa *</label>
@@ -2288,6 +2308,7 @@ export default function VillasInventory() {
                         </option>
                       ))}
                     </select>
+                    {validationErrors.villa_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.villa_id}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1">Unit Category *</label>
@@ -2304,6 +2325,7 @@ export default function VillasInventory() {
                         </option>
                       ))}
                     </select>
+                    {validationErrors.category_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.category_id}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-1">Description</label>
@@ -2358,6 +2380,7 @@ export default function VillasInventory() {
                       onChange={(e) => setForm({ ...form, base_rate: e.target.value })}
                       className={INPUT_STYLES.base}
                     />
+                    {validationErrors.base_rate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.base_rate}</p>}
                   </div>
                 </div>
               </div>
@@ -2422,6 +2445,7 @@ export default function VillasInventory() {
                       placeholder="Inherit villa / default"
                       className={INPUT_STYLES.base}
                     />
+                    {validationErrors.late_checkout_fee && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.late_checkout_fee}</p>}
                   </div>
                 </div>
                 <p className="mt-1.5 text-[11px] text-stone-500">
@@ -2448,6 +2472,7 @@ export default function VillasInventory() {
                     </option>
                   ))}
                 </select>
+                {validationErrors.unit_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.unit_id}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold mb-1">Season Name *</label>
@@ -2459,6 +2484,7 @@ export default function VillasInventory() {
                   placeholder="e.g. Festive Winter Peak"
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.name}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">Start Date *</label>
@@ -2469,6 +2495,7 @@ export default function VillasInventory() {
                   onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.start_date && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.start_date}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">End Date *</label>
@@ -2479,6 +2506,7 @@ export default function VillasInventory() {
                   onChange={(e) => setForm({ ...form, end_date: e.target.value })}
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.end_date && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.end_date}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold mb-1">Seasonal Nightly Rate (₹) *</label>
@@ -2491,6 +2519,7 @@ export default function VillasInventory() {
                   onChange={(e) => setForm({ ...form, nightly_rate: e.target.value })}
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.nightly_rate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.nightly_rate}</p>}
               </div>
             </div>
           )}
@@ -2512,6 +2541,7 @@ export default function VillasInventory() {
                     </option>
                   ))}
                 </select>
+                {validationErrors.unit_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.unit_id}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">Block Type *</label>
@@ -2536,6 +2566,7 @@ export default function VillasInventory() {
                   onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.start_date && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.start_date}</p>}
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1">End Date *</label>
@@ -2546,6 +2577,7 @@ export default function VillasInventory() {
                   onChange={(e) => setForm({ ...form, end_date: e.target.value })}
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.end_date && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.end_date}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold mb-1">Reason *</label>
@@ -2557,6 +2589,7 @@ export default function VillasInventory() {
                   placeholder="e.g. Annual AC & plunge pool maintenance"
                   className={INPUT_STYLES.base}
                 />
+                {validationErrors.reason && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{validationErrors.reason}</p>}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-semibold mb-1">Detailed Notes</label>

@@ -217,7 +217,7 @@ export const getContextualOrderAction = (order) => {
     case "Completed":
       return {
         actionKey: "view_invoice",
-        label: "View / Share Invoice",
+        label: "Invoice",
         type: "view_invoice",
         buttonStyle: "border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#151D29] text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 font-semibold",
       };

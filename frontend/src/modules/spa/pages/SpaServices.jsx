@@ -224,8 +224,7 @@ export default function SpaServices() {
     <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
-        title="Spa Services"
-        description="Configure spa treatments, therapies, durations, and pricing."
+        title="Services"
         actions={
           <div className="flex items-center gap-2.5">
             <button
@@ -261,8 +260,21 @@ export default function SpaServices() {
       />
 
       {/* Compact search and category filters */}
-      <div className="flex flex-col gap-2 rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-[#101722] sm:flex-row sm:items-center sm:justify-start sm:gap-2">
-        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto sm:flex-none">
+      <div className="flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-stone-200 bg-white p-2 dark:border-stone-800 dark:bg-[#101722]">
+        <div className="relative w-full sm:w-48">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search services..."
+            className="w-full rounded-lg border border-stone-200 bg-white py-1.5 pl-8 pr-3 text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] dark:border-stone-700 dark:bg-[#151D29] dark:text-stone-100"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
           <select
             value={selectedCatId ?? ""}
             onChange={(e) => {
@@ -270,7 +282,7 @@ export default function SpaServices() {
               setCurrentPage(1);
             }}
             aria-label="Filter services by category"
-            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 sm:w-96"
+            className="rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 text-xs text-stone-700 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200"
           >
             <option value="">All Categories ({services.length})</option>
             {categories.map((category) => (
@@ -283,7 +295,7 @@ export default function SpaServices() {
             <button
               type="button"
               onClick={() => handleDeleteCategory(selectedCategory)}
-              className="shrink-0 rounded-lg border border-stone-200 bg-white p-2 text-stone-400 transition hover:bg-rose-50 hover:text-rose-600 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-rose-950/30"
+              className="shrink-0 rounded-lg border border-stone-200 bg-white p-1.5 text-stone-400 transition hover:bg-rose-50 hover:text-rose-600 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-rose-950/30 cursor-pointer"
               title={`Delete ${selectedCategory.name} category`}
               aria-label={`Delete ${selectedCategory.name} category`}
             >
@@ -291,28 +303,15 @@ export default function SpaServices() {
             </button>
           )}
         </div>
-        <div className="relative w-full sm:max-w-xs">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="Search"
-            className="w-full rounded-lg border border-stone-200 bg-white py-2 pl-9 pr-3 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#F59E0B] dark:border-stone-700 dark:bg-[#151D29] dark:text-stone-100"
-          />
-        </div>
       </div>
 
       <BulkSelectionBar count={selectedIds.size} onDelete={handleDeleteSelectedServices} onClear={clear} />
 
       {/* Services Table */}
       {loading ? (
-        <div className="rounded-xl border border-stone-200 bg-white p-10 text-center text-sm text-stone-400 dark:border-stone-800 dark:bg-[#101722]">Loading spa services...</div>
+        <div className="rounded-xl border border-stone-200 bg-white p-8 text-center text-sm text-stone-400 dark:border-stone-800 dark:bg-[#101722]">Loading spa services...</div>
       ) : filteredServices.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 bg-white p-10 text-center dark:border-stone-800 dark:bg-[#101722]">
+        <div className="rounded-xl border border-stone-200 bg-white p-8 text-center dark:border-stone-800 dark:bg-[#101722]">
           <Sparkles size={30} className="mx-auto mb-2 text-stone-300 dark:text-stone-700" />
           <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">No services found</p>
           <p className="mt-1 text-xs text-stone-400">Add a treatment or adjust your search and category filters.</p>
@@ -324,45 +323,48 @@ export default function SpaServices() {
               <h2 className="text-sm font-bold text-stone-900 dark:text-white">Spa Service Catalogue</h2>
               <p className="mt-0.5 text-xs text-stone-500">{filteredServices.length} services</p>
             </div>
-            <button type="button" onClick={fetchData} disabled={loading} aria-label="Refresh services" className="rounded-lg border border-stone-200 p-2 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800 disabled:opacity-50">
+            <button type="button" onClick={fetchData} disabled={loading} aria-label="Refresh services" className="rounded-lg border border-stone-200 p-1.5 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800 disabled:opacity-50 cursor-pointer">
               <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[950px] text-left text-sm">
-              <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <colgroup>
+                <col className="w-10" />
+              </colgroup>
+              <thead className="bg-stone-50 text-[11px] uppercase tracking-wide text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
                 <tr>
-                  <th className="px-4 py-3"><input type="checkbox" aria-label="Select all services on this page" checked={filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((service) => selectedIds.has(service.id))} onChange={() => toggleMany(filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((service) => service.id))} className="h-4 w-4 accent-amber-500" /></th>
-                  <th className="px-4 py-3 font-semibold">Service</th>
-                  <th className="px-4 py-3 font-semibold">Category</th>
-                  <th className="px-4 py-3 font-semibold">Duration</th>
-                  <th className="px-4 py-3 font-semibold">Price</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label="Select all services on this page" checked={filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((service) => selectedIds.has(service.id))} onChange={() => toggleMany(filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((service) => service.id))} className="h-4 w-4 accent-amber-500" /></th>
+                  <th className="px-3.5 py-2.5 font-semibold">Service</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Category</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Duration</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Price</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Status</th>
+                  <th className="px-3.5 py-2.5 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
                 {filteredServices.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((svc) => (
                   <tr key={svc.id} className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40">
-                    <td className="px-4 py-3"><input type="checkbox" aria-label={`Select service ${svc.name}`} checked={selectedIds.has(svc.id)} onChange={() => toggle(svc.id)} className="h-4 w-4 accent-amber-500" /></td>
-                    <td className="px-4 py-3">
+                    <td className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label={`Select service ${svc.name}`} checked={selectedIds.has(svc.id)} onChange={() => toggle(svc.id)} className="h-4 w-4 accent-amber-500" /></td>
+                    <td className="px-3.5 py-2.5">
                       <p className="font-semibold text-stone-900 dark:text-white">{svc.name}</p>
                       {svc.description && <p className="mt-0.5 max-w-sm truncate text-xs text-stone-500">{svc.description}</p>}
                     </td>
-                    <td className="px-4 py-3 text-stone-600 dark:text-stone-300">{svc.category_name || "General"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-stone-600 dark:text-stone-300">{svc.duration_minutes} min</td>
-                    <td className="px-4 py-3 whitespace-nowrap font-semibold text-stone-900 dark:text-white">{formatCurrency(svc.price)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${svc.is_available ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                    <td className="px-3.5 py-2.5 text-stone-600 dark:text-stone-300">{svc.category_name || "General"}</td>
+                    <td className="px-3.5 py-2.5 whitespace-nowrap text-stone-600 dark:text-stone-300">{svc.duration_minutes} min</td>
+                    <td className="px-3.5 py-2.5 whitespace-nowrap font-semibold text-stone-900 dark:text-white">{formatCurrency(svc.price)}</td>
+                    <td className="px-3.5 py-2.5">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${svc.is_available ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
                         {svc.is_available ? <CheckCircle2 size={12} /> : <XCircle size={12} />}{svc.is_available ? "Available" : "Unavailable"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3.5 py-2.5">
                       <div className="flex items-center justify-end gap-1">
-                        <button type="button" onClick={() => setViewingService(svc)} title="View service details" aria-label={`View ${svc.name}`} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white"><Eye size={15} /></button>
-                        <button type="button" onClick={() => openEditService(svc)} title="Edit service" aria-label={`Edit ${svc.name}`} className="rounded-lg p-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40"><Edit2 size={15} /></button>
-                        <button type="button" onClick={() => handleToggleAvailability(svc)} disabled={availabilityUpdatingId === svc.id} title={svc.is_available ? "Deactivate service" : "Activate service"} aria-label={`${svc.is_available ? "Deactivate" : "Activate"} ${svc.name}`} className={`rounded-lg p-2 disabled:opacity-50 ${svc.is_available ? "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700" : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"}`}><Power size={15} /></button>
-                        <button type="button" onClick={() => handleDeleteService(svc)} title="Delete / deactivate service" aria-label={`Delete ${svc.name}`} className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"><Trash2 size={15} /></button>
+                        <button type="button" onClick={() => setViewingService(svc)} title="View service details" aria-label={`View ${svc.name}`} className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white cursor-pointer"><Eye size={15} /></button>
+                        <button type="button" onClick={() => openEditService(svc)} title="Edit service" aria-label={`Edit ${svc.name}`} className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer"><Edit2 size={15} /></button>
+                        <button type="button" onClick={() => handleToggleAvailability(svc)} disabled={availabilityUpdatingId === svc.id} title={svc.is_available ? "Deactivate service" : "Activate service"} aria-label={`${svc.is_available ? "Deactivate" : "Activate"} ${svc.name}`} className={`rounded-lg p-1.5 disabled:opacity-50 cursor-pointer ${svc.is_available ? "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700" : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"}`}><Power size={15} /></button>
+                        <button type="button" onClick={() => handleDeleteService(svc)} title="Delete / deactivate service" aria-label={`Delete ${svc.name}`} className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"><Trash2 size={15} /></button>
                       </div>
                     </td>
                   </tr>
@@ -375,7 +377,8 @@ export default function SpaServices() {
             totalPages={Math.ceil(filteredServices.length / pageSize) || 1}
             onPageChange={setCurrentPage}
             totalRecords={filteredServices.length}
-            limit={pageSize}
+            pageSize={pageSize}
+            className="px-4 pb-3"
           />
         </div>
       )}

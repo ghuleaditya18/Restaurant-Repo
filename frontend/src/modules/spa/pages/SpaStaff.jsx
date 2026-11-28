@@ -64,6 +64,7 @@ export default function SpaStaff() {
     is_active: true,
   });
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [savingStaff, setSavingStaff] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [isImageRemoved, setIsImageRemoved] = useState(false);
@@ -110,6 +111,7 @@ export default function SpaStaff() {
       is_active: true,
     });
     setFormError("");
+    setFieldErrors({});
     setSelectedImageFile(null);
     setIsImageRemoved(false);
     setIsStaffModalOpen(true);
@@ -128,6 +130,7 @@ export default function SpaStaff() {
       is_active: staff.is_active ?? true,
     });
     setFormError("");
+    setFieldErrors({});
     setSelectedImageFile(null);
     setIsImageRemoved(false);
     setIsStaffModalOpen(true);
@@ -135,16 +138,19 @@ export default function SpaStaff() {
 
   const handleSaveStaff = async (e) => {
     e.preventDefault();
+    setFormError("");
+    const nextFieldErrors = {};
     if (!staffForm.full_name.trim()) {
-      setFormError("Staff full name is required.");
-      return;
+      nextFieldErrors.full_name = "Staff full name is required.";
     }
     if (!staffForm.phone.trim()) {
-      setFormError("Contact phone number is required.");
+      nextFieldErrors.phone = "Contact phone number is required.";
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
     setSavingStaff(true);
-    setFormError("");
     try {
       const payload = {
         full_name: staffForm.full_name.trim(),
@@ -319,8 +325,7 @@ export default function SpaStaff() {
     <div className="space-y-4">
       {/* A1 Standard PageHeader */}
       <PageHeader
-        title="Spa Therapists"
-        description="Manage therapist roster, support staff, specializations, employee codes, and weekly availability schedules."
+        title="Therapist Management"
         actions={
           <button
             onClick={openAddStaff}
@@ -333,21 +338,21 @@ export default function SpaStaff() {
       />
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col gap-2.5 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-3 sm:flex-row sm:items-center sm:justify-start sm:gap-2.5">
-        <div className="relative w-full sm:max-w-xs">
+      <div className="flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-2">
+        <div className="relative w-full sm:w-48">
           <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400"
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
           />
           <input
             type="text"
-            placeholder="Search"
+            placeholder="Search staff..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] pl-9 pr-3 py-2 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F59E0B] focus:outline-none"
+            className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] pl-8 pr-3 py-1.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:border-[#F59E0B] focus:outline-none"
           />
         </div>
 
@@ -357,7 +362,7 @@ export default function SpaStaff() {
               setFilterTherapist("all");
               setCurrentPage(1);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
               filterTherapist === "all"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
                 : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
@@ -370,7 +375,7 @@ export default function SpaStaff() {
               setFilterTherapist("therapists");
               setCurrentPage(1);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               filterTherapist === "therapists"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
                 : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
@@ -384,7 +389,7 @@ export default function SpaStaff() {
               setFilterTherapist("other");
               setCurrentPage(1);
             }}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
               filterTherapist === "other"
                 ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
                 : "border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] text-stone-700 dark:text-[#8A9AB2] hover:bg-stone-50 dark:hover:bg-[#151D29]"
@@ -399,7 +404,7 @@ export default function SpaStaff() {
 
       {/* Staff Table */}
       {loading ? (
-        <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-10 text-center text-sm text-stone-400">
+        <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-8 text-center text-sm text-stone-400">
           Loading staff directory...
         </div>
       ) : error ? (
@@ -407,8 +412,8 @@ export default function SpaStaff() {
           {error}
         </div>
       ) : filteredStaff.length === 0 ? (
-        <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-10 text-center">
-          <Users size={32} className="mx-auto mb-2 text-stone-300 dark:text-stone-600" />
+        <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#101722] p-8 text-center">
+          <Users size={30} className="mx-auto mb-2 text-stone-300 dark:text-stone-600" />
           <p className="text-sm font-semibold text-stone-700 dark:text-stone-300">No staff members found</p>
           <p className="mt-1 text-xs text-stone-500">{search ? "Try another search." : "Add a therapist or support staff member to get started."}</p>
         </div>
@@ -419,21 +424,24 @@ export default function SpaStaff() {
               <h2 className="text-sm font-bold text-stone-900 dark:text-white">Spa Staff Directory</h2>
               <p className="mt-0.5 text-xs text-stone-500">{filteredStaff.length} staff members</p>
             </div>
-            <button type="button" onClick={fetchStaff} disabled={loading} aria-label="Refresh staff" className="rounded-lg border border-stone-200 dark:border-stone-700 p-2 text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-50">
+            <button type="button" onClick={fetchStaff} disabled={loading} aria-label="Refresh staff" className="rounded-lg border border-stone-200 dark:border-stone-700 p-1.5 text-stone-500 hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-50 cursor-pointer">
               <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
-              <thead className="bg-stone-50 dark:bg-stone-800/60 text-xs uppercase tracking-wide text-stone-500 dark:text-stone-400">
+            <table className="w-full min-w-[820px] text-left text-sm">
+              <colgroup>
+                <col className="w-10" />
+              </colgroup>
+              <thead className="bg-stone-50 dark:bg-stone-800/60 text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">
                 <tr>
-                  <th className="px-4 py-3"><input type="checkbox" aria-label="Select all spa staff on this page" checked={filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((staff) => selectedIds.has(staff.id))} onChange={() => toggleMany(filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((staff) => staff.id))} className="h-4 w-4 accent-amber-500" /></th>
-                  <th className="px-4 py-3 font-semibold">Staff Member</th>
-                  <th className="px-4 py-3 font-semibold">Role</th>
-                  <th className="px-4 py-3 font-semibold">Specialization</th>
-                  <th className="px-4 py-3 font-semibold">Contact</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                  <th className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label="Select all spa staff on this page" checked={filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).length > 0 && filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).every((staff) => selectedIds.has(staff.id))} onChange={() => toggleMany(filteredStaff.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((staff) => staff.id))} className="h-4 w-4 accent-amber-500" /></th>
+                  <th className="px-3.5 py-2.5 font-semibold">Staff Member</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Role</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Specialization</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Contact</th>
+                  <th className="px-3.5 py-2.5 font-semibold">Status</th>
+                  <th className="px-3.5 py-2.5 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
@@ -441,36 +449,36 @@ export default function SpaStaff() {
                   const displayName = staff.full_name || staff.name || "Staff Member";
                   return (
                     <tr key={staff.id} className="transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40">
-                      <td className="px-4 py-3"><input type="checkbox" aria-label={`Select staff ${displayName}`} checked={selectedIds.has(staff.id)} onChange={() => toggle(staff.id)} className="h-4 w-4 accent-amber-500" /></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-amber-200 bg-amber-50 text-center leading-9 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                      <td className="w-10 px-3 py-2.5 text-center"><input type="checkbox" aria-label={`Select staff ${displayName}`} checked={selectedIds.has(staff.id)} onChange={() => toggle(staff.id)} className="h-4 w-4 accent-amber-500" /></td>
+                      <td className="px-3.5 py-2.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-amber-200 bg-amber-50 text-center leading-8 text-xs font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
                             <AuthenticatedImage src={staff.image_url} alt={displayName} fallback={displayName.charAt(0).toUpperCase()} />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold text-stone-900 dark:text-white">{displayName}</p>
-                            <p className="text-xs text-stone-500">{staff.employee_code || "No employee code"}</p>
+                            <p className="font-semibold text-stone-900 dark:text-white leading-tight">{displayName}</p>
+                            <p className="text-[11px] text-stone-500">{staff.employee_code || "No employee code"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-stone-700 dark:text-stone-300">{staff.is_therapist ? "Therapist" : staff.designation || "Support Staff"}</td>
-                      <td className="px-4 py-3 text-stone-600 dark:text-stone-400">{staff.specialization || "—"}</td>
-                      <td className="px-4 py-3 text-xs text-stone-600 dark:text-stone-400">
+                      <td className="px-3.5 py-2.5 text-stone-700 dark:text-stone-300">{staff.is_therapist ? "Therapist" : staff.designation || "Support Staff"}</td>
+                      <td className="px-3.5 py-2.5 text-stone-600 dark:text-stone-400">{staff.specialization || "—"}</td>
+                      <td className="px-3.5 py-2.5 text-xs text-stone-600 dark:text-stone-400">
                         <div>{staff.phone || "—"}</div>
                         {staff.email && <div className="max-w-[220px] truncate">{staff.email}</div>}
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${staff.is_active ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
+                      <td className="px-3.5 py-2.5">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${staff.is_active ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300"}`}>
                           {staff.is_active ? <CheckCircle2 size={12} /> : <XCircle size={12} />}{staff.is_active ? "Active" : "Inactive"}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3.5 py-2.5">
                         <div className="flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => setViewingStaff(staff)} title="View staff details" aria-label={`View ${displayName}`} className="rounded-lg p-2 text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white"><Eye size={15} /></button>
-                          <button type="button" onClick={() => openEditStaff(staff)} title="Edit staff" aria-label={`Edit ${displayName}`} className="rounded-lg p-2 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40"><Edit2 size={15} /></button>
-                          {staff.is_therapist && <button type="button" onClick={() => openAvailability(staff)} title="Manage schedule" aria-label={`Schedule for ${displayName}`} className="rounded-lg p-2 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40"><Calendar size={15} /></button>}
-                          <button type="button" onClick={() => handleToggleStaffStatus(staff)} disabled={statusUpdatingId === staff.id} title={staff.is_active ? "Deactivate staff" : "Activate staff"} aria-label={`${staff.is_active ? "Deactivate" : "Activate"} ${displayName}`} className={`rounded-lg p-2 disabled:opacity-50 ${staff.is_active ? "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700" : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"}`}><Power size={15} /></button>
-                          <button type="button" onClick={() => handleDeleteStaff(staff)} title="Delete / deactivate staff" aria-label={`Delete ${displayName}`} className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"><Trash2 size={15} /></button>
+                          <button type="button" onClick={() => setViewingStaff(staff)} title="View staff details" aria-label={`View ${displayName}`} className="rounded-lg p-1.5 text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:hover:bg-stone-700 dark:hover:text-white cursor-pointer"><Eye size={15} /></button>
+                          <button type="button" onClick={() => openEditStaff(staff)} title="Edit staff" aria-label={`Edit ${displayName}`} className="rounded-lg p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer"><Edit2 size={15} /></button>
+                          {staff.is_therapist && <button type="button" onClick={() => openAvailability(staff)} title="Manage schedule" aria-label={`Schedule for ${displayName}`} className="rounded-lg p-1.5 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40 cursor-pointer"><Calendar size={15} /></button>}
+                          <button type="button" onClick={() => handleToggleStaffStatus(staff)} disabled={statusUpdatingId === staff.id} title={staff.is_active ? "Deactivate staff" : "Activate staff"} aria-label={`${staff.is_active ? "Deactivate" : "Activate"} ${displayName}`} className={`rounded-lg p-1.5 disabled:opacity-50 cursor-pointer ${staff.is_active ? "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700" : "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"}`}><Power size={15} /></button>
+                          <button type="button" onClick={() => handleDeleteStaff(staff)} title="Delete / deactivate staff" aria-label={`Delete ${displayName}`} className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
@@ -484,7 +492,8 @@ export default function SpaStaff() {
             totalPages={Math.ceil(filteredStaff.length / pageSize) || 1}
             onPageChange={setCurrentPage}
             totalRecords={filteredStaff.length}
-            limit={pageSize}
+            pageSize={pageSize}
+            className="px-4 pb-3"
           />
         </div>
       )}
@@ -552,9 +561,14 @@ export default function SpaStaff() {
               required
               placeholder="e.g. Maya Patel"
               value={staffForm.full_name}
-              onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })}
-              className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+              onChange={(e) => {
+                setStaffForm({ ...staffForm, full_name: e.target.value });
+                setFieldErrors((previous) => ({ ...previous, full_name: "" }));
+              }}
+              aria-invalid={Boolean(fieldErrors.full_name)}
+              className={`w-full rounded-xl border bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:outline-none ${fieldErrors.full_name ? "border-red-500 focus:border-red-500" : "border-stone-200 dark:border-stone-800 focus:border-[#F59E0B]"}`}
             />
+            {fieldErrors.full_name && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.full_name}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -608,9 +622,14 @@ export default function SpaStaff() {
                 required
                 placeholder="9876543210"
                 value={staffForm.phone}
-                onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
-                className="w-full rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:border-[#F59E0B] focus:outline-none"
+                onChange={(e) => {
+                  setStaffForm({ ...staffForm, phone: e.target.value });
+                  setFieldErrors((previous) => ({ ...previous, phone: "" }));
+                }}
+                aria-invalid={Boolean(fieldErrors.phone)}
+                className={`w-full rounded-xl border bg-white dark:bg-[#151D29] px-3.5 py-2 text-xs sm:text-sm text-stone-900 dark:text-white focus:outline-none ${fieldErrors.phone ? "border-red-500 focus:border-red-500" : "border-stone-200 dark:border-stone-800 focus:border-[#F59E0B]"}`}
               />
+              {fieldErrors.phone && <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">{fieldErrors.phone}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">

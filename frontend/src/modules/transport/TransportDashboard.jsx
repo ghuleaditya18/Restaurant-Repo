@@ -51,7 +51,6 @@ export default function TransportDashboard() {
   }, [loadDashboard]);
 
   const stats = data?.statistics || {};
-  const alerts = data?.alerts || [];
 
   const pickupColumns = [
     {
@@ -251,31 +250,6 @@ export default function TransportDashboard() {
           onClick={() => navigate("/transport/maintenance")}
         />
       </div>
-
-      {/* COMPACT OPERATIONAL ALERTS */}
-      {!loading && alerts.length > 0 && (
-        <div className="space-y-2">
-          {alerts.slice(0, 4).map((al) => (
-            <AlertBanner
-              key={al.id}
-              variant={al.severity || "warning"}
-              title={al.title}
-              message={al.message}
-              action={
-                al.route ? (
-                  <button
-                    type="button"
-                    onClick={() => navigate(al.route)}
-                    className={BUTTON_VARIANTS.secondary}
-                  >
-                    Review
-                  </button>
-                ) : null
-              }
-            />
-          ))}
-        </div>
-      )}
 
       {/* QUICK ACTIONS */}
       <div className={CARD_STYLES.base}>

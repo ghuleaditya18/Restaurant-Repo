@@ -86,6 +86,7 @@ export default function TransportDrivers() {
   const [form, setForm] = useState(INITIAL_DRIVER_FORM);
   const [pendingFile, setPendingFile] = useState(null);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const [detailDriver, setDetailDriver] = useState(null);
@@ -146,6 +147,7 @@ export default function TransportDrivers() {
     setForm(INITIAL_DRIVER_FORM);
     setPendingFile(null);
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
@@ -167,25 +169,27 @@ export default function TransportDrivers() {
     });
     setPendingFile(null);
     setFormError("");
+    setFieldErrors({});
     setFormOpen(true);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError("");
-
+    const nextFieldErrors = {};
     const phoneRes = validateMobileNumber(form.phone, { required: true, label: "Driver phone" });
     if (!phoneRes.valid) {
-      setFormError(phoneRes.error);
-      return;
+      nextFieldErrors.phone = phoneRes.error;
     }
     const emailRes = validateEmailAddress(form.email, { required: false });
     if (!emailRes.valid) {
-      setFormError(emailRes.error);
-      return;
+      nextFieldErrors.email = emailRes.error;
     }
-    if (!form.driver_name.trim() || !form.licence_number.trim() || !form.licence_validity) {
-      setFormError("Driver name, licence number, and licence validity date are required.");
+    if (!form.driver_name.trim()) nextFieldErrors.driver_name = "Driver name is required.";
+    if (!form.licence_number.trim()) nextFieldErrors.licence_number = "Driving licence number is required.";
+    if (!form.licence_validity) nextFieldErrors.licence_validity = "Licence validity date is required.";
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -460,23 +464,28 @@ export default function TransportDrivers() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">Driver Name *</label>
-              <input type="text" required value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="text" required value={form.driver_name} onChange={(e) => { setForm({ ...form, driver_name: e.target.value }); setFieldErrors((p) => ({ ...p, driver_name: "" })); }} aria-invalid={Boolean(fieldErrors.driver_name)} className={`${INPUT_STYLES.base} ${fieldErrors.driver_name ? "border-red-500 focus:border-red-500" : ""}`} />
+              {fieldErrors.driver_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.driver_name}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Mobile Number *</label>
-              <input type="text" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={INPUT_STYLES.base} placeholder="10-digit mobile" />
+              <input type="text" required value={form.phone} onChange={(e) => { setForm({ ...form, phone: e.target.value }); setFieldErrors((p) => ({ ...p, phone: "" })); }} aria-invalid={Boolean(fieldErrors.phone)} className={`${INPUT_STYLES.base} ${fieldErrors.phone ? "border-red-500 focus:border-red-500" : ""}`} placeholder="10-digit mobile" />
+              {fieldErrors.phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.phone}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Email</label>
-              <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="email" value={form.email} onChange={(e) => { setForm({ ...form, email: e.target.value }); setFieldErrors((p) => ({ ...p, email: "" })); }} aria-invalid={Boolean(fieldErrors.email)} className={`${INPUT_STYLES.base} ${fieldErrors.email ? "border-red-500 focus:border-red-500" : ""}`} />
+              {fieldErrors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.email}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Driving Licence Number *</label>
-              <input type="text" required value={form.licence_number} onChange={(e) => setForm({ ...form, licence_number: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="text" required value={form.licence_number} onChange={(e) => { setForm({ ...form, licence_number: e.target.value }); setFieldErrors((p) => ({ ...p, licence_number: "" })); }} aria-invalid={Boolean(fieldErrors.licence_number)} className={`${INPUT_STYLES.base} ${fieldErrors.licence_number ? "border-red-500 focus:border-red-500" : ""}`} />
+              {fieldErrors.licence_number && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.licence_number}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Licence Validity *</label>
-              <input type="date" required value={form.licence_validity} onChange={(e) => setForm({ ...form, licence_validity: e.target.value })} className={INPUT_STYLES.base} />
+              <input type="date" required value={form.licence_validity} onChange={(e) => { setForm({ ...form, licence_validity: e.target.value }); setFieldErrors((p) => ({ ...p, licence_validity: "" })); }} aria-invalid={Boolean(fieldErrors.licence_validity)} className={`${INPUT_STYLES.base} ${fieldErrors.licence_validity ? "border-red-500 focus:border-red-500" : ""}`} />
+              {fieldErrors.licence_validity && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.licence_validity}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Experience (Years)</label>

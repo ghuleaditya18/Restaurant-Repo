@@ -12,8 +12,8 @@ const formatCurrency = (amount) =>
 
 function RecentOrders({ orders = [], loading = false }) {
   return (
-    <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 shadow-xs">
+      <div className="mb-3 flex items-center justify-between">
         <div>
           <h3 className="text-base font-bold text-stone-900 dark:text-stone-100">Recent Orders</h3>
           <p className="mt-0.5 text-xs text-stone-500 dark:text-[#8A9AB2]">

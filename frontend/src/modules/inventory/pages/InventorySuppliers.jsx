@@ -332,11 +332,11 @@ export default function InventorySuppliers() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="relative w-full sm:w-64">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
             placeholder="Search supplier name, contact or phone..."
@@ -345,7 +345,7 @@ export default function InventorySuppliers() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className={`${INPUT_STYLES.base} pl-9`}
+            className={`${INPUT_STYLES.base} pl-8 !py-1.5 text-xs`}
           />
         </div>
 

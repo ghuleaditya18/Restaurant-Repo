@@ -130,6 +130,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
     is_seasonal_offer: seasonalOnly,
   }));
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   // Detail & Management Modal (Inclusions, Media, Blackouts, History)
@@ -289,6 +290,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   const openCreateModal = () => {
     setEditingPkg(null);
     setFormError("");
+    setFieldErrors({});
     setForm({
       ...INITIAL_FORM,
       category: seasonalOnly ? "Seasonal" : "Couple",
@@ -300,6 +302,7 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   const openEditModal = (pkg) => {
     setEditingPkg(pkg);
     setFormError("");
+    setFieldErrors({});
     setForm({
       name: pkg.name || "",
       package_code: pkg.package_code || "",
@@ -325,27 +328,25 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
   const handleSavePackage = async (e) => {
     e.preventDefault();
     setFormError("");
+    const nextFieldErrors = {};
 
     const trimmedName = form.name.trim();
     if (trimmedName.length < 2) {
-      setFormError("Package name must contain at least 2 characters.");
-      return;
+      nextFieldErrors.name = "Package name must contain at least 2 characters.";
     }
     const priceNum = Number(form.price);
-    if (!Number.isFinite(priceNum) || priceNum <= 0) {
-      setFormError("Package price must be greater than zero.");
-      return;
-    }
-    if (Number(form.duration_nights) < 1) {
-      setFormError("Duration in nights must be at least 1.");
-      return;
-    }
-    if (Number(form.min_guests) < 1 || Number(form.max_guests) < Number(form.min_guests)) {
-      setFormError("Guest range is invalid (min >= 1 and max >= min).");
-      return;
+    if (!Number.isFinite(priceNum) || priceNum <= 0) nextFieldErrors.price = "Package price must be greater than zero.";
+    if (Number(form.duration_nights) < 1) nextFieldErrors.duration_nights = "Duration in nights must be at least 1.";
+    if (Number(form.min_guests) < 1) {
+      nextFieldErrors.min_guests = "Minimum guests must be at least 1.";
+    } else if (Number(form.max_guests) < Number(form.min_guests)) {
+      nextFieldErrors.max_guests = "Max guests must be at least the minimum guests.";
     }
     if (!form.valid_from || !form.valid_to || form.valid_to < form.valid_from) {
-      setFormError("Valid-to date cannot precede valid-from date.");
+      nextFieldErrors.valid_to = "Valid-to date cannot precede valid-from date.";
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
       return;
     }
 
@@ -796,11 +797,11 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
         />
       </div>
 
-      {/* SINGLE-ROW SEARCH, FILTERS & CARDS/TABLE TOGGLE TOOLBAR */}
-      <div className={`${CARD_STYLES.base} !p-2.5`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-            <div className="relative w-full sm:w-60">
+      {/* SEPARATED TOOLBAR: SEARCH/FILTERS LEFT, TABLE/CARDS TOGGLE RIGHT */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className={`${CARD_STYLES.base} w-fit max-w-full !p-2`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-56 max-w-full">
               <Search
                 size={15}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
@@ -858,33 +859,33 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
               </button>
             )}
           </div>
+        </div>
 
-          <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-stone-50 dark:bg-[#0D1420] p-1 gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                viewMode === "table"
-                  ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
-                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
-              }`}
-            >
-              <List size={13} />
-              <span>Table</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("cards")}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
-                viewMode === "cards"
-                  ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
-                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
-              }`}
-            >
-              <LayoutGrid size={13} />
-              <span>Cards</span>
-            </button>
-          </div>
+        <div className="inline-flex rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-1 gap-1 shrink-0 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setViewMode("table")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+              viewMode === "table"
+                ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+            }`}
+          >
+            <List size={13} />
+            <span>Table</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("cards")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
+              viewMode === "cards"
+                ? "bg-[#F59E0B] text-[#0D1420] shadow-2xs"
+                : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-white"
+            }`}
+          >
+            <LayoutGrid size={13} />
+            <span>Cards</span>
+          </button>
         </div>
       </div>
 
@@ -1137,10 +1138,15 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                 type="text"
                 required
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, name: e.target.value }));
+                  setFieldErrors((p) => ({ ...p, name: "" }));
+                }}
                 placeholder="e.g. Honeymoon Sunset Retreat"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(fieldErrors.name)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.name ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.name}</p>}
             </div>
 
             <div>
@@ -1200,10 +1206,15 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                 min="1"
                 required
                 value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, price: e.target.value }));
+                  setFieldErrors((p) => ({ ...p, price: "" }));
+                }}
                 placeholder="e.g. 24999.00"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(fieldErrors.price)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.price ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.price && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.price}</p>}
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -1216,9 +1227,14 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                   min="1"
                   required
                   value={form.duration_nights}
-                  onChange={(e) => setForm((f) => ({ ...f, duration_nights: e.target.value }))}
-                  className={INPUT_STYLES.base}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, duration_nights: e.target.value }));
+                    setFieldErrors((p) => ({ ...p, duration_nights: "" }));
+                  }}
+                  aria-invalid={Boolean(fieldErrors.duration_nights)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.duration_nights ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.duration_nights && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.duration_nights}</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-1">
@@ -1229,9 +1245,14 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                   min="1"
                   required
                   value={form.min_guests}
-                  onChange={(e) => setForm((f) => ({ ...f, min_guests: e.target.value }))}
-                  className={INPUT_STYLES.base}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, min_guests: e.target.value }));
+                    setFieldErrors((p) => ({ ...p, min_guests: "", max_guests: "" }));
+                  }}
+                  aria-invalid={Boolean(fieldErrors.min_guests)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.min_guests ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.min_guests && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.min_guests}</p>}
               </div>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mb-1">
@@ -1242,9 +1263,14 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                   min="1"
                   required
                   value={form.max_guests}
-                  onChange={(e) => setForm((f) => ({ ...f, max_guests: e.target.value }))}
-                  className={INPUT_STYLES.base}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, max_guests: e.target.value }));
+                    setFieldErrors((p) => ({ ...p, max_guests: "" }));
+                  }}
+                  aria-invalid={Boolean(fieldErrors.max_guests)}
+                  className={`${INPUT_STYLES.base} ${fieldErrors.max_guests ? "border-red-500 focus:border-red-500" : ""}`}
                 />
+                {fieldErrors.max_guests && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.max_guests}</p>}
               </div>
             </div>
 
@@ -1269,9 +1295,14 @@ export default function PackagesCatalog({ seasonalOnly = false }) {
                 type="date"
                 required
                 value={form.valid_to}
-                onChange={(e) => setForm((f) => ({ ...f, valid_to: e.target.value }))}
-                className={INPUT_STYLES.base}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, valid_to: e.target.value }));
+                  setFieldErrors((p) => ({ ...p, valid_to: "" }));
+                }}
+                aria-invalid={Boolean(fieldErrors.valid_to)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.valid_to ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.valid_to && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.valid_to}</p>}
             </div>
 
             <div>

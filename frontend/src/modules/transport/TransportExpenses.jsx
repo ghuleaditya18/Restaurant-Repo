@@ -42,6 +42,7 @@ export default function TransportExpenses() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
   const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -78,7 +79,8 @@ export default function TransportExpenses() {
   const handleSave = async (e) => {
     e.preventDefault();
     setFormError("");
-    if (!form.vehicle_id) return setFormError("Select a vehicle.");
+    const nextFieldErrors = {};
+    if (!form.vehicle_id) nextFieldErrors.vehicle_id = "Select a vehicle.";
 
     const computedTotal =
       form.total_amount !== ""
@@ -88,7 +90,11 @@ export default function TransportExpenses() {
           : NaN;
 
     if (!Number.isFinite(computedTotal) || computedTotal < 0) {
-      return setFormError("Enter Total Amount or both Quantity and Cost per Unit.");
+      nextFieldErrors.total_amount = "Enter a total amount or both quantity and cost per unit.";
+    }
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) {
+      return;
     }
 
     setSaving(true);
@@ -243,10 +249,11 @@ export default function TransportExpenses() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold mb-1">Vehicle *</label>
-              <select required value={form.vehicle_id} onChange={(e) => setForm({ ...form, vehicle_id: e.target.value })} className={INPUT_STYLES.select}>
+              <select required value={form.vehicle_id} onChange={(e) => { setForm({ ...form, vehicle_id: e.target.value }); setFieldErrors((p) => ({ ...p, vehicle_id: "" })); }} aria-invalid={Boolean(fieldErrors.vehicle_id)} className={`${INPUT_STYLES.select} ${fieldErrors.vehicle_id ? "border-red-500 focus:border-red-500" : ""}`}>
                 <option value="">Select vehicle...</option>
                 {vehicles.map((v) => <option key={v.id} value={v.id}>{v.vehicle_name} ({v.registration_number})</option>)}
               </select>
+              {fieldErrors.vehicle_id && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.vehicle_id}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Date *</label>
@@ -282,9 +289,11 @@ export default function TransportExpenses() {
                 min={0}
                 value={form.total_amount}
                 placeholder={form.quantity && form.cost_per_unit ? (Number(form.quantity) * Number(form.cost_per_unit)).toFixed(2) : "Auto or enter"}
-                onChange={(e) => setForm({ ...form, total_amount: e.target.value })}
-                className={INPUT_STYLES.base}
+                onChange={(e) => { setForm({ ...form, total_amount: e.target.value }); setFieldErrors((p) => ({ ...p, total_amount: "" })); }}
+                aria-invalid={Boolean(fieldErrors.total_amount)}
+                className={`${INPUT_STYLES.base} ${fieldErrors.total_amount ? "border-red-500 focus:border-red-500" : ""}`}
               />
+              {fieldErrors.total_amount && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{fieldErrors.total_amount}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Odometer Reading (km)</label>

@@ -21,9 +21,6 @@ import {
   AlertCircle,
   Sun,
   Moon,
-  Monitor,
-  Check,
-  Palette,
   Camera,
   Trash2,
   Loader2,
@@ -253,16 +250,30 @@ export default function Settings() {
             ? TRANSPORT_HELP_SECTIONS
             : HELP_SECTIONS;
   const isManager = (user?.role || "").toLowerCase() === "manager" || (user?.role || "").toLowerCase() === "admin";
+  const isResortManager = (user?.role || "").toLowerCase() === "manager";
+  const profileRoleLabel = isResortManager
+    ? "Resort Manager"
+    : isSpaContext
+      ? "Spa Receptionist"
+      : isTransportContext
+        ? "Transport Manager"
+        : isVillaContext
+          ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
+          : isPackageContext
+            ? (user?.role ? `Packages ${user.role}` : "Packages Manager")
+            : isActivityContext
+              ? (user?.role ? `Activities ${user.role}` : "Activities Manager")
+              : (user?.role || "Receptionist");
 
   const { themeMode, setThemeMode } = useTheme();
 
   // Active section tab: 'profile' | 'appearance' | 'help' | 'about'
   const rawTab = searchParams.get("tab");
-  const activeTab = ["profile", "appearance", "help", "about"].includes(rawTab) ? rawTab : "profile";
+  const activeTab = ["profile", "help", "about"].includes(rawTab) ? rawTab : "profile";
 
   useEffect(() => {
     // Gracefully normalize invalid tabs to profile
-    if (rawTab && !["profile", "appearance", "help", "about"].includes(rawTab)) {
+    if (rawTab && !["profile", "help", "about"].includes(rawTab)) {
       setSearchParams({ tab: "profile" }, { replace: true });
     }
   }, [rawTab, setSearchParams]);
@@ -282,6 +293,7 @@ export default function Settings() {
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [profileFieldErrors, setProfileFieldErrors] = useState({});
 
   // PROFILE AVATAR MANAGEMENT
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -380,6 +392,7 @@ export default function Settings() {
   const [villaPolicyEditing, setVillaPolicyEditing] = useState(false);
   const [villaPolicySaving, setVillaPolicySaving] = useState(false);
   const [villaPolicyError, setVillaPolicyError] = useState("");
+  const [villaPolicyFieldErrors, setVillaPolicyFieldErrors] = useState({});
   const [villaPolicyForm, setVillaPolicyForm] = useState({
     default_check_in_time: "14:00",
     default_check_out_time: "11:00",
@@ -418,14 +431,17 @@ export default function Settings() {
   const handleSaveVillaPolicy = async (e) => {
     e.preventDefault();
     setVillaPolicyError("");
+    const errors = {};
     const grace = Number(villaPolicyForm.late_checkout_grace_minutes);
     if (!Number.isInteger(grace) || grace < 0 || grace > 720) {
-      setVillaPolicyError("Late checkout grace period must be a whole number between 0 and 720 minutes.");
-      return;
+      errors.late_checkout_grace_minutes = "Enter a whole number from 0 to 720 minutes.";
     }
     const feeRaw = String(villaPolicyForm.default_late_checkout_fee ?? "").trim();
     if (feeRaw !== "" && (Number.isNaN(Number(feeRaw)) || Number(feeRaw) < 0)) {
-      setVillaPolicyError("Default late checkout fee must be a valid non-negative INR amount.");
+      errors.default_late_checkout_fee = "Enter a valid non-negative amount.";
+    }
+    setVillaPolicyFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setVillaPolicySaving(true);
@@ -464,6 +480,7 @@ export default function Settings() {
       ...prev,
       [name]: name === "phone" ? sanitizeMobileInput(value) : value,
     }));
+    setProfileFieldErrors((previous) => ({ ...previous, [name]: "" }));
   };
 
   const handleProfileCancel = async () => {
@@ -490,41 +507,43 @@ export default function Settings() {
       phone: user?.phone || "",
     });
     setProfileError("");
+    setProfileFieldErrors({});
     setIsEditing(false);
   };
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setProfileError("");
+    const nextFieldErrors = {};
 
     const trimmedName = profileForm.full_name.trim();
     if (!trimmedName || trimmedName.length < 2) {
-      setProfileError("Full Name must contain at least 2 characters.");
-      return;
+      nextFieldErrors.full_name = "Full name must contain at least 2 characters.";
     }
 
     const emailCheck = validateEmailAddress(profileForm.email, { required: true });
     if (!emailCheck.valid) {
-      setProfileError(emailCheck.error);
-      return;
+      nextFieldErrors.email = emailCheck.error;
     }
     const trimmedEmail = emailCheck.normalized;
 
     const trimmedPhone = profileForm.phone.trim();
+    let phoneCheck = null;
     if (trimmedPhone) {
-      const phoneCheck = validateMobileNumber(trimmedPhone, { required: false });
+      phoneCheck = validateMobileNumber(trimmedPhone, { required: false });
       if (!phoneCheck.valid) {
-        setProfileError(phoneCheck.error);
-        return;
+        nextFieldErrors.phone = phoneCheck.error;
       }
     }
+    setProfileFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) return;
 
     setProfileSaving(true);
     try {
       const updated = await updateProfile({
         full_name: trimmedName,
         email: trimmedEmail,
-        phone: trimmedPhone || null,
+        phone: phoneCheck?.normalized || null,
       });
       updateUser(updated);
       showSuccess(
@@ -581,7 +600,7 @@ export default function Settings() {
       <PageHeader
         title={
           isSpaContext
-            ? "Spa Facility Settings"
+            ? "Settings"
             : isVillaContext || isPackageContext || isActivityContext || isTransportContext
               ? "Settings"
               : "System Settings"
@@ -599,19 +618,6 @@ export default function Settings() {
             >
               <User size={14} />
               <span>Profile</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("appearance")}
-              className={`flex items-center gap-1.5 sm:gap-2 rounded-lg px-2.5 sm:px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
-                activeTab === "appearance"
-                  ? "bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold shadow-xs"
-                  : "text-stone-600 dark:text-[#8A9AB2] hover:text-stone-900 dark:hover:text-stone-100"
-              }`}
-            >
-              <Palette size={14} />
-              <span>Appearance</span>
             </button>
 
             <button
@@ -731,7 +737,7 @@ export default function Settings() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
                     <span className="rounded-md bg-stone-100 dark:bg-stone-800 px-2 py-0.5 font-semibold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-                      {isSpaContext ? "Role: Spa Receptionist" : isTransportContext ? "Role: Transport Manager" : (user?.role ? `Role: ${user.role}` : "Role: Receptionist")}
+                      {`Role: ${profileRoleLabel}`}
                     </span>
                     <span className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 font-semibold text-amber-800 dark:text-amber-300">
                       {isSpaContext
@@ -760,8 +766,35 @@ export default function Settings() {
                 </div>
               </div>
 
-              {!isEditing && (
-                <div className="shrink-0">
+              <div className="flex shrink-0 flex-col items-end gap-3">
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                    Appearance
+                  </span>
+                  <div className="inline-flex items-center gap-1 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-[#151D29] p-1" role="group" aria-label="Appearance">
+                    <button
+                      type="button"
+                      onClick={() => setThemeMode("light", user?.id)}
+                      aria-label="Use light appearance"
+                      aria-pressed={themeMode === "light"}
+                      title="Light appearance"
+                      className={`flex h-7 w-7 items-center justify-center rounded-md transition cursor-pointer ${themeMode === "light" ? "bg-white text-amber-600 shadow-xs dark:bg-stone-800" : "text-stone-500 hover:bg-white hover:text-amber-600 dark:text-stone-400 dark:hover:bg-stone-800"}`}
+                    >
+                      <Sun size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setThemeMode("dark", user?.id)}
+                      aria-label="Use dark appearance"
+                      aria-pressed={themeMode === "dark"}
+                      title="Dark appearance"
+                      className={`flex h-7 w-7 items-center justify-center rounded-md transition cursor-pointer ${themeMode === "dark" ? "bg-stone-800 text-amber-300 shadow-xs" : "text-stone-500 hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100"}`}
+                    >
+                      <Moon size={15} />
+                    </button>
+                  </div>
+                </div>
+                {!isEditing && (
                   <button
                     type="button"
                     onClick={() => {
@@ -773,8 +806,8 @@ export default function Settings() {
                     <Edit3 size={15} />
                     <span>Update Profile</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
@@ -838,13 +871,7 @@ export default function Settings() {
                   <div className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-stone-900 dark:text-stone-100">
                     <ShieldCheck size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>
-                      {isSpaContext
-                        ? "Spa Receptionist"
-                        : isVillaContext
-                          ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
-                          : isPackageContext
-                            ? (user?.role ? `Packages ${user.role}` : "Packages Manager")
-                            : (user?.role || "Receptionist")}
+                      {profileRoleLabel}
                     </span>
                   </div>
                 </div>
@@ -890,8 +917,10 @@ export default function Settings() {
                       maxLength={100}
                       disabled={profileSaving}
                       placeholder="e.g. Amit Patil"
-                      className={INPUT_STYLES.base}
+                      aria-invalid={Boolean(profileFieldErrors.full_name)}
+                      className={`${INPUT_STYLES.base} ${profileFieldErrors.full_name ? "border-red-500 focus:border-red-500" : ""}`}
                     />
+                    {profileFieldErrors.full_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{profileFieldErrors.full_name}</p>}
                     <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                       Minimum 2 characters. Displayed on header and order logs.
                     </p>
@@ -911,10 +940,12 @@ export default function Settings() {
                         maxLength={150}
                         disabled={profileSaving}
                         placeholder="e.g. receptionist@example.com"
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(profileFieldErrors.email)}
+                        className={`${INPUT_STYLES.base} ${profileFieldErrors.email ? "border-red-500 focus:border-red-500" : ""}`}
                       />
                       <Mail size={16} className="pointer-events-none absolute right-3 top-2.5 text-stone-400" />
                     </div>
+                    {profileFieldErrors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{profileFieldErrors.email}</p>}
                     <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                       Authorized email address used for signing in.
                     </p>
@@ -936,10 +967,12 @@ export default function Settings() {
                         maxLength={10}
                         disabled={profileSaving}
                         placeholder="e.g. 9876543210"
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(profileFieldErrors.phone)}
+                        className={`${INPUT_STYLES.base} ${profileFieldErrors.phone ? "border-red-500 focus:border-red-500" : ""}`}
                       />
                       <Phone size={16} className="pointer-events-none absolute right-3 top-2.5 text-stone-400" />
                     </div>
+                    {profileFieldErrors.phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{profileFieldErrors.phone}</p>}
                     <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                       10-digit Indian mobile number (starting with 6, 7, 8, or 9).
                     </p>
@@ -951,17 +984,7 @@ export default function Settings() {
                     </label>
                     <input
                       type="text"
-                      value={
-                        isSpaContext
-                          ? "Spa Receptionist"
-                          : isVillaContext
-                            ? (user?.role ? `Villas ${user.role}` : "Villas Manager")
-                            : isPackageContext
-                              ? (user?.role ? `Packages ${user.role}` : "Packages Manager")
-                              : isActivityContext
-                                ? (user?.role ? `Activities ${user.role}` : "Activities Manager")
-                                : (user?.role || "Receptionist")
-                      }
+                      value={profileRoleLabel}
                       disabled
                       className="w-full rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-[#151D29] px-3 py-2 text-sm text-stone-500 dark:text-stone-400 cursor-not-allowed"
                     />
@@ -1188,14 +1211,16 @@ export default function Settings() {
                         required
                         value={villaPolicyForm.late_checkout_grace_minutes}
                         onChange={(e) =>
-                          setVillaPolicyForm({
+                          (setVillaPolicyForm({
                             ...villaPolicyForm,
                             late_checkout_grace_minutes: e.target.value,
-                          })
+                          }), setVillaPolicyFieldErrors((p) => ({ ...p, late_checkout_grace_minutes: "" })))
                         }
                         disabled={villaPolicySaving}
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(villaPolicyFieldErrors.late_checkout_grace_minutes)}
+                        className={`${INPUT_STYLES.base} ${villaPolicyFieldErrors.late_checkout_grace_minutes ? "border-red-500" : ""}`}
                       />
+                      {villaPolicyFieldErrors.late_checkout_grace_minutes && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{villaPolicyFieldErrors.late_checkout_grace_minutes}</p>}
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-stone-700 dark:text-stone-300">
@@ -1207,15 +1232,17 @@ export default function Settings() {
                         step="0.01"
                         value={villaPolicyForm.default_late_checkout_fee}
                         onChange={(e) =>
-                          setVillaPolicyForm({
+                          (setVillaPolicyForm({
                             ...villaPolicyForm,
                             default_late_checkout_fee: e.target.value,
-                          })
+                          }), setVillaPolicyFieldErrors((p) => ({ ...p, default_late_checkout_fee: "" })))
                         }
                         disabled={villaPolicySaving}
                         placeholder="Not configured"
-                        className={INPUT_STYLES.base}
+                        aria-invalid={Boolean(villaPolicyFieldErrors.default_late_checkout_fee)}
+                        className={`${INPUT_STYLES.base} ${villaPolicyFieldErrors.default_late_checkout_fee ? "border-red-500" : ""}`}
                       />
+                      {villaPolicyFieldErrors.default_late_checkout_fee && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{villaPolicyFieldErrors.default_late_checkout_fee}</p>}
                     </div>
                   </div>
                   <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-end gap-2.5">
@@ -1299,109 +1326,6 @@ export default function Settings() {
         </div>
       )}
 
-      {/* =========================================================================
-          TAB: THEME & APPEARANCE (A2 STANDARD)
-         ========================================================================= */}
-      {activeTab === "appearance" && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-[#101722] p-5 shadow-xs">
-            <div>
-              <h2 className="text-lg font-bold text-stone-900 dark:text-stone-100">
-                Application Appearance
-              </h2>
-              <p className="mt-1 text-sm text-stone-500 dark:text-stone-400">
-                Select your preferred interface display theme.
-              </p>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {/* Light Mode Card */}
-              <button
-                type="button"
-                onClick={() => {
-                  setThemeMode("light", user?.id);
-                  showSuccess("Appearance set to Light Mode");
-                }}
-                className={`group flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 min-w-[165px] text-left transition-all cursor-pointer ${
-                  themeMode === "light"
-                    ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 border border-amber-200">
-                    <Sun size={16} />
-                  </div>
-                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap">
-                    Light Theme
-                  </h3>
-                </div>
-                {themeMode === "light" && (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
-                    <Check size={12} className="stroke-[3]" />
-                  </span>
-                )}
-              </button>
-
-              {/* Dark Mode Card */}
-              <button
-                type="button"
-                onClick={() => {
-                  setThemeMode("dark", user?.id);
-                  showSuccess("Appearance set to Dark Mode");
-                }}
-                className={`group flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 min-w-[165px] text-left transition-all cursor-pointer ${
-                  themeMode === "dark"
-                    ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-stone-900 text-amber-400 border border-stone-800">
-                    <Moon size={16} />
-                  </div>
-                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap">
-                    Dark Theme
-                  </h3>
-                </div>
-                {themeMode === "dark" && (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
-                    <Check size={12} className="stroke-[3]" />
-                  </span>
-                )}
-              </button>
-
-              {/* System Sync Card */}
-              <button
-                type="button"
-                onClick={() => {
-                  setThemeMode("system", user?.id);
-                  showSuccess("Appearance set to System Default");
-                }}
-                className={`group flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 min-w-[165px] text-left transition-all cursor-pointer ${
-                  themeMode === "system"
-                    ? "border-[#F59E0B] ring-2 ring-[#F59E0B]/30 bg-amber-50/20 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 bg-white dark:bg-[#101722]"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                    <Monitor size={16} />
-                  </div>
-                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 whitespace-nowrap">
-                    System Sync
-                  </h3>
-                </div>
-                {themeMode === "system" && (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB02E] via-[#F59E0B] to-[#D97706] text-[#0D1420] font-bold">
-                    <Check size={12} className="stroke-[3]" />
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           TAB 2: HELP & SUPPORT CENTRE

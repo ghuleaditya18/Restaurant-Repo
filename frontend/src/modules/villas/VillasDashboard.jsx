@@ -110,12 +110,11 @@ export default function VillasDashboard() {
     <div className="space-y-4">
       <PageHeader
         title="Dashboard"
-        description="Real-time resort occupancy, arrivals and departures, housekeeping readiness, and revenue summary."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate("/villas/inventory")}
+              onClick={() => navigate("/villas/inventory?tab=units")}
               className={BUTTON_VARIANTS.secondary}
             >
               <BedDouble size={15} />
@@ -225,24 +224,6 @@ export default function VillasDashboard() {
           onClick={() => navigate("/villas/invoices")}
         />
       </div>
-
-      {/* HOUSEKEEPING / OUT-OF-ORDER ALERT */}
-      {!loading && ((data?.out_of_order_units || 0) > 0 || (data?.needs_housekeeping_units || 0) > 0) && (
-        <AlertBanner
-          variant={data.out_of_order_units > 0 ? "warning" : "info"}
-          title="Housekeeping & Unit Readiness Attention"
-          message={`${data.needs_housekeeping_units || 0} unit(s) require cleaning/inspection and ${data.out_of_order_units || 0} unit(s) are currently Out of Order.`}
-          action={
-            <button
-              type="button"
-              onClick={() => navigate("/villas/inventory?tab=housekeeping")}
-              className={BUTTON_VARIANTS.secondary}
-            >
-              Open Housekeeping
-            </button>
-          }
-        />
-      )}
 
       {/* QUICK ACTIONS */}
       <div className={CARD_STYLES.base}>

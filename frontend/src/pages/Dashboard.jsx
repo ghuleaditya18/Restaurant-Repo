@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ShoppingCart,
   IndianRupee,
@@ -26,6 +26,7 @@ import RecentOrders from "../components/RecentOrders";
 import DateFilter from "../components/DateFilter";
 import PageHeader from "../components/PageHeader";
 import AlertBanner from "../components/AlertBanner";
+import { CARD_STYLES } from "../utils/themeTokens";
 import { getDashboardSummary } from "../services/dashboardService";
 
 const formatCurrency = (amount) =>
@@ -37,6 +38,7 @@ const formatCurrency = (amount) =>
   }).format(Number(amount || 0));
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorInfo, setErrorInfo] = useState(null);
@@ -108,7 +110,6 @@ function Dashboard() {
       {/* A1 Standard PageHeader */}
       <PageHeader
         title="Dashboard"
-        description={`Live operations, metrics, and dining activity for ${periodLabel}.`}
         actions={
           <div className="flex flex-wrap items-center gap-2.5">
             <DateFilter
@@ -196,178 +197,179 @@ function Dashboard() {
 
       {/* SKELETON LOADING STATE (FIRST LOAD) */}
       {loading && !data && !errorInfo && (
-        <div className="space-y-6">
-          <div className="h-6 w-48 rounded-md bg-stone-200 dark:bg-stone-800 animate-pulse" />
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
+        <div className="space-y-4">
+          <div className="h-5 w-48 rounded-md bg-stone-200 dark:bg-stone-800 animate-pulse" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 w-full">
+            {Array.from({ length: 12 }, (_, idx) => idx + 1).map((i) => (
               <div
                 key={i}
-                className="h-28 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs animate-pulse"
+                className="h-[68px] rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-3 shadow-xs animate-pulse"
               />
             ))}
           </div>
-          <div className="h-44 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-5 shadow-xs animate-pulse" />
+          <div className="h-44 rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 shadow-xs animate-pulse" />
         </div>
       )}
 
       {/* POPULATED DATA VIEW */}
       {data && stats && (
         <>
-          {/* PERIOD-SPECIFIC METRICS */}
+          {/* UNIFIED 12-CARD OPERATIONAL METRICS */}
           <div>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                Period Performance ({periodLabel})
+                Restaurant Overview ({periodLabel})
               </h2>
-              <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
-                Live Aggregation
-              </span>
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/inventory"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition"
+                >
+                  <span>Manage Inventory</span>
+                  <ArrowRight size={13} />
+                </Link>
+              </div>
             </div>
 
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+            <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 w-full">
               <StatCard
                 compact
                 title={`Orders (${periodLabel})`}
                 value={String(stats.total_orders).padStart(2, "0")}
-                description={
-                  stats.completed_orders > 0
-                    ? `${stats.completed_orders} completed in this period`
-                    : "Total orders recorded"
-                }
                 icon={ShoppingCart}
-                color="bg-[#FFF7E8] dark:bg-[#30251C] text-[#9A3412] dark:text-[#FFB02E] border border-[#FFEDD5] dark:border-[#9A3412]/40"
+                color="amber"
+                onClick={() => navigate("/orders")}
               />
 
               <StatCard
                 compact
                 title={`Revenue (${periodLabel})`}
                 value={formattedRevenue}
-                description="Net invoiced period revenue"
                 icon={IndianRupee}
-                color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
+                color="emerald"
+                onClick={() => navigate("/invoices")}
               />
 
               <StatCard
                 compact
                 title="Active Orders"
                 value={String(stats.active_orders).padStart(2, "0")}
-                description={
-                  stats.preparing_orders > 0
-                    ? `${stats.preparing_orders} in kitchen preparation`
-                    : "Live orders in service"
-                }
                 icon={Clock}
-                color="bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800"
+                color="amber"
+                onClick={() => navigate("/orders")}
               />
 
               <StatCard
                 compact
                 title="Pending Bills"
                 value={String(stats.pending_payments).padStart(2, "0")}
-                description="Unsettled customer invoices"
                 icon={Receipt}
-                color="bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-800"
-              />
-            </section>
-          </div>
-
-          {/* RESTAURANT CAPACITY & RESOURCES */}
-          <div>
-            <h2 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-              Restaurant Capacity & Resources
-            </h2>
-
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
-              <StatCard
-                compact
-                layout="horizontal"
-                title="Customers"
-                value={stats.total_customers}
-                icon={Users}
-                color="bg-[#FFF7E8] dark:bg-[#30251C] text-[#9A3412] dark:text-[#FFB02E] border border-[#FFEDD5] dark:border-[#9A3412]/40"
+                color="orange"
+                onClick={() => navigate("/invoices")}
               />
 
               <StatCard
                 compact
-                layout="horizontal"
-                title="Staff Members"
-                value={stats.total_staff}
-                icon={UserCog}
-                color="bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700"
-              />
-
-              <StatCard
-                compact
-                layout="horizontal"
-                title="Menu Items"
-                value={stats.total_menu_items}
-                icon={UtensilsCrossed}
-                color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
-              />
-
-              <StatCard
-                compact
-                layout="horizontal"
                 title="Dining Tables"
                 value={stats.total_tables}
                 icon={Grid3X3}
-                color="bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800"
+                color="amber"
+                onClick={() => navigate("/tables")}
+              />
+
+              <StatCard
+                compact
+                title="Menu Items"
+                value={stats.total_menu_items}
+                icon={UtensilsCrossed}
+                color="emerald"
+                onClick={() => navigate("/menu")}
+              />
+
+              <StatCard
+                compact
+                title="Customers"
+                value={stats.total_customers}
+                icon={Users}
+                color="indigo"
+                onClick={() => navigate("/customers")}
+              />
+
+              <StatCard
+                compact
+                title="Staff Members"
+                value={stats.total_staff}
+                icon={UserCog}
+                color="stone"
+                onClick={() => navigate("/staff")}
+              />
+
+              <StatCard
+                compact
+                title="Stock Items"
+                value={stats.total_inventory_items || 0}
+                icon={Package}
+                color="sky"
+                onClick={() => navigate("/inventory")}
+              />
+
+              <StatCard
+                compact
+                title="Low Stock"
+                value={stats.low_stock_items_count || 0}
+                icon={AlertTriangle}
+                color="amber"
+                onClick={() => navigate("/inventory")}
+              />
+
+              <StatCard
+                compact
+                title="Out of Stock"
+                value={stats.out_of_stock_items_count || 0}
+                icon={PackageX}
+                color="rose"
+                onClick={() => navigate("/inventory")}
+              />
+
+              <StatCard
+                compact
+                title="Valuation"
+                value={formatCurrency(stats.total_inventory_valuation || 0)}
+                icon={IndianRupee}
+                color="emerald"
+                onClick={() => navigate("/inventory")}
               />
             </section>
           </div>
 
-          {/* INVENTORY HEALTH & STOCK OVERVIEW */}
-          <div>
-            <div className="mb-2.5 flex items-center justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                Inventory Health & Stock
+          {/* QUICK ACTIONS (4 PRIORITIZED TABS) */}
+          <div className={`${CARD_STYLES.base} !p-3.5`}>
+            <div className="flex items-center justify-between mb-2.5">
+              <h2 className="text-sm font-bold text-[#172033] dark:text-[#F8FAFC]">
+                Quick Actions
               </h2>
-              <Link
-                to="/inventory"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition"
-              >
-                <span>Manage Inventory</span>
-                <ArrowRight size={13} />
-              </Link>
             </div>
-
-            <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
-              <StatCard
-                compact
-                layout="horizontal"
-                title="Stock Items"
-                value={stats.total_inventory_items || 0}
-                icon={Package}
-                color="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-              />
-
-              <StatCard
-                compact
-                layout="horizontal"
-                title="Low Stock"
-                value={stats.low_stock_items_count || 0}
-                icon={AlertTriangle}
-                color="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800"
-              />
-
-              <StatCard
-                compact
-                layout="horizontal"
-                title="Out of Stock"
-                value={stats.out_of_stock_items_count || 0}
-                icon={PackageX}
-                color="bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
-              />
-
-              <StatCard
-                compact
-                layout="horizontal"
-                title="Valuation"
-                value={formatCurrency(stats.total_inventory_valuation || 0)}
-                icon={IndianRupee}
-                color="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800"
-              />
-            </section>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: "Manage Orders", path: "/orders", icon: ShoppingCart },
+                { label: "Dining Tables", path: "/tables", icon: Grid3X3 },
+                { label: "Menu Management", path: "/menu", icon: UtensilsCrossed },
+                { label: "Invoices & Billing", path: "/invoices", icon: Receipt },
+              ].map(({ label, path, icon: Icon }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => navigate(path)}
+                  className="flex items-center justify-between rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-[#F8FAFC] dark:bg-[#151D29] px-3 py-2.5 text-xs font-semibold text-[#172033] dark:text-[#F8FAFC] hover:border-amber-400 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition cursor-pointer"
+                >
+                  <span className="inline-flex items-center gap-2 truncate">
+                    <Icon size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </span>
+                  <ArrowRight size={13} className="text-stone-400 shrink-0" />
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Main Content: Recent Orders and Live Table Status */}
@@ -378,7 +380,7 @@ function Dashboard() {
 
             {/* Live Table Status */}
             <div className="rounded-xl border border-[#E5E9F0] dark:border-[#1E293B] bg-white dark:bg-[#101722] p-4 shadow-xs">
-              <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-bold text-stone-900 dark:text-stone-100">Live Table Status</h2>

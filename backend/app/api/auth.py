@@ -75,11 +75,16 @@ def login(
         requested_context = context_aliases.get(requested_context, requested_context)
         stored_context = str(getattr(biz_context, "value", biz_context)).strip().upper()
         stored_context = context_aliases.get(stored_context, stored_context)
-        if requested_context not in {"RESTAURANT", "SPA", "VILLA", "PACKAGE", "ACTIVITY", "TRANSPORT"} or requested_context != stored_context:
+        valid_contexts = {"RESTAURANT", "SPA", "VILLA", "PACKAGE", "ACTIVITY", "TRANSPORT"}
+        if requested_context not in valid_contexts or (stored_context != "ALL" and requested_context != stored_context):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
             )
+        # A universal manager selects the active module at sign-in. The token
+        # remains scoped to that module for API context checks and auditing.
+        if stored_context == "ALL":
+            biz_context = requested_context
 
     access_token = create_access_token(
         data={

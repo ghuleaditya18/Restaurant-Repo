@@ -120,18 +120,21 @@ export default function VillaBookings() {
   const [guestSearch, setGuestSearch] = useState("");
   const [selectedGuestId, setSelectedGuestId] = useState(preselectedGuestId);
   const [wizardError, setWizardError] = useState("");
+  const [wizardFieldErrors, setWizardFieldErrors] = useState({});
   const [submittingBooking, setSubmittingBooking] = useState(false);
 
   // Inline Add Guest Modal (preserves wizard state)
   const [inlineGuestOpen, setInlineGuestOpen] = useState(false);
   const [inlineGuestForm, setInlineGuestForm] = useState(INITIAL_GUEST_FORM);
   const [inlineGuestError, setInlineGuestError] = useState("");
+  const [inlineGuestFieldErrors, setInlineGuestFieldErrors] = useState({});
   const [savingGuest, setSavingGuest] = useState(false);
 
   // Edit Stay Modal (for Reserved / Confirmed bookings)
   const [editTarget, setEditTarget] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [editError, setEditError] = useState("");
+  const [editFieldErrors, setEditFieldErrors] = useState({});
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Lifecycle Action Modal (Check-In / Check-Out / Cancel / No Show)
@@ -192,21 +195,15 @@ export default function VillaBookings() {
 
   const checkAvailability = async (advanceToStep2 = true) => {
     setWizardError("");
+    const errors = {};
     const today = toIsoDate(0);
-    if (!stayForm.check_in || !stayForm.check_out) {
-      setWizardError("Select both check-in and check-out dates.");
-      return;
-    }
-    if (stayForm.check_in < today) {
-      setWizardError("Check-in date cannot be in the past.");
-      return;
-    }
-    if (stayForm.check_out <= stayForm.check_in) {
-      setWizardError("Check-out date must be after check-in date.");
-      return;
-    }
-    if (Number(stayForm.guests) < 1) {
-      setWizardError("Guest count must be at least 1.");
+    if (!stayForm.check_in) errors.check_in = "Select a check-in date.";
+    else if (stayForm.check_in < today) errors.check_in = "Check-in date cannot be in the past.";
+    if (!stayForm.check_out) errors.check_out = "Select a check-out date.";
+    else if (stayForm.check_out <= stayForm.check_in) errors.check_out = "Check-out must be after check-in.";
+    if (Number(stayForm.guests) < 1) errors.guests = "At least one guest is required.";
+    setWizardFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
 
@@ -239,18 +236,20 @@ export default function VillaBookings() {
   const handleSaveInlineGuest = async (e) => {
     e.preventDefault();
     setInlineGuestError("");
+    const errors = {};
     if (!inlineGuestForm.full_name.trim() || inlineGuestForm.full_name.trim().length < 2) {
-      setInlineGuestError("Guest name must contain at least 2 characters.");
-      return;
+      errors.full_name = "Guest name must contain at least 2 characters.";
     }
     const phoneCheck = validateMobileNumber(inlineGuestForm.phone, { required: true });
     if (!phoneCheck.valid) {
-      setInlineGuestError(phoneCheck.error);
-      return;
+      errors.phone = phoneCheck.error;
     }
     const emailCheck = validateEmailAddress(inlineGuestForm.email, { required: false });
     if (!emailCheck.valid) {
-      setInlineGuestError(emailCheck.error);
+      errors.email = emailCheck.error;
+    }
+    setInlineGuestFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
 
@@ -283,12 +282,12 @@ export default function VillaBookings() {
   const handleCreateBooking = async () => {
     setWizardError("");
     if (!selectedUnit) {
-      setWizardError("Select an available accommodation unit.");
+      setWizardFieldErrors((previous) => ({ ...previous, unit: "Select an available accommodation unit." }));
       setStep(2);
       return;
     }
     if (!selectedGuestId) {
-      setWizardError("Select or register a guest before creating the reservation.");
+      setWizardFieldErrors((previous) => ({ ...previous, guest: "Select or register a guest." }));
       setStep(3);
       return;
     }
@@ -340,12 +339,15 @@ export default function VillaBookings() {
     e.preventDefault();
     if (!editTarget) return;
     setEditError("");
+    const errors = {};
     if (editForm.check_in < todayKolkata) {
-      setEditError("Check-in date cannot be in the past.");
-      return;
+      errors.check_in = "Check-in date cannot be in the past.";
     }
     if (editForm.check_out <= editForm.check_in) {
-      setEditError("Check-out must be after check-in.");
+      errors.check_out = "Check-out must be after check-in.";
+    }
+    setEditFieldErrors(errors);
+    if (Object.keys(errors).length > 0) {
       return;
     }
     setSavingEdit(true);
@@ -893,9 +895,12 @@ export default function VillaBookings() {
                           ? addDaysIso(nextIn, 1)
                           : stayForm.check_out;
                       setStayForm({ ...stayForm, check_in: nextIn, check_out: nextOut });
+                      setWizardFieldErrors((previous) => ({ ...previous, check_in: "", check_out: "" }));
                     }}
-                    className={INPUT_STYLES.base}
+                    aria-invalid={Boolean(wizardFieldErrors.check_in)}
+                    className={`${INPUT_STYLES.base} ${wizardFieldErrors.check_in ? "border-red-500" : ""}`}
                   />
+                  {wizardFieldErrors.check_in && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{wizardFieldErrors.check_in}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold mb-1">Check-out Date *</label>
@@ -903,9 +908,11 @@ export default function VillaBookings() {
                     type="date"
                     min={addDaysIso(stayForm.check_in || todayKolkata, 1)}
                     value={stayForm.check_out}
-                    onChange={(e) => setStayForm({ ...stayForm, check_out: e.target.value })}
-                    className={INPUT_STYLES.base}
+                    onChange={(e) => { setStayForm({ ...stayForm, check_out: e.target.value }); setWizardFieldErrors((previous) => ({ ...previous, check_out: "" })); }}
+                    aria-invalid={Boolean(wizardFieldErrors.check_out)}
+                    className={`${INPUT_STYLES.base} ${wizardFieldErrors.check_out ? "border-red-500" : ""}`}
                   />
+                  {wizardFieldErrors.check_out && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{wizardFieldErrors.check_out}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold mb-1">Number of Guests *</label>
@@ -914,9 +921,11 @@ export default function VillaBookings() {
                     min={1}
                     max={50}
                     value={stayForm.guests}
-                    onChange={(e) => setStayForm({ ...stayForm, guests: e.target.value })}
-                    className={INPUT_STYLES.base}
+                    onChange={(e) => { setStayForm({ ...stayForm, guests: e.target.value }); setWizardFieldErrors((previous) => ({ ...previous, guests: "" })); }}
+                    aria-invalid={Boolean(wizardFieldErrors.guests)}
+                    className={`${INPUT_STYLES.base} ${wizardFieldErrors.guests ? "border-red-500" : ""}`}
                   />
+                  {wizardFieldErrors.guests && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{wizardFieldErrors.guests}</p>}
                 </div>
               </div>
               <div>
@@ -1035,6 +1044,7 @@ export default function VillaBookings() {
                             disabled={!u.available}
                             onClick={() => {
                               setSelectedUnit(u);
+                              setWizardFieldErrors((previous) => ({ ...previous, unit: "" }));
                               setStep(3);
                             }}
                             className={
@@ -1051,6 +1061,7 @@ export default function VillaBookings() {
               )}
 
               <div className="flex items-center justify-between pt-2">
+                {wizardFieldErrors.unit && <p className="text-xs text-red-600 dark:text-red-400">{wizardFieldErrors.unit}</p>}
                 <button
                   type="button"
                   onClick={() => setStep(1)}
@@ -1114,7 +1125,7 @@ export default function VillaBookings() {
                       <button
                         key={g.id}
                         type="button"
-                        onClick={() => setSelectedGuestId(String(g.id))}
+                        onClick={() => { setSelectedGuestId(String(g.id)); setWizardFieldErrors((previous) => ({ ...previous, guest: "" })); }}
                         className={`text-left rounded-xl border p-3 transition cursor-pointer ${
                           isPicked
                             ? "border-amber-500 bg-amber-50/70 dark:bg-amber-950/30 ring-1 ring-amber-500"
@@ -1140,6 +1151,7 @@ export default function VillaBookings() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
+                {wizardFieldErrors.guest && <p className="text-xs text-red-600 dark:text-red-400">{wizardFieldErrors.guest}</p>}
                 <button
                   type="button"
                   onClick={() => setStep(2)}
@@ -1470,10 +1482,12 @@ export default function VillaBookings() {
                 type="text"
                 required
                 value={inlineGuestForm.full_name}
-                onChange={(e) => setInlineGuestForm({ ...inlineGuestForm, full_name: e.target.value })}
+                onChange={(e) => { setInlineGuestForm({ ...inlineGuestForm, full_name: e.target.value }); setInlineGuestFieldErrors((p) => ({ ...p, full_name: "" })); }}
                 placeholder="e.g. Kavya Kulkarni"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(inlineGuestFieldErrors.full_name)}
+                className={`${INPUT_STYLES.base} ${inlineGuestFieldErrors.full_name ? "border-red-500" : ""}`}
               />
+              {inlineGuestFieldErrors.full_name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{inlineGuestFieldErrors.full_name}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Phone Number *</label>
@@ -1482,10 +1496,12 @@ export default function VillaBookings() {
                 required
                 maxLength={15}
                 value={inlineGuestForm.phone}
-                onChange={(e) => setInlineGuestForm({ ...inlineGuestForm, phone: e.target.value })}
+                onChange={(e) => { setInlineGuestForm({ ...inlineGuestForm, phone: e.target.value }); setInlineGuestFieldErrors((p) => ({ ...p, phone: "" })); }}
                 placeholder="e.g. 9820198201"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(inlineGuestFieldErrors.phone)}
+                className={`${INPUT_STYLES.base} ${inlineGuestFieldErrors.phone ? "border-red-500" : ""}`}
               />
+              {inlineGuestFieldErrors.phone && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{inlineGuestFieldErrors.phone}</p>}
               <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
                 10-digit mobile starting with 6, 7, 8, or 9.
               </p>
@@ -1495,10 +1511,12 @@ export default function VillaBookings() {
               <input
                 type="email"
                 value={inlineGuestForm.email}
-                onChange={(e) => setInlineGuestForm({ ...inlineGuestForm, email: e.target.value })}
+                onChange={(e) => { setInlineGuestForm({ ...inlineGuestForm, email: e.target.value }); setInlineGuestFieldErrors((p) => ({ ...p, email: "" })); }}
                 placeholder="guest@example.com"
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(inlineGuestFieldErrors.email)}
+                className={`${INPUT_STYLES.base} ${inlineGuestFieldErrors.email ? "border-red-500" : ""}`}
               />
+              {inlineGuestFieldErrors.email && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{inlineGuestFieldErrors.email}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">City</label>
@@ -1619,9 +1637,12 @@ export default function VillaBookings() {
                       ? addDaysIso(nextIn, 1)
                       : editForm.check_out;
                   setEditForm({ ...editForm, check_in: nextIn, check_out: nextOut });
+                  setEditFieldErrors((previous) => ({ ...previous, check_in: "", check_out: "" }));
                 }}
-                className={INPUT_STYLES.base}
+                aria-invalid={Boolean(editFieldErrors.check_in)}
+                className={`${INPUT_STYLES.base} ${editFieldErrors.check_in ? "border-red-500" : ""}`}
               />
+              {editFieldErrors.check_in && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{editFieldErrors.check_in}</p>}
             </div>
             <div>
               <label className="block text-xs font-semibold mb-1">Check-out *</label>
@@ -1630,9 +1651,11 @@ export default function VillaBookings() {
                 required
                 min={addDaysIso(editForm.check_in || todayKolkata, 1)}
                 value={editForm.check_out || ""}
-                onChange={(e) => setEditForm({ ...editForm, check_out: e.target.value })}
-                className={INPUT_STYLES.base}
+                onChange={(e) => { setEditForm({ ...editForm, check_out: e.target.value }); setEditFieldErrors((previous) => ({ ...previous, check_out: "" })); }}
+                aria-invalid={Boolean(editFieldErrors.check_out)}
+                className={`${INPUT_STYLES.base} ${editFieldErrors.check_out ? "border-red-500" : ""}`}
               />
+              {editFieldErrors.check_out && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{editFieldErrors.check_out}</p>}
             </div>
           </div>
           <div>
